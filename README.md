@@ -4,84 +4,121 @@
 
 The goal is to stop treating chat history as project state. Experiment facts go into SQLite, readable summaries go into Markdown, and fresh Codex sessions resume from a generated handoff.
 
-## Minimum Workflow
+## Primary Codex Workflow
 
-Use inside this repository:
+Install once from this repository:
+
+```bash
+cd /home/ryan/auto_iteration
+python3 -m auto_iteration.cli install
+```
+
+The install command creates:
+
+- command: `/home/ryan/.local/bin/auto-iter`
+- Codex entry skill: `~/.codex/skills/auto-iteration-entry`
+
+Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command.
+
+Then start Codex from the target algorithm project:
+
+```bash
+cd /path/to/algorithm_repo
+codex
+```
+
+In Codex CLI, ask the agent to use auto-iteration:
+
+```text
+Use auto-iteration for this project. If this is a new project, initialize it first. Then run doctor, resume, context index, and continue from the current plans and decisions.
+```
+
+The agent should call `auto-iter` inside the same Codex session. You do not need to exit Codex to run the commands manually.
+
+For a new project, the agent initializes the project root:
+
+```bash
+auto-iter init
+```
+
+For an existing project, the agent starts with:
+
+```bash
+auto-iter doctor
+auto-iter resume
+auto-iter context index
+```
+
+## Manual CLI Workflow
+
+Manual commands are for installation, debugging, CI, or cases where you intentionally operate outside Codex CLI.
+
+Inside this repository, this works:
 
 ```bash
 python3 -m auto_iteration.cli init
 ```
 
-Use from another algorithm repository by running the wrapper with an absolute path. The wrapper keeps the tool code in `/home/ryan/auto_iteration`, while the current working directory becomes the project whose experiments are recorded:
+In another algorithm repository, use the installed command from the target project root:
 
 ```bash
 cd /path/to/algorithm_repo
-python3 /home/ryan/auto_iteration/tools/auto_iter.py init
-```
-
-For convenience, create a shell alias named `auto-iter` (only a shorter command name):
-
-```bash
-alias auto-iter='python3 /home/ryan/auto_iteration/tools/auto_iter.py'
-```
-
-Or install the command and Codex entry skill:
-
-```bash
-python3 -m auto_iteration.cli install
-```
-
-Then run commands from the target project root:
-
-```bash
+auto-iter init
 auto-iter doctor
 ```
 
-Check state:
+If `auto-iter` is not installed yet, run the wrapper once:
 
 ```bash
-python3 -m auto_iteration.cli doctor
+python3 /home/ryan/auto_iteration/tools/auto_iter.py install
+```
+
+## What The Agent Calls
+
+Before a new experiment route:
+
+```bash
+auto-iter route check --config config.json --summary "<中文路线说明>"
 ```
 
 Record a run by letting `auto_iteration` execute the command and capture logs:
 
 ```bash
-python3 -m auto_iteration.cli run exec --config config.json --dataset demo --command "python experiment.py" --metrics metrics.json --artifact report.md
+auto-iter run exec --config config.json --dataset demo --command "python experiment.py" --metrics metrics.json --artifact report.md
 ```
 
-Or record a run manually:
+Record a rejected route with evidence from the completed run:
 
 ```bash
-python3 -m auto_iteration.cli run start --config config.json --dataset demo --command "python experiment.py"
-python3 -m auto_iteration.cli run finish <run_id> --status success --metrics metrics.json --artifact report.md
-```
-
-Block repeated failed routes:
-
-```bash
-python3 -m auto_iteration.cli decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-keyword "<关键词>"
-python3 -m auto_iteration.cli route check --config config.json --summary "<中文路线说明>"
+auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-keyword "<关键词>"
 ```
 
 Block a rejected numeric parameter range:
 
 ```bash
-python3 -m auto_iteration.cli decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-relation parameter-space --route-param threshold:0.60:0.90
+auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-relation parameter-space --route-param threshold:0.60:0.90
 ```
 
-Generate handoff:
+Generate and validate handoff:
 
 ```bash
-python3 -m auto_iteration.cli handoff generate
-python3 -m auto_iteration.cli handoff validate
-python3 -m auto_iteration.cli resume
+auto-iter handoff generate
+auto-iter handoff validate
 ```
-
-When using the `auto-iter` alias in another repository, replace `python3 -m auto_iteration.cli` with `auto-iter`.
 
 ## Codex Entry
 
-The install command also installs `auto-iteration-entry` into the Codex skills directory. In Codex CLI, ask to continue an auto-iteration task; the agent should use that entry skill and call `auto-iter` commands inside the same Codex session.
+The Codex entry is the installed skill `auto-iteration-entry`.
+
+It is installed by:
+
+```bash
+python3 -m auto_iteration.cli install
+```
+
+The source lives in this repository at `skills/auto-iteration-entry/`. The installed copy goes to `~/.codex/skills/auto-iteration-entry`, or `$CODEX_HOME/skills/auto-iteration-entry` when `CODEX_HOME` is set.
+
+In Codex CLI, ask to continue an auto-iteration task; the agent should use that entry skill and call `auto-iter` commands inside the same Codex session.
 
 ## Version Task Tracking
 
@@ -98,8 +135,8 @@ sed -n '1,160p' plans/active_plan.md
 At session end, regenerate the handoff so the next Codex session sees the current version state:
 
 ```bash
-python3 -m auto_iteration.cli handoff generate
-python3 -m auto_iteration.cli handoff validate
+auto-iter handoff generate
+auto-iter handoff validate
 ```
 
 ## Raw Input
@@ -111,8 +148,8 @@ python3 -m auto_iteration.cli handoff validate
 Use the context index before reading broad history:
 
 ```bash
-python3 -m auto_iteration.cli context index
-python3 -m auto_iteration.cli context show --path plans/global_plan.md --heading "Global Plan"
+auto-iter context index
+auto-iter context show --path plans/global_plan.md --heading "Global Plan"
 ```
 
 `raw_input/` is excluded by default. Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
@@ -133,3 +170,5 @@ python3 -m auto_iteration.cli context show --path plans/global_plan.md --heading
 - `runs/<run_id>/logs/stderr.log`: captured stderr.
 - `runs/<run_id>/logs/debug.jsonl`: structured execution events.
 - `runs/<run_id>/logs/error_summary.md`: bounded stderr summary for default reading.
+
+`run_id` is an internal evidence handle generated by `auto-iter`. Developers do not need to memorize it. The agent should use the `run_id` printed by `run exec`, `run start`, `run list`, or `run show` when recording decisions. Humans only need to mention a `run_id` when they want to point at one specific historical experiment.
