@@ -6,7 +6,7 @@
 ## 当前快照
 - root: /home/ryan/auto_iteration
 - branch: master
-- commit: a71c2f4cbac7cd21b22f780a840a70844a4f53ef
+- commit: 9ee15d2805e76dc171c15fd6574613fff4342cf0
 - latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
 - global_plan: /home/ryan/auto_iteration/plans/global_plan.md
@@ -29,9 +29,10 @@
 - none
 
 ## 下一步最小实验集合
-1. 先运行 `auto-iteration route check --config <file> --summary <中文路线说明>`。
-2. 若允许，再运行实验并用 `auto-iteration run finish` 写回指标和工件。
-3. 实验后用 `auto-iteration decision add` 写入结论状态。
+1. 先运行 `auto-iter route check --config <file> --summary <中文路线说明>`。
+2. 若允许，再用 `auto-iter run exec` 执行实验，或用 `auto-iter run start` 和 `auto-iter run finish` 分步写回指标和工件。
+3. 实验后用 `auto-iter decision add` 写入结论状态。
+4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 
 ## 读取顺序
 1. /home/ryan/auto_iteration/AGENTS.md
@@ -41,4 +42,6 @@
 5. /home/ryan/auto_iteration/plans/active_plan.md
 6. /home/ryan/auto_iteration/state/agent_state.db
 7. /home/ryan/auto_iteration/decisions
-8. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
+8. 用 `auto-iter context index` 查看可按需读取的标题索引。
+9. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
+10. 只有初次开始项目或明确缺失信息时才读取 raw_input/。

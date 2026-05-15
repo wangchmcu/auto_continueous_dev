@@ -63,10 +63,17 @@ python3 -m auto_iteration.cli decision add --status rejected --evidence <run_id>
 python3 -m auto_iteration.cli route check --config config.json --summary "<中文路线说明>"
 ```
 
+Block a rejected numeric parameter range:
+
+```bash
+python3 -m auto_iteration.cli decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-relation parameter-space --route-param threshold:0.60:0.90
+```
+
 Generate handoff:
 
 ```bash
 python3 -m auto_iteration.cli handoff generate
+python3 -m auto_iteration.cli handoff validate
 python3 -m auto_iteration.cli resume
 ```
 
@@ -92,11 +99,23 @@ At session end, regenerate the handoff so the next Codex session sees the curren
 
 ```bash
 python3 -m auto_iteration.cli handoff generate
+python3 -m auto_iteration.cli handoff validate
 ```
 
 ## Raw Input
 
 `raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. Normal work should use `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db` first. If useful information is recovered from `raw_input/`, write it back into tracking information.
+
+## Context Loading
+
+Use the context index before reading broad history:
+
+```bash
+python3 -m auto_iteration.cli context index
+python3 -m auto_iteration.cli context show --path plans/global_plan.md --heading "Global Plan"
+```
+
+`raw_input/` is excluded by default. Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
 
 ## Storage Rule
 

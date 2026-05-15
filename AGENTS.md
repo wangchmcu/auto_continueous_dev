@@ -30,6 +30,12 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - When a task status changes, update `plans/version_iterations.md` in the same change.
 - Keep changing experiment history out of `AGENTS.md`; link to runs, decisions, artifacts, and plan files instead.
 
+## Context Loading
+
+- Use `auto-iter context index` before reading broad history.
+- Use `auto-iter context show --path <file> --heading "<heading>"` to load only the needed section.
+- Do not use `--include-raw-input` or `--allow-raw-input` unless the task is initial project setup or an explicit missing-information lookup.
+
 ## Raw Input
 
 - `raw_input/` stores original input materials or old project imports.
@@ -43,12 +49,14 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Every experiment must have one `run_id`.
 - Every experiment must save resolved config, metrics, logs, and artifacts.
 - Every conclusion must become a decision record with evidence run IDs.
+- For rejected parameter ranges, use `decision add --route-relation parameter-space --route-param name:min:max`.
 - Raw logs stay under `runs/<run_id>/logs/`; do not paste full logs into context by default.
 - Read summaries, metrics, artifacts, and decisions first; read raw logs only for a specific failure investigation.
 - At session end, generate a handoff with:
 
 ```bash
 auto-iter handoff generate
+auto-iter handoff validate
 ```
 
 ## State Ownership

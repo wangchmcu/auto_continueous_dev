@@ -45,6 +45,24 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 
 If the route check returns `BLOCKED`, do not run that route unless the user explicitly reopens it.
 
+For rejected numeric parameter ranges, record the rejected decision with `--route-relation parameter-space --route-param name:min:max`.
+
+## Loading Context
+
+Before broad history reading, run:
+
+```bash
+auto-iter context index
+```
+
+Then load only the needed section:
+
+```bash
+auto-iter context show --path <file> --heading "<heading>"
+```
+
+Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
+
 ## Running An Experiment
 
 Prefer:
@@ -71,6 +89,7 @@ Run:
 
 ```bash
 auto-iter handoff generate
+auto-iter handoff validate
 ```
 
 Final response must report:

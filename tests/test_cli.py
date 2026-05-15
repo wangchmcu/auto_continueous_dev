@@ -53,6 +53,14 @@ class CliTests(unittest.TestCase):
         self.assertTrue((self.tmp / "plans" / "global_plan.md").exists())
         self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
         self.assertTrue((self.tmp / "plans" / "version_iterations.md").exists())
+        active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
+        version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        self.assertIn("当前版本：v0.4", active_plan)
+        self.assertIn("current_version: v0.4", version_tracking)
+        self.assertIn("auto-iter handoff validate", active_plan)
+        self.assertIn("后续可选：语义检索", global_plan)
+        self.assertNotIn("增加任务状态命令", global_plan)
 
         doctor = run_cli(self.tmp, "doctor")
 
@@ -360,6 +368,141 @@ class CliTests(unittest.TestCase):
         self.assertIn("BLOCKED", blocked.stdout)
         self.assertIn("放弃单纯提高采样次数到 100000", blocked.stdout)
         self.assertIn(run_id, blocked.stdout)
+
+    def test_route_check_blocks_rejected_parameter_space(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        blocked_config = self.tmp / "blocked.json"
+        allowed_config = self.tmp / "allowed.json"
+        write_json(evidence_config, {"threshold": 0.75, "method": "weighted"})
+        write_json(blocked_config, {"threshold": 0.72, "method": "weighted"})
+        write_json(allowed_config, {"threshold": 0.45, "method": "weighted"})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-space",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "放弃 weighted 方法的高阈值区间",
+            "--claim",
+            "threshold 在 0.60 到 0.90 之间时稳定性差。",
+            "--route-relation",
+            "parameter-space",
+            "--route-keyword",
+            "weighted",
+            "--route-param",
+            "threshold:0.60:0.90",
+            "--reopen-condition",
+            "只有更换打分函数后才允许重开。",
+        )
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(blocked_config),
+            "--summary",
+            "继续尝试 weighted 方法 threshold 0.72",
+            check=False,
+        )
+        allowed = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(allowed_config),
+            "--summary",
+            "继续尝试 weighted 方法 threshold 0.45",
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("parameter-space", blocked.stdout)
+        self.assertIn("threshold:0.6:0.9", blocked.stdout)
+        self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn("ALLOWED", allowed.stdout)
+
+    def test_handoff_validate_reports_missing_required_sections(self):
+        run_cli(self.tmp, "init")
+        valid = run_cli(self.tmp, "handoff", "generate")
+
+        self.assertIn("generated", valid.stdout)
+        validated = run_cli(self.tmp, "handoff", "validate")
+        self.assertIn("VALID", validated.stdout)
+
+        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        text = handoff_path.read_text(encoding="utf-8").replace("## 读取顺序", "## Broken Read Order")
+        handoff_path.write_text(text, encoding="utf-8")
+        invalid = run_cli(self.tmp, "handoff", "validate", check=False)
+
+        self.assertEqual(invalid.returncode, 1)
+        self.assertIn("INVALID", invalid.stdout)
+        self.assertIn("missing section: ## 读取顺序", invalid.stdout)
+
+    def test_context_index_and_show_exclude_raw_input_by_default(self):
+        run_cli(self.tmp, "init")
+        raw_note = self.tmp / "raw_input" / "legacy.md"
+        raw_archive = self.tmp / "raw_input" / "legacy.mhtml"
+        raw_note.write_text("# Legacy Raw Input\n\nlegacy-only detail\n", encoding="utf-8")
+        raw_archive.write_text("<html><body>archived source detail</body></html>\n", encoding="utf-8")
+
+        index = run_cli(self.tmp, "context", "index")
+        raw_index = run_cli(self.tmp, "context", "index", "--include-raw-input")
+        shown = run_cli(
+            self.tmp,
+            "context",
+            "show",
+            "--path",
+            str(self.tmp / "plans" / "global_plan.md"),
+            "--heading",
+            "Global Plan",
+        )
+        blocked_raw = run_cli(
+            self.tmp,
+            "context",
+            "show",
+            "--path",
+            str(raw_note),
+            "--heading",
+            "Legacy Raw Input",
+            check=False,
+        )
+        allowed_raw = run_cli(
+            self.tmp,
+            "context",
+            "show",
+            "--path",
+            str(raw_note),
+            "--heading",
+            "Legacy Raw Input",
+            "--allow-raw-input",
+        )
+
+        self.assertIn("plans/global_plan.md", index.stdout)
+        self.assertNotIn("legacy-only detail", index.stdout)
+        self.assertNotIn("raw_input/legacy.md", index.stdout)
+        self.assertIn("raw_input/legacy.md", raw_index.stdout)
+        self.assertIn("raw_input/legacy.mhtml", raw_index.stdout)
+        self.assertIn("no markdown headings", raw_index.stdout)
+        self.assertIn("# Global Plan", shown.stdout)
+        self.assertEqual(blocked_raw.returncode, 1)
+        self.assertIn("raw_input requires --allow-raw-input", blocked_raw.stderr)
+        self.assertIn("legacy-only detail", allowed_raw.stdout)
 
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")

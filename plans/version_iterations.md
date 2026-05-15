@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.2
+- current_version: v0.4
 - status: done
-- goal: 让 Codex agent 在 Codex CLI 会话内自动调用 `auto-iter`，用户不需要退出 Codex 或手写绝对路径。
+- goal: 完成 handoff 校验、raw_input 读取边界、路线关系增强和动态上下文载入。
 
 ## v0.1 任务清单
 
@@ -95,6 +95,53 @@ v0.2 之后仍未覆盖的全局能力：
 - 按标题索引动态载入上下文，避免一次性塞入所有历史。
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
+## v0.3 任务清单
+
+- [x] `init` 创建 `raw_input/`。
+- [x] `AGENTS.md` 和入口 skill 明确 `raw_input/` 只能在初次开始项目或明确缺失信息时读取。
+- [x] 从 `raw_input/` 找到的新信息必须沉淀回 tracking 信息。
+- [x] 增加 `handoff validate`，检查 handoff 关键章节和路径。
+
+## v0.3 距离 global plan
+
+v0.3 覆盖了 raw_input 使用边界和 handoff 完整性校验。
+
+v0.3 已覆盖的全局能力：
+
+- `raw_input/` 固定目录和默认不读取规则。
+- `raw_input/` 显式读取许可：初次开始项目或缺失信息检索。
+- handoff 校验：关键章节、global plan、version tracking、active plan 路径。
+
+v0.3 之后仍未覆盖的全局能力：
+
+- 更强的路线关系管理。
+- 按标题索引动态载入上下文。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.4 任务清单
+
+- [x] 增加 `--route-relation parameter-space` 和 `--route-param name:min:max`。
+- [x] `route check` 能阻断被 rejected decision 覆盖的数值参数区间。
+- [x] 增加 `context index`，默认索引 plans、handoff、decisions、run summaries、error summaries。
+- [x] `context index` 默认排除 `raw_input/`。
+- [x] 增加 `context show --path <file> --heading "<heading>"`，按标题载入单个章节。
+- [x] 读取 `raw_input/` 需要显式 `--include-raw-input` 或 `--allow-raw-input`。
+
+## v0.4 距离 global plan
+
+v0.4 覆盖了路线关系增强和动态上下文载入。
+
+v0.4 已覆盖的全局能力：
+
+- 参数空间级 rejected route 阻断。
+- 标题索引读取。
+- 按需载入单个 Markdown 章节。
+- raw_input 默认排除。
+
+v0.4 之后仍未覆盖的全局能力：
+
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
 ## 后续版本方向
 
 ### v0.2
@@ -103,14 +150,12 @@ v0.2 之后仍未覆盖的全局能力：
 
 ### v0.3
 
-- `init` 创建 `raw_input/`。
-- `AGENTS.md` 和入口 skill 明确 `raw_input/` 只能在初次开始项目或明确缺失信息时读取。
-- 从 `raw_input/` 找到的新信息必须沉淀回 tracking 信息。
-- 增加 handoff 完整性校验，检查关键字段是否缺失。
+- done：raw_input 使用边界和 handoff 校验已完成。
 
 ### v0.4
 
-- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
-- 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
-- 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+- done：路线关系增强和动态载入上下文已完成。
+
+### 后续可选
+
 - 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。

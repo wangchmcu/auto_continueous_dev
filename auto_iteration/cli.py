@@ -22,18 +22,22 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前目标
 
-- 建立 Codex 长周期算法迭代的本地状态闭环。
+- 使用 Codex 长周期算法迭代的本地状态闭环，并保持 tracking 信息优先于原始输入材料。
 
 ## 当前版本
 
-- 读取 `plans/global_plan.md` 和 `plans/version_iterations.md`，按当前版本的任务清单推进。
+- 当前版本：v0.4。
+- v0.1 已完成：本地状态闭环、实验日志、结论记录和 handoff。
+- v0.2 已完成：Codex 入口 skill 和 `auto-iter` 短命令。
+- v0.3 已完成：`raw_input/` 读取边界和 handoff 完整性校验。
+- v0.4 已完成：参数空间路线拦截、上下文标题索引和按需读取。
 
 ## 下一步
 
-1. 让 `init` 创建 `raw_input/`。
-2. 明确 `raw_input/` 只在初次开始项目或明确缺失信息时读取。
-3. 设计 handoff 完整性校验的最小字段集合。
-4. 会话结束前运行 `handoff generate`。
+1. 正常任务继续使用 `auto-iter doctor`、`auto-iter resume`、`auto-iter context index`。
+2. 需要读取详细上下文时，用 `auto-iter context show --path <file> --heading "<heading>"`。
+3. 只有初次开始项目或明确缺失信息时才读取 `raw_input/`。
+4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 """
 
 VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
@@ -54,9 +58,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.2
+- current_version: v0.4
 - status: done
-- goal: 让 Codex agent 在 Codex CLI 会话内自动调用 `auto-iter`，用户不需要退出 Codex 或手写绝对路径。
+- goal: 完成 handoff 校验、raw_input 读取边界、路线关系增强和动态上下文载入。
 
 ## v0.1 任务清单
 
@@ -127,9 +131,57 @@ v0.2 已覆盖的全局能力：
 
 v0.2 之后仍未覆盖的全局能力：
 
+- raw_input 原始输入目录的读取边界和沉淀规则。
 - handoff 完整性校验，检查关键字段缺失。
 - 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 - 按标题索引动态载入上下文，避免一次性塞入所有历史。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.3 任务清单
+
+- [x] `init` 创建 `raw_input/`。
+- [x] `AGENTS.md` 和入口 skill 明确 `raw_input/` 只能在初次开始项目或明确缺失信息时读取。
+- [x] 从 `raw_input/` 找到的新信息必须沉淀回 tracking 信息。
+- [x] 增加 `handoff validate`，检查 handoff 关键章节和路径。
+
+## v0.3 距离 global plan
+
+v0.3 覆盖了 raw_input 使用边界和 handoff 完整性校验。
+
+v0.3 已覆盖的全局能力：
+
+- `raw_input/` 固定目录和默认不读取规则。
+- `raw_input/` 显式读取许可：初次开始项目或缺失信息检索。
+- handoff 校验：关键章节、global plan、version tracking、active plan 路径。
+
+v0.3 之后仍未覆盖的全局能力：
+
+- 更强的路线关系管理。
+- 按标题索引动态载入上下文。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.4 任务清单
+
+- [x] 增加 `--route-relation parameter-space` 和 `--route-param name:min:max`。
+- [x] `route check` 能阻断被 rejected decision 覆盖的数值参数区间。
+- [x] 增加 `context index`，默认索引 plans、handoff、decisions、run summaries、error summaries。
+- [x] `context index` 默认排除 `raw_input/`。
+- [x] 增加 `context show --path <file> --heading "<heading>"`，按标题载入单个章节。
+- [x] 读取 `raw_input/` 需要显式 `--include-raw-input` 或 `--allow-raw-input`。
+
+## v0.4 距离 global plan
+
+v0.4 覆盖了路线关系增强和动态上下文载入。
+
+v0.4 已覆盖的全局能力：
+
+- 参数空间级 rejected route 阻断。
+- 标题索引读取。
+- 按需载入单个 Markdown 章节。
+- raw_input 默认排除。
+
+v0.4 之后仍未覆盖的全局能力：
+
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
 ## 后续版本方向
@@ -140,13 +192,14 @@ v0.2 之后仍未覆盖的全局能力：
 
 ### v0.3
 
-- 增加 handoff 完整性校验，检查关键字段是否缺失。
-- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+- done：raw_input 使用边界和 handoff 校验已完成。
 
 ### v0.4
 
-- 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
-- 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+- done：路线关系增强和动态载入上下文已完成。
+
+### 后续可选
+
 - 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 """
 
@@ -185,14 +238,15 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 每个 decision 必须有 evidence run IDs。
 - 新路线前运行 route check。
 - 阻止明显重复配置和 rejected/superseded 路线。
-- 后续增强方法被替代、参数空间被部分否定、重开条件提示。
+- 支持参数空间被部分否定后的 route check 拦截。
+- 后续可继续增强方法被替代和重开条件提示。
 
 ### 4. 交接和恢复
 
 - 自动生成 `handoffs/latest_handoff.md`。
 - handoff 指向 run summaries、decisions、plans，而不是粘贴完整原始日志。
 - 新 Codex session 先读 `AGENTS.md`、handoff、global plan、version tracking、active plan。
-- 后续增加 handoff 完整性校验，检查关键字段缺失。
+- 已增加 handoff 完整性校验，检查关键字段缺失。
 
 ### 5. 原始输入目录
 
@@ -249,6 +303,8 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 
 ### v0.3：raw_input 使用边界和 handoff 校验
 
+状态：done。
+
 目标：让原始输入材料有固定落点和明确读取边界，同时减少交接字段缺失。
 
 任务：
@@ -260,14 +316,25 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 
 ### v0.4：路线关系增强和动态载入上下文
 
+状态：done。
+
 目标：减少重复路线误判，并按标题索引和摘要读取历史，减少 token 占用。
 
 任务：
 
-- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+- 记录路线关系字段，并落地参数空间被部分否定后的 route check 拦截。
+- 保留 reopen condition 输出；方法替代的自动判断后续可继续增强。
 - 建立 handoff、decision、run summary 的标题索引。
 - 先读目录和摘要，需要时再读详细内容。
-- 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+
+### 后续可选：语义检索
+
+状态：deferred。
+
+任务：
+
+- 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+- 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
 """
 
 
@@ -804,6 +871,83 @@ def command_run_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_route_param(spec: str) -> dict[str, Any]:
+    parts = spec.split(":")
+    if len(parts) != 3:
+        raise UserError(f"invalid --route-param {spec!r}; expected name:min:max")
+    name, minimum, maximum = parts
+    if not name:
+        raise UserError(f"invalid --route-param {spec!r}; name is empty")
+    try:
+        min_value = float(minimum)
+        max_value = float(maximum)
+    except ValueError as exc:
+        raise UserError(f"invalid --route-param {spec!r}; min and max must be numbers") from exc
+    if min_value > max_value:
+        raise UserError(f"invalid --route-param {spec!r}; min must be <= max")
+    return {"name": name, "min": min_value, "max": max_value}
+
+
+def encode_route_rule(route_keywords: list[str], route_relation: str, route_params: list[str]) -> str:
+    params = [parse_route_param(spec) for spec in route_params]
+    return json.dumps(
+        {
+            "keywords": route_keywords,
+            "relation": route_relation,
+            "params": params,
+        },
+        ensure_ascii=False,
+    )
+
+
+def decode_route_rule(raw: str) -> dict[str, Any]:
+    data = json.loads(raw)
+    if isinstance(data, list):
+        return {"keywords": data, "relation": "keyword", "params": []}
+    if not isinstance(data, dict):
+        return {"keywords": [], "relation": "keyword", "params": []}
+    return {
+        "keywords": list(data.get("keywords") or []),
+        "relation": str(data.get("relation") or "keyword"),
+        "params": list(data.get("params") or []),
+    }
+
+
+def route_param_text(params: list[dict[str, Any]]) -> str:
+    return ", ".join(f"{item['name']}:{item['min']:g}:{item['max']:g}" for item in params)
+
+
+def config_value(config: Any, dotted_name: str) -> Any:
+    current = config
+    for part in dotted_name.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current
+
+
+def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
+    haystack = summary + "\n" + stable_json(config)
+    keywords = rule["keywords"]
+    keywords_match = all(keyword in haystack for keyword in keywords)
+    relation = rule["relation"]
+    params = rule["params"]
+    if relation == "parameter-space":
+        if not params:
+            return False
+        for item in params:
+            value = config_value(config, str(item["name"]))
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return False
+            if numeric < float(item["min"]) or numeric > float(item["max"]):
+                return False
+        return keywords_match if keywords else True
+    return bool(keywords) and keywords_match
+
+
 def decision_path(status: str, decision_id: str) -> Path:
     return root() / "decisions" / status / f"{decision_id}.md"
 
@@ -814,7 +958,7 @@ def write_decision_projection(
     title: str,
     claim: str,
     evidence: list[str],
-    route_keywords: list[str],
+    route_rule: dict[str, Any],
     reopen_condition: str,
     supersedes: str | None,
 ) -> None:
@@ -828,8 +972,12 @@ def write_decision_projection(
     ]
     if supersedes:
         lines.append(f"- supersedes_decision_id: {supersedes}")
-    if route_keywords:
-        lines.append(f"- route_keywords: {', '.join(route_keywords)}")
+    if route_rule["relation"]:
+        lines.append(f"- route_relation: {route_rule['relation']}")
+    if route_rule["keywords"]:
+        lines.append(f"- route_keywords: {', '.join(route_rule['keywords'])}")
+    if route_rule["params"]:
+        lines.append(f"- route_params: {route_param_text(route_rule['params'])}")
     if reopen_condition:
         lines.append(f"- reopen_condition: {reopen_condition}")
     lines += ["", "## 结论", claim, ""]
@@ -844,6 +992,8 @@ def command_decision_add(args: argparse.Namespace) -> int:
         raise UserError("at least one --evidence run_id is required")
     decision_id = new_id("D")
     route_keywords = args.route_keyword or []
+    route_rule_json = encode_route_rule(route_keywords, args.route_relation, args.route_param or [])
+    route_rule = decode_route_rule(route_rule_json)
     with database() as db:
         for run_id in evidence:
             if not db.execute("select run_id from runs where run_id = ?", (run_id,)).fetchone():
@@ -862,7 +1012,7 @@ def command_decision_add(args: argparse.Namespace) -> int:
                 args.title,
                 args.claim,
                 json.dumps(evidence, ensure_ascii=False),
-                json.dumps(route_keywords, ensure_ascii=False),
+                route_rule_json,
                 args.supersedes,
                 args.reopen_condition or "",
                 now_iso(),
@@ -874,7 +1024,7 @@ def command_decision_add(args: argparse.Namespace) -> int:
         args.title,
         args.claim,
         evidence,
-        route_keywords,
+        route_rule,
         args.reopen_condition or "",
         args.supersedes,
     )
@@ -924,8 +1074,8 @@ def command_route_check(args: argparse.Namespace) -> int:
             """
         ).fetchall()
         for decision in decisions:
-            keywords = json.loads(decision["route_keywords_json"])
-            if keywords and all(keyword in summary or keyword in stable_json(config) for keyword in keywords):
+            rule = decode_route_rule(decision["route_keywords_json"])
+            if route_rule_matches(rule, summary, config):
                 matched.append(decision)
         result = "block" if matched or exact else "allow"
         check_id = new_id("C")
@@ -946,8 +1096,12 @@ def command_route_check(args: argparse.Namespace) -> int:
     for reason in reasons:
         print(f"- {reason}")
     for decision in matched:
+        rule = decode_route_rule(decision["route_keywords_json"])
         evidence = ", ".join(json.loads(decision["evidence_run_ids_json"]))
         print(f"- {decision['decision_id']}: {decision['title']}")
+        print(f"  route_relation: {rule['relation']}")
+        if rule["params"]:
+            print(f"  route_params: {route_param_text(rule['params'])}")
         print(f"  evidence_run_ids: {evidence}")
         if decision["reopen_condition"]:
             print(f"  reopen_condition: {decision['reopen_condition']}")
@@ -1027,9 +1181,10 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     lines += [
         "",
         "## 下一步最小实验集合",
-        "1. 先运行 `auto-iteration route check --config <file> --summary <中文路线说明>`。",
-        "2. 若允许，再运行实验并用 `auto-iteration run finish` 写回指标和工件。",
-        "3. 实验后用 `auto-iteration decision add` 写入结论状态。",
+        "1. 先运行 `auto-iter route check --config <file> --summary <中文路线说明>`。",
+        "2. 若允许，再用 `auto-iter run exec` 执行实验，或用 `auto-iter run start` 和 `auto-iter run finish` 分步写回指标和工件。",
+        "3. 实验后用 `auto-iter decision add` 写入结论状态。",
+        "4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。",
         "",
         "## 读取顺序",
         f"1. {root() / 'AGENTS.md'}",
@@ -1039,10 +1194,43 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"5. {root() / 'plans' / 'active_plan.md'}",
         f"6. {root() / 'state' / 'agent_state.db'}",
         f"7. {root() / 'decisions'}",
-        "8. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        "8. 用 `auto-iter context index` 查看可按需读取的标题索引。",
+        "9. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        "10. 只有初次开始项目或明确缺失信息时才读取 raw_input/。",
         "",
     ]
     return "\n".join(lines), success["run_id"] if success else None
+
+
+def validate_handoff_text(text: str) -> list[str]:
+    errors: list[str] = []
+    required_sections = [
+        "## 当前目标",
+        "## 当前快照",
+        "## 最近成功实验",
+        "## 当前有效结论",
+        "## 已废弃且不要重复的路线",
+        "## 未决假设",
+        "## 下一步最小实验集合",
+        "## 读取顺序",
+    ]
+    for section in required_sections:
+        if section not in text:
+            errors.append(f"missing section: {section}")
+    required_paths = {
+        "global_plan": root() / "plans" / "global_plan.md",
+        "version_task_tracking": root() / "plans" / "version_iterations.md",
+        "active_plan": root() / "plans" / "active_plan.md",
+    }
+    for key, path in required_paths.items():
+        expected = f"- {key}: {path}"
+        if expected not in text:
+            errors.append(f"missing snapshot path: {key}")
+        elif not path.exists():
+            errors.append(f"snapshot path does not exist: {path}")
+    if str(root() / "plans" / "global_plan.md") not in text:
+        errors.append("read order missing global plan")
+    return errors
 
 
 def command_handoff_generate(_args: argparse.Namespace) -> int:
@@ -1064,6 +1252,23 @@ def command_handoff_generate(_args: argparse.Namespace) -> int:
     return 0
 
 
+def command_handoff_validate(_args: argparse.Namespace) -> int:
+    path = root() / "handoffs" / "latest_handoff.md"
+    if not path.exists():
+        print("INVALID")
+        print(f"- handoff missing: {path.resolve()}")
+        return 1
+    errors = validate_handoff_text(path.read_text(encoding="utf-8"))
+    if errors:
+        print("INVALID")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("VALID")
+    print(f"validated {path.resolve()}")
+    return 0
+
+
 def command_resume(_args: argparse.Namespace) -> int:
     path = root() / "handoffs" / "latest_handoff.md"
     if not path.exists():
@@ -1072,6 +1277,98 @@ def command_resume(_args: argparse.Namespace) -> int:
         return 1
     print(f"read first: {path.resolve()}")
     print(path.read_text(encoding="utf-8"))
+    return 0
+
+
+def is_under(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def context_files(include_raw_input: bool) -> list[Path]:
+    patterns = [
+        "plans/*.md",
+        "handoffs/latest_handoff.md",
+        "decisions/*/*.md",
+        "runs/*/summary.md",
+        "runs/*/logs/error_summary.md",
+    ]
+    files: list[Path] = []
+    for pattern in patterns:
+        files.extend(root().glob(pattern))
+    if include_raw_input:
+        files.extend(path for path in (root() / "raw_input").glob("**/*") if path.is_file())
+    return sorted({path.resolve() for path in files if path.is_file()})
+
+
+def markdown_headings(path: Path) -> list[str]:
+    if path.suffix.lower() not in {".md", ".markdown"}:
+        return []
+    headings: list[str] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            marker, _, title = stripped.partition(" ")
+            if marker and set(marker) == {"#"} and title:
+                headings.append(stripped)
+    return headings
+
+
+def command_context_index(args: argparse.Namespace) -> int:
+    print("# Context Index")
+    for path in context_files(args.include_raw_input):
+        rel = path.relative_to(root())
+        print(f"- path: {rel}")
+        headings = markdown_headings(path)
+        if headings:
+            for heading in headings:
+                print(f"  - {heading}")
+        else:
+            print("  - no markdown headings")
+    return 0
+
+
+def heading_level(line: str) -> int:
+    return len(line) - len(line.lstrip("#"))
+
+
+def heading_title(line: str) -> str:
+    return line.lstrip("#").strip()
+
+
+def extract_heading_section(path: Path, heading: str) -> str:
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    start: int | None = None
+    level = 0
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#") and heading_title(stripped) == heading:
+            start = index
+            level = heading_level(stripped)
+            break
+    if start is None:
+        raise UserError(f"heading not found: {heading}")
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        stripped = lines[index].strip()
+        if stripped.startswith("#") and heading_level(stripped) <= level:
+            end = index
+            break
+    return "\n".join(lines[start:end]).rstrip() + "\n"
+
+
+def command_context_show(args: argparse.Namespace) -> int:
+    path = Path(args.path).expanduser().resolve()
+    if not path.exists():
+        raise UserError(f"context path does not exist: {path}")
+    if is_under(path, root() / "raw_input") and not args.allow_raw_input:
+        raise UserError("raw_input requires --allow-raw-input")
+    if not is_under(path, root()):
+        raise UserError(f"context path must be under project root: {path}")
+    print(extract_heading_section(path, args.heading), end="")
     return 0
 
 
@@ -1128,6 +1425,12 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--title", required=True)
     add.add_argument("--claim", required=True)
     add.add_argument("--route-keyword", action="append", default=[])
+    add.add_argument(
+        "--route-relation",
+        choices=["keyword", "method", "parameter-space", "supersedes"],
+        default="keyword",
+    )
+    add.add_argument("--route-param", action="append", default=[])
     add.add_argument("--reopen-condition")
     add.add_argument("--supersedes")
     add.set_defaults(func=command_decision_add)
@@ -1145,6 +1448,18 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_sub = handoff.add_subparsers(dest="handoff_command", required=True)
     generate = handoff_sub.add_parser("generate")
     generate.set_defaults(func=command_handoff_generate)
+    validate = handoff_sub.add_parser("validate")
+    validate.set_defaults(func=command_handoff_validate)
+    context = subparsers.add_parser("context")
+    context_sub = context.add_subparsers(dest="context_command", required=True)
+    index = context_sub.add_parser("index")
+    index.add_argument("--include-raw-input", action="store_true")
+    index.set_defaults(func=command_context_index)
+    show_context = context_sub.add_parser("show")
+    show_context.add_argument("--path", required=True)
+    show_context.add_argument("--heading", required=True)
+    show_context.add_argument("--allow-raw-input", action="store_true")
+    show_context.set_defaults(func=command_context_show)
     resume = subparsers.add_parser("resume")
     resume.set_defaults(func=command_resume)
     return parser

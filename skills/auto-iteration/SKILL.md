@@ -43,6 +43,28 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 
 If the command returns `BLOCKED`, do not run that route unless the user explicitly reopens it.
 
+For rejected numeric parameter ranges, record the rejected decision with:
+
+```bash
+auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-relation parameter-space --route-param name:min:max
+```
+
+## Loading Context
+
+Before broad history reading, use:
+
+```bash
+auto-iter context index
+```
+
+Load only the section needed:
+
+```bash
+auto-iter context show --path <file> --heading "<heading>"
+```
+
+Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
+
 ## Recording A Run
 
 Prefer `run exec` when the experiment can be launched from one shell command. It records the run, executes the command, captures stdout/stderr/debug logs, and generates summaries:
@@ -88,6 +110,7 @@ Generate the next-session entry point:
 
 ```bash
 auto-iter handoff generate
+auto-iter handoff validate
 ```
 
 The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads after `AGENTS.md`.
