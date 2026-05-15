@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 
@@ -97,7 +98,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("precision", shown.stdout)
         self.assertIn(str(artifact.resolve()), shown.stdout)
 
-        with sqlite3.connect(self.tmp / "state" / "agent_state.db") as db:
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
             metric = db.execute(
                 "select metric_value, unit, direction from metrics where run_id = ? and metric_name = ?",
                 (run_id, "precision"),
@@ -212,6 +213,72 @@ class CliTests(unittest.TestCase):
         self.assertIn("雨天阈值使用 0.58", text)
         self.assertIn(str(artifact.resolve()), text)
         self.assertIn(str(handoff_path.resolve()), resume.stdout)
+
+    def test_handoff_uses_newest_success_when_runs_share_timestamp(self):
+        run_cli(self.tmp, "init")
+        first_config = self.tmp / "first.json"
+        second_config = self.tmp / "second.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        write_json(first_config, {"round": 1})
+        write_json(second_config, {"round": 2})
+        write_json(metrics, {"score": 1.0})
+        artifact.write_text("# report\n", encoding="utf-8")
+
+        first_run = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(first_config),
+            "--dataset",
+            "same-second",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            first_run,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        second_run = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(second_config),
+            "--dataset",
+            "same-second",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            second_run,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            db.execute("update runs set ended_at = '2026-01-01T00:00:00+00:00'")
+            db.commit()
+
+        run_cli(self.tmp, "handoff", "generate")
+
+        text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn(f"latest_successful_run_id: {second_run}", text)
 
 
 if __name__ == "__main__":

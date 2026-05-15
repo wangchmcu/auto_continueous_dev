@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,7 @@ RUN_STATUSES = {"running", "success", "failed", "aborted"}
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 def root() -> Path:
@@ -37,6 +38,20 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     return db
+
+
+@contextmanager
+def database(require_existing: bool = True) -> sqlite3.Connection:
+    if require_existing:
+        db = connect()
+    else:
+        db = sqlite3.connect(db_path())
+        db.row_factory = sqlite3.Row
+    try:
+        yield db
+        db.commit()
+    finally:
+        db.close()
 
 
 class UserError(Exception):
@@ -183,7 +198,7 @@ def init_schema(db: sqlite3.Connection) -> None:
 
 def command_init(_args: argparse.Namespace) -> int:
     ensure_dirs()
-    with sqlite3.connect(db_path()) as db:
+    with database(require_existing=False) as db:
         init_schema(db)
         project_id = hashlib.sha256(str(root()).encode("utf-8")).hexdigest()[:12]
         db.execute(
@@ -203,7 +218,7 @@ def command_doctor(_args: argparse.Namespace) -> int:
     if missing:
         raise UserError("missing directories: " + ", ".join(missing))
     print("state: ok")
-    with connect() as db:
+    with database() as db:
         row = db.execute("select count(*) from sqlite_master where type = 'table'").fetchone()
     if row[0] < 7:
         raise UserError("database schema is incomplete")
@@ -226,7 +241,7 @@ def command_run_start(args: argparse.Namespace) -> int:
     config_text = json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True)
     (run_dir / "config_resolved.json").write_text(config_text + "\n", encoding="utf-8")
     config_hash = hash_data(config)
-    with connect() as db:
+    with database() as db:
         project = db.execute("select project_id from projects limit 1").fetchone()
         project_id = project["project_id"] if project else "default"
         db.execute(
@@ -282,7 +297,7 @@ def command_run_finish(args: argparse.Namespace) -> int:
     if args.status not in RUN_STATUSES:
         raise UserError(f"invalid status: {args.status}")
     metrics = read_json(args.metrics) if args.metrics else {}
-    with connect() as db:
+    with database() as db:
         existing = db.execute("select run_id from runs where run_id = ?", (args.run_id,)).fetchone()
         if not existing:
             raise UserError(f"unknown run_id: {args.run_id}")
@@ -307,7 +322,7 @@ def command_run_finish(args: argparse.Namespace) -> int:
 
 
 def command_run_list(args: argparse.Namespace) -> int:
-    with connect() as db:
+    with database() as db:
         rows = db.execute(
             """
             select run_id, status, dataset_id, started_at, ended_at
@@ -323,7 +338,7 @@ def command_run_list(args: argparse.Namespace) -> int:
 
 
 def command_run_show(args: argparse.Namespace) -> int:
-    with connect() as db:
+    with database() as db:
         run = db.execute("select * from runs where run_id = ?", (args.run_id,)).fetchone()
         if not run:
             raise UserError(f"unknown run_id: {args.run_id}")
@@ -377,7 +392,7 @@ def command_decision_add(args: argparse.Namespace) -> int:
         raise UserError("at least one --evidence run_id is required")
     decision_id = new_id("D")
     route_keywords = args.route_keyword or []
-    with connect() as db:
+    with database() as db:
         for run_id in evidence:
             if not db.execute("select run_id from runs where run_id = ?", (run_id,)).fetchone():
                 raise UserError(f"unknown evidence run_id: {run_id}")
@@ -416,7 +431,7 @@ def command_decision_add(args: argparse.Namespace) -> int:
 
 
 def command_decision_supersede(args: argparse.Namespace) -> int:
-    with connect() as db:
+    with database() as db:
         old = db.execute("select * from decisions where decision_id = ?", (args.old_id,)).fetchone()
         new = db.execute("select * from decisions where decision_id = ?", (args.new_id,)).fetchone()
         if not old:
@@ -442,7 +457,7 @@ def command_route_check(args: argparse.Namespace) -> int:
     summary = args.summary
     matched: list[sqlite3.Row] = []
     reasons: list[str] = []
-    with connect() as db:
+    with database() as db:
         exact = db.execute(
             "select run_id, status from runs where config_hash = ? order by started_at desc limit 1",
             (config_hash,),
@@ -489,10 +504,10 @@ def command_route_check(args: argparse.Namespace) -> int:
 
 def latest_runs(db: sqlite3.Connection) -> tuple[sqlite3.Row | None, sqlite3.Row | None]:
     success = db.execute(
-        "select * from runs where status = 'success' order by ended_at desc limit 1"
+        "select * from runs where status = 'success' order by ended_at desc, rowid desc limit 1"
     ).fetchone()
     failed = db.execute(
-        "select * from runs where status in ('failed', 'aborted') order by ended_at desc limit 1"
+        "select * from runs where status in ('failed', 'aborted') order by ended_at desc, rowid desc limit 1"
     ).fetchone()
     return success, failed
 
@@ -574,7 +589,7 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
 
 def command_handoff_generate(_args: argparse.Namespace) -> int:
     path = root() / "handoffs" / "latest_handoff.md"
-    with connect() as db:
+    with database() as db:
         handoff_md, based_on_run_id = build_handoff(db)
         path.write_text(handoff_md, encoding="utf-8")
         archive = root() / "handoffs" / "archive" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
