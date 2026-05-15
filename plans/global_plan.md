@@ -69,10 +69,10 @@
 - Codex entry skill 负责把这些短句映射到 `auto-iter` 命令序列。
 - 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 等具体命令。
 
-### 9. Self-Improvement（系统改进沉淀能力）
+### 9. Auto It Self Improve（系统改进沉淀能力）
 
-- `self-improvement` 指系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
-- 这个能力不能自动触发，只能在用户明确点名 `self-improvement` 或未来对应 skill 名时触发。
+- `auto it self improve` 是固定触发短句和能力名，指 auto_iteration 的系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
+- 这个能力不能自动触发，只能在用户明确点名 `auto it self improve` 或 `auto-it-self-improve` skill 名时触发。
 - 输入是已解决的对话片段、相关文件改动、失败现象和最终处理方式；输出是对 auto_iteration 系统的通用改进建议或补丁。
 - 改进落点由 agent 根据问题类型选择，例如 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
 - 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
@@ -151,20 +151,21 @@
 - README 和 entry skill 明确 `auto-iteration` 是固定工具名，不随算法项目名称变化。
 - README 添加好例子，说明如何结束 session、如何开启新 session、如何查阅某个细节。
 
-### v0.6：self-improvement 系统改进沉淀能力
+### v0.6：auto it self improve 系统改进沉淀能力
 
-状态：planned。
+状态：done。
 
-目标：用户明确调用 self-improvement 后，agent 能从已经解决的具体问题中抽取通用改进，并把改进落到 auto_iteration 系统合适的位置。
+目标：用户明确调用 `auto it self improve` 后，agent 能从已经解决的具体问题中抽取通用改进，并把改进落到 auto_iteration 系统合适的位置。
 
 任务：
 
-- 新增或扩展一个入口 skill，让 `self-improvement` 成为明确触发词，而不是自动后台行为。
+- 新增 `auto-it-self-improve` skill，让 `auto it self improve` 成为明确触发短句，而不是自动后台行为。
 - 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
 - 定义禁止写入的内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
 - 定义可写入的内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
-- 增加检查清单，要求每次 self-improvement 输出都说明抽象依据和被排除的具体细节。
-- 增加测试或示例，验证具体问题不会原样污染系统规则。
+- 增加检查清单，要求每次执行都说明抽象依据和被排除的具体细节。
+- 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
+- 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
 
 ### 后续可选：语义检索
 

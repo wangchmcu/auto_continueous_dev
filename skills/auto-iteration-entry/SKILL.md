@@ -16,6 +16,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “结束当前 session” or “做 handoff”：run the end-of-task workflow below.
 - “查阅某个结论、实验、参数或历史细节”：run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
+- “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
 
 ## Required Start
 

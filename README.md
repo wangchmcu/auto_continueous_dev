@@ -17,6 +17,9 @@ The install command creates:
 
 - command: `/home/ryan/.local/bin/auto-iter`
 - Codex entry skill: `~/.codex/skills/auto-iteration-entry`
+- system-improvement skill: `~/.codex/skills/auto-it-self-improve`
+
+The install command also runs a self-check. It verifies that `python3` is available, `auto-iter` is executable, and the required skills have non-empty `SKILL.md` files. A healthy install prints `install check: ok`.
 
 Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command.
 
@@ -121,6 +124,18 @@ python3 -m auto_iteration.cli install
 The source lives in this repository at `skills/auto-iteration-entry/`. The installed copy goes to `~/.codex/skills/auto-iteration-entry`, or `$CODEX_HOME/skills/auto-iteration-entry` when `CODEX_HOME` is set.
 
 In Codex CLI, ask to continue an auto-iteration task; the agent should use that entry skill and call `auto-iter` commands inside the same Codex session.
+
+## Auto It Self Improve
+
+`auto it self improve` is a fixed trigger phrase. It does not run automatically.
+
+Use it after a concrete auto_iteration workflow problem has been solved and you want the agent to generalize that lesson back into the system:
+
+```text
+auto it self improve：把刚才解决的问题抽象成通用规则，更新 auto_iteration 系统。不要把本项目的具体路径、数据集、一次性参数或临时文件名写进系统规则。
+```
+
+The agent should use the installed `auto-it-self-improve` skill, choose the appropriate files to update, add tests when generated templates or installation behavior changes, and report which concrete details were intentionally excluded.
 
 ## Good Examples
 
@@ -228,6 +243,7 @@ auto-iter context show --path plans/global_plan.md --heading "Global Plan"
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.
 - `skills/auto-iteration-entry/SKILL.md`: Codex entry skill installed by `auto-iter install`.
+- `skills/auto-it-self-improve/SKILL.md`: explicit-trigger skill for generalizing solved workflow problems into reusable system improvements.
 - `runs/<run_id>/config_resolved.json`: resolved config snapshot.
 - `runs/<run_id>/summary.md`: per-run readable summary.
 - `runs/<run_id>/logs/stdout.log`: captured stdout.

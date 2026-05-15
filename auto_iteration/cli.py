@@ -26,20 +26,20 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前版本
 
-- 当前版本：v0.5。
+- 当前版本：v0.6。
 - v0.1 已完成：本地状态闭环、实验日志、结论记录和 handoff。
 - v0.2 已完成：Codex 入口 skill 和 `auto-iter` 短命令。
 - v0.3 已完成：`raw_input/` 读取边界和 handoff 完整性校验。
 - v0.4 已完成：参数空间路线拦截、上下文标题索引和按需读取。
 - v0.5 已完成：用自然语言短句触发 session 结束、session 接力和细节查阅流程。
-- v0.6 已计划：self-improvement 系统改进沉淀能力。
+- v0.6 已完成：`auto it self improve` 系统改进沉淀能力。
 
 ## 下一步
 
-1. v0.6 开始前，读取 `plans/global_plan.md` 中的 `v0.6：self-improvement 系统改进沉淀能力`。
-2. 设计明确触发词，保证 self-improvement 不会自动后台触发。
-3. 设计抽象流程，保证具体问题只作为证据，不原样写进系统规则。
-4. 设计文件落点选择规则，让 agent 能判断改 README、skill、CLI、模板、测试或 plans。
+1. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
+2. 运行该流程时，先抽象具体问题，再选择 README、skill、CLI、模板、测试、plans 或 handoff 等落点。
+3. 不把具体项目名、数据集、一次性参数、临时路径或单次对话细节写进系统规则。
+4. 若 tracking 信息规模明显变大，再评估语义检索。
 5. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 """
 
@@ -61,9 +61,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.5
+- current_version: v0.6
 - status: done
-- goal: 完成自然语言短句触发 session 结束、session 接力和历史细节查阅。
+- goal: 完成 `auto it self improve` 系统改进沉淀能力。
 
 ## v0.1 任务清单
 
@@ -211,31 +211,33 @@ v0.5 已覆盖的全局能力：
 
 v0.5 之后仍未覆盖的全局能力：
 
-- self-improvement 系统改进沉淀能力：用户明确调用后，从具体对话问题中抽取通用改进并更新系统。
+- `auto it self improve` 系统改进沉淀能力：用户明确调用后，从具体对话问题中抽取通用改进并更新系统。
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
 ## v0.6 任务清单
 
-- status: planned
-- goal: 完成 self-improvement 系统改进沉淀能力的入口、抽象流程、落点选择和防污染检查。
-- [ ] 新增或扩展入口 skill，让 `self-improvement` 成为明确触发词，而不是自动后台行为。
-- [ ] 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
-- [ ] 定义文件落点选择规则：根据问题类型选择 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
-- [ ] 定义禁止写入内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
-- [ ] 定义可写入内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
-- [ ] 增加检查清单：每次 self-improvement 都要说明抽象依据、改动文件、验证方式、被排除的具体细节。
-- [ ] 增加测试或示例，验证具体问题不会原样污染系统规则。
+- status: done
+- goal: 完成 `auto it self improve` 系统改进沉淀能力的入口、抽象流程、落点选择和防污染检查。
+- [x] 新增 `auto-it-self-improve` skill，让 `auto it self improve` 成为明确触发短句，而不是自动后台行为。
+- [x] 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
+- [x] 定义文件落点选择规则：根据问题类型选择 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
+- [x] 定义禁止写入内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
+- [x] 定义可写入内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
+- [x] 增加检查清单：每次执行都要说明抽象依据、改动文件、验证方式、被排除的具体细节。
+- [x] 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
+- [x] 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
 
 ## v0.6 距离 global plan
 
-v0.6 计划覆盖 self-improvement 系统改进沉淀能力。
+v0.6 覆盖了 `auto it self improve` 系统改进沉淀能力。
 
-v0.6 完成后应覆盖的全局能力：
+v0.6 已覆盖的全局能力：
 
 - 用户通过明确关键字触发系统改进沉淀。
 - agent 能把具体对话问题抽象成通用能力改进。
 - agent 能判断改进应该落在哪些系统文件中。
 - 系统有防污染检查，避免把具体项目细节写进通用规则。
+- 安装流程能检查必要依赖、命令和 skills 是否 ready。
 
 v0.6 之后仍未覆盖的全局能力：
 
@@ -261,7 +263,7 @@ v0.6 之后仍未覆盖的全局能力：
 
 ### v0.6
 
-- planned：self-improvement 系统改进沉淀能力。
+- done：`auto it self improve` 系统改进沉淀能力。
 
 ### 后续可选
 
@@ -340,10 +342,10 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - Codex entry skill 负责把这些短句映射到 `auto-iter` 命令序列。
 - 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 等具体命令。
 
-### 9. Self-Improvement（系统改进沉淀能力）
+### 9. Auto It Self Improve（系统改进沉淀能力）
 
-- `self-improvement` 指系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
-- 这个能力不能自动触发，只能在用户明确点名 `self-improvement` 或未来对应 skill 名时触发。
+- `auto it self improve` 是固定触发短句和能力名，指 auto_iteration 的系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
+- 这个能力不能自动触发，只能在用户明确点名 `auto it self improve` 或 `auto-it-self-improve` skill 名时触发。
 - 输入是已解决的对话片段、相关文件改动、失败现象和最终处理方式；输出是对 auto_iteration 系统的通用改进建议或补丁。
 - 改进落点由 agent 根据问题类型选择，例如 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
 - 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
@@ -422,20 +424,21 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - README 和 entry skill 明确 `auto-iteration` 是固定工具名，不随算法项目名称变化。
 - README 添加好例子，说明如何结束 session、如何开启新 session、如何查阅某个细节。
 
-### v0.6：self-improvement 系统改进沉淀能力
+### v0.6：auto it self improve 系统改进沉淀能力
 
-状态：planned。
+状态：done。
 
-目标：用户明确调用 self-improvement 后，agent 能从已经解决的具体问题中抽取通用改进，并把改进落到 auto_iteration 系统合适的位置。
+目标：用户明确调用 `auto it self improve` 后，agent 能从已经解决的具体问题中抽取通用改进，并把改进落到 auto_iteration 系统合适的位置。
 
 任务：
 
-- 新增或扩展一个入口 skill，让 `self-improvement` 成为明确触发词，而不是自动后台行为。
+- 新增 `auto-it-self-improve` skill，让 `auto it self improve` 成为明确触发短句，而不是自动后台行为。
 - 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
 - 定义禁止写入的内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
 - 定义可写入的内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
-- 增加检查清单，要求每次 self-improvement 输出都说明抽象依据和被排除的具体细节。
-- 增加测试或示例，验证具体问题不会原样污染系统规则。
+- 增加检查清单，要求每次执行都说明抽象依据和被排除的具体细节。
+- 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
+- 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
 
 ### 后续可选：语义检索
 
@@ -719,15 +722,35 @@ def command_install(args: argparse.Namespace) -> int:
     )
     command_path.chmod(0o755)
 
-    source_skill = TOOL_ROOT / "skills" / "auto-iteration-entry"
-    if not source_skill.exists():
-        raise UserError(f"entry skill source does not exist: {source_skill}")
-    target_skill = skills_dir / "auto-iteration-entry"
-    shutil.copytree(source_skill, target_skill, dirs_exist_ok=True)
-
     print(f"installed command: {command_path}")
-    print(f"installed skill: {target_skill}")
+    installed_skills: list[tuple[str, Path]] = []
+    for skill_name in ["auto-iteration-entry", "auto-it-self-improve"]:
+        source_skill = TOOL_ROOT / "skills" / skill_name
+        if not source_skill.exists():
+            raise UserError(f"skill source does not exist: {source_skill}")
+        target_skill = skills_dir / skill_name
+        shutil.copytree(source_skill, target_skill, dirs_exist_ok=True)
+        installed_skills.append((skill_name, target_skill))
+        print(f"installed skill: {target_skill}")
+    verify_installation(command_path, installed_skills)
     return 0
+
+
+def verify_installation(command_path: Path, installed_skills: list[tuple[str, Path]]) -> None:
+    python3_path = shutil.which("python3")
+    if not python3_path:
+        raise UserError("install check failed: dependency missing: python3")
+    if not command_path.exists() or not os.access(command_path, os.X_OK):
+        raise UserError(f"install check failed: command is not executable: {command_path}")
+    for skill_name, skill_dir in installed_skills:
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists() or not skill_md.read_text(encoding="utf-8").strip():
+            raise UserError(f"install check failed: skill not ready: {skill_name}")
+    print("install check: ok")
+    print(f"dependency ready: python3 ({python3_path})")
+    print(f"command ready: auto-iter ({command_path})")
+    for skill_name, skill_dir in installed_skills:
+        print(f"skill ready: {skill_name} ({skill_dir})")
 
 
 def new_id(prefix: str) -> str:

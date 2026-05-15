@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.5
+- current_version: v0.6
 - status: done
-- goal: 完成自然语言短句触发 session 结束、session 接力和历史细节查阅。
+- goal: 完成 `auto it self improve` 系统改进沉淀能力。
 
 ## v0.1 任务清单
 
@@ -166,31 +166,33 @@ v0.5 已覆盖的全局能力：
 
 v0.5 之后仍未覆盖的全局能力：
 
-- self-improvement 系统改进沉淀能力：用户明确调用后，从具体对话问题中抽取通用改进并更新系统。
+- `auto it self improve` 系统改进沉淀能力：用户明确调用后，从具体对话问题中抽取通用改进并更新系统。
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
 ## v0.6 任务清单
 
-- status: planned
-- goal: 完成 self-improvement 系统改进沉淀能力的入口、抽象流程、落点选择和防污染检查。
-- [ ] 新增或扩展入口 skill，让 `self-improvement` 成为明确触发词，而不是自动后台行为。
-- [ ] 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
-- [ ] 定义文件落点选择规则：根据问题类型选择 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
-- [ ] 定义禁止写入内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
-- [ ] 定义可写入内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
-- [ ] 增加检查清单：每次 self-improvement 都要说明抽象依据、改动文件、验证方式、被排除的具体细节。
-- [ ] 增加测试或示例，验证具体问题不会原样污染系统规则。
+- status: done
+- goal: 完成 `auto it self improve` 系统改进沉淀能力的入口、抽象流程、落点选择和防污染检查。
+- [x] 新增 `auto-it-self-improve` skill，让 `auto it self improve` 成为明确触发短句，而不是自动后台行为。
+- [x] 定义抽象流程：具体问题复盘、通用问题抽取、改进落点选择、候选补丁生成、验证、提交。
+- [x] 定义文件落点选择规则：根据问题类型选择 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
+- [x] 定义禁止写入内容：具体项目名、具体数据集、一次性参数、临时路径、只对单次对话成立的细节。
+- [x] 定义可写入内容：通用流程规则、触发语句、文件选择规则、测试覆盖、文档示例、CLI 或模板缺口。
+- [x] 增加检查清单：每次执行都要说明抽象依据、改动文件、验证方式、被排除的具体细节。
+- [x] 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
+- [x] 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
 
 ## v0.6 距离 global plan
 
-v0.6 计划覆盖 self-improvement 系统改进沉淀能力。
+v0.6 覆盖了 `auto it self improve` 系统改进沉淀能力。
 
-v0.6 完成后应覆盖的全局能力：
+v0.6 已覆盖的全局能力：
 
 - 用户通过明确关键字触发系统改进沉淀。
 - agent 能把具体对话问题抽象成通用能力改进。
 - agent 能判断改进应该落在哪些系统文件中。
 - 系统有防污染检查，避免把具体项目细节写进通用规则。
+- 安装流程能检查必要依赖、命令和 skills 是否 ready。
 
 v0.6 之后仍未覆盖的全局能力：
 
@@ -216,7 +218,7 @@ v0.6 之后仍未覆盖的全局能力：
 
 ### v0.6
 
-- planned：self-improvement 系统改进沉淀能力。
+- done：`auto it self improve` 系统改进沉淀能力。
 
 ### 后续可选
 
