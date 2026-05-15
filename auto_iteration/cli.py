@@ -15,6 +15,7 @@ from typing import Any
 
 
 DB_PATH = Path("state") / "agent_state.db"
+TOOL_ROOT = Path(__file__).resolve().parents[1]
 DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
 ACTIVE_PLAN_TEMPLATE = """# Active Plan
@@ -29,10 +30,10 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 下一步
 
-1. 提供可安装的短命令入口 `auto-iter`。
-2. 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
-3. 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
-4. 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+1. 设计 handoff 完整性校验的最小字段集合。
+2. 设计路线关系增强的最小数据结构。
+3. 每次版本范围变化时，先更新 `plans/version_iterations.md`。
+4. 会话结束前运行 `handoff generate`。
 """
 
 VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
@@ -53,9 +54,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.1
+- current_version: v0.2
 - status: done
-- goal: 建立最小可用的本地状态闭环，让长周期算法迭代不会只依赖聊天上下文。
+- goal: 让 Codex agent 在 Codex CLI 会话内自动调用 `auto-iter`，用户不需要退出 Codex 或手写绝对路径。
 
 ## v0.1 任务清单
 
@@ -105,14 +106,37 @@ v0.1 之后仍未覆盖的全局能力：
 3. `handoffs/latest_handoff.md` 包含版本任务跟踪文件路径。
 4. `plans/version_iterations.md` 明确列出当前版本状态、已完成任务、未完成任务和后续版本方向。
 
+## v0.2 任务清单
+
+- [x] 提供可安装的短命令入口 `auto-iter`。
+- [x] 新增 Codex 入口 skill：`skills/auto-iteration-entry/SKILL.md`。
+- [x] 入口 skill 指导 agent 在任务开始、实验前、实验后、任务结束时自动调用 `auto-iter`。
+- [x] 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+- [x] 提供端到端演示：测试覆盖 doctor、resume、route check、run exec、decision add、handoff generate。
+
+## v0.2 距离 global plan
+
+v0.2 覆盖了 Codex 入口能力：用户可以在 Codex CLI 内表达任务，agent 通过入口 skill 在同一会话内调用 `auto-iter`。
+
+v0.2 已覆盖的全局能力：
+
+- Codex 入口 skill：`auto-iteration-entry`。
+- 短命令入口：`auto-iter`。
+- 入口流程：doctor、resume、route check、run exec、decision add、handoff generate。
+- 端到端演示：临时项目中通过已安装 `auto-iter` 完成完整流程。
+
+v0.2 之后仍未覆盖的全局能力：
+
+- handoff 完整性校验，检查关键字段缺失。
+- 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+- 按标题索引动态载入上下文，避免一次性塞入所有历史。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
 ## 后续版本方向
 
 ### v0.2
 
-- 提供可安装的短命令入口 `auto-iter`。
-- 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
-- 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
-- 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+- done：Codex 入口能力已完成。
 
 ### v0.3
 
@@ -203,6 +227,8 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - version task tracking。
 
 ### v0.2：Codex 入口能力
+
+状态：done。
 
 目标：用户在 Codex CLI 内只表达任务，Codex agent 根据入口 skill 自动调用 `auto-iter`，不需要用户退出 Codex 或手写绝对路径。
 
@@ -466,6 +492,48 @@ def command_doctor(_args: argparse.Namespace) -> int:
         raise UserError("database schema is incomplete")
     print("database: ok")
     print(f"root: {root()}")
+    return 0
+
+
+def default_bin_dir() -> Path:
+    return Path.home() / ".local" / "bin"
+
+
+def default_skills_dir() -> Path:
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home).expanduser() / "skills"
+    return Path.home() / ".codex" / "skills"
+
+
+def command_install(args: argparse.Namespace) -> int:
+    bin_dir = Path(args.bin_dir).expanduser().resolve()
+    skills_dir = Path(args.skills_dir).expanduser().resolve()
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    command_path = bin_dir / "auto-iter"
+    tool_path = TOOL_ROOT / "tools" / "auto_iter.py"
+    command_path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                f'exec python3 "{tool_path}" "$@"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    command_path.chmod(0o755)
+
+    source_skill = TOOL_ROOT / "skills" / "auto-iteration-entry"
+    if not source_skill.exists():
+        raise UserError(f"entry skill source does not exist: {source_skill}")
+    target_skill = skills_dir / "auto-iteration-entry"
+    shutil.copytree(source_skill, target_skill, dirs_exist_ok=True)
+
+    print(f"installed command: {command_path}")
+    print(f"installed skill: {target_skill}")
     return 0
 
 
@@ -1031,6 +1099,10 @@ def build_parser() -> argparse.ArgumentParser:
     init.set_defaults(func=command_init)
     doctor = subparsers.add_parser("doctor")
     doctor.set_defaults(func=command_doctor)
+    install = subparsers.add_parser("install")
+    install.add_argument("--bin-dir", default=str(default_bin_dir()))
+    install.add_argument("--skills-dir", default=str(default_skills_dir()))
+    install.set_defaults(func=command_install)
     add_common_run_subcommands(subparsers)
     decision = subparsers.add_parser("decision")
     decision_sub = decision.add_subparsers(dest="decision_command", required=True)

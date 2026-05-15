@@ -9,14 +9,14 @@
 
 ## Before Any Coding Or Experiment
 
-1. Run `python3 -m auto_iteration.cli doctor` and read the result.
-2. Run `python3 -m auto_iteration.cli resume` if `handoffs/latest_handoff.md` exists.
+1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, run `python3 /home/ryan/auto_iteration/tools/auto_iter.py install` first.
+2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
 3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 4. Read active decisions under `decisions/active/`.
 5. Before proposing or running a new experiment route, run:
 
 ```bash
-python3 -m auto_iteration.cli route check --config <config.json> --summary "<中文路线说明>"
+auto-iter route check --config <config.json> --summary "<中文路线说明>"
 ```
 
 6. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
@@ -40,7 +40,7 @@ python3 -m auto_iteration.cli route check --config <config.json> --summary "<中
 - At session end, generate a handoff with:
 
 ```bash
-python3 -m auto_iteration.cli handoff generate
+auto-iter handoff generate
 ```
 
 ## State Ownership

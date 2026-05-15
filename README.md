@@ -25,6 +25,12 @@ For convenience, create a shell alias named `auto-iter` (only a shorter command 
 alias auto-iter='python3 /home/ryan/auto_iteration/tools/auto_iter.py'
 ```
 
+Or install the command and Codex entry skill:
+
+```bash
+python3 -m auto_iteration.cli install
+```
+
 Then run commands from the target project root:
 
 ```bash
@@ -66,6 +72,10 @@ python3 -m auto_iteration.cli resume
 
 When using the `auto-iter` alias in another repository, replace `python3 -m auto_iteration.cli` with `auto-iter`.
 
+## Codex Entry
+
+The install command also installs `auto-iteration-entry` into the Codex skills directory. In Codex CLI, ask to continue an auto-iteration task; the agent should use that entry skill and call `auto-iter` commands inside the same Codex session.
+
 ## Version Task Tracking
 
 Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
@@ -92,6 +102,7 @@ python3 -m auto_iteration.cli handoff generate
 - `plans/global_plan.md`: global plan for the full context-management system.
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.
+- `skills/auto-iteration-entry/SKILL.md`: Codex entry skill installed by `auto-iter install`.
 - `runs/<run_id>/config_resolved.json`: resolved config snapshot.
 - `runs/<run_id>/summary.md`: per-run readable summary.
 - `runs/<run_id>/logs/stdout.log`: captured stdout.

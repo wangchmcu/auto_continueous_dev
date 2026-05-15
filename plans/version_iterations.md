@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.1
+- current_version: v0.2
 - status: done
-- goal: 建立最小可用的本地状态闭环，让长周期算法迭代不会只依赖聊天上下文。
+- goal: 让 Codex agent 在 Codex CLI 会话内自动调用 `auto-iter`，用户不需要退出 Codex 或手写绝对路径。
 
 ## v0.1 任务清单
 
@@ -68,14 +68,37 @@ v0.1 之后仍未覆盖的全局能力：
 3. `handoffs/latest_handoff.md` 包含版本任务跟踪文件路径。
 4. `plans/version_iterations.md` 明确列出当前版本状态、已完成任务、未完成任务和后续版本方向。
 
+## v0.2 任务清单
+
+- [x] 提供可安装的短命令入口 `auto-iter`。证据：`install` 命令和安装测试。
+- [x] 新增 Codex 入口 skill：`skills/auto-iteration-entry/SKILL.md`。
+- [x] 入口 skill 指导 agent 在任务开始、实验前、实验后、任务结束时自动调用 `auto-iter`。
+- [x] 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+- [x] 提供端到端演示：测试覆盖 doctor、resume、route check、run exec、decision add、handoff generate。
+
+## v0.2 距离 global plan
+
+v0.2 覆盖了 Codex 入口能力：用户可以在 Codex CLI 内表达任务，agent 通过入口 skill 在同一会话内调用 `auto-iter`。
+
+v0.2 已覆盖的全局能力：
+
+- Codex 入口 skill：`auto-iteration-entry`。
+- 短命令入口：`auto-iter`。
+- 入口流程：doctor、resume、route check、run exec、decision add、handoff generate。
+- 端到端演示：临时项目中通过已安装 `auto-iter` 完成完整流程。
+
+v0.2 之后仍未覆盖的全局能力：
+
+- handoff 完整性校验，检查关键字段缺失。
+- 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+- 按标题索引动态载入上下文，避免一次性塞入所有历史。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
 ## 后续版本方向
 
 ### v0.2
 
-- 提供可安装的短命令入口 `auto-iter`。
-- 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
-- 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
-- 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+- done：Codex 入口能力已完成。
 
 ### v0.3
 

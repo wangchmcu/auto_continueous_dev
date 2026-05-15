@@ -58,6 +58,41 @@ class CliTests(unittest.TestCase):
         self.assertIn("state: ok", doctor.stdout)
         self.assertIn("database: ok", doctor.stdout)
 
+    def test_install_creates_short_command_and_entry_skill(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+
+        result = run_cli(
+            self.tmp,
+            "install",
+            "--bin-dir",
+            str(bin_dir),
+            "--skills-dir",
+            str(skills_dir),
+        )
+
+        command_path = bin_dir / "auto-iter"
+        skill_path = skills_dir / "auto-iteration-entry" / "SKILL.md"
+        self.assertTrue(command_path.exists())
+        self.assertTrue(os.access(command_path, os.X_OK))
+        self.assertTrue(skill_path.exists())
+        self.assertIn("installed command", result.stdout)
+        self.assertIn("installed skill", result.stdout)
+        self.assertIn("auto-iter doctor", skill_path.read_text(encoding="utf-8"))
+
+        env = os.environ.copy()
+        env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+        doctor = subprocess.run(
+            ["auto-iter", "doctor"],
+            cwd=self.tmp,
+            text=True,
+            capture_output=True,
+            env=env,
+        )
+        self.assertEqual(doctor.returncode, 0)
+        self.assertIn("state: ok", doctor.stdout)
+
     def test_run_finish_persists_config_metrics_and_artifacts(self):
         run_cli(self.tmp, "init")
         config = self.tmp / "config.json"
@@ -190,6 +225,88 @@ class CliTests(unittest.TestCase):
         with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
             status = db.execute("select status from runs where run_id = ?", (run_id,)).fetchone()[0]
         self.assertEqual(status, "failed")
+
+    def test_v0_2_entry_flow_uses_installed_auto_iter_command(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        run_cli(self.tmp, "install", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        script = self.tmp / "experiment.py"
+        write_json(config, {"round": 1, "method": "entry-flow"})
+        script.write_text(
+            "\n".join(
+                [
+                    "from pathlib import Path",
+                    "import json",
+                    "import sys",
+                    "Path(sys.argv[1]).write_text(json.dumps({'loss': 0.2}), encoding='utf-8')",
+                    "Path(sys.argv[2]).write_text('# v0.2 demo report\\n', encoding='utf-8')",
+                    "print('entry flow complete')",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+
+        def run_auto_iter(*args, check=True):
+            result = subprocess.run(
+                ["auto-iter", *args],
+                cwd=self.tmp,
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            if check and result.returncode != 0:
+                raise AssertionError(
+                    f"auto-iter failed: {' '.join(args)}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+                )
+            return result
+
+        self.assertIn("state: ok", run_auto_iter("doctor").stdout)
+        self.assertIn("handoff", run_auto_iter("resume", check=False).stdout)
+        self.assertIn(
+            "ALLOWED",
+            run_auto_iter("route", "check", "--config", str(config), "--summary", "v0.2 入口流程演示").stdout,
+        )
+        executed = run_auto_iter(
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "v0.2-entry-demo",
+            "--command",
+            f"{sys.executable} {script} {metrics} {artifact}",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        run_id = executed.stdout.strip().split()[2]
+        run_auto_iter(
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "v0.2 入口流程演示通过",
+            "--claim",
+            "Codex agent 可以在同一会话内通过 auto-iter 完成恢复、路线检查、执行实验、记录结论和生成 handoff。",
+        )
+        run_auto_iter("handoff", "generate")
+
+        handoff = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn("global_plan", handoff)
+        self.assertIn("v0.2 入口流程演示通过", handoff)
+        self.assertIn("entry flow complete", (self.tmp / "runs" / run_id / "logs" / "stdout.log").read_text(encoding="utf-8"))
 
     def test_rejected_decision_blocks_matching_route(self):
         run_cli(self.tmp, "init")

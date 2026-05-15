@@ -76,6 +76,8 @@
 
 ### v0.2：Codex 入口能力
 
+状态：done。
+
 目标：用户在 Codex CLI 内只表达任务，Codex agent 根据入口 skill 自动调用 `auto-iter`，不需要用户退出 Codex 或手写绝对路径。
 
 任务：
