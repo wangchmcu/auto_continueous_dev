@@ -7,6 +7,13 @@ description: Use when working on long-running algorithm experiments that must pr
 
 Use this skill to keep long-running algorithm iteration recoverable across sessions.
 
+## Natural Language Triggers
+
+- If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run the required start workflow.
+- If the user says “结束当前 session” or “做 handoff”, run the end-of-session workflow.
+- If the user asks to “查阅某个结论、实验、参数或历史细节”, run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
+- If the user asks to search `raw_input/`, do it only for initial setup or explicit missing-information lookup, then write useful information back into tracking information.
+
 ## Required Start
 
 1. Check the local state:

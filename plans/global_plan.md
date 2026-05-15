@@ -63,7 +63,13 @@
 - handoff、decision、run summary、error summary 都应可被按需读取。
 - 避免一次性把所有历史塞进上下文。
 
-### 8. 后续可选语义检索
+### 8. 自然语言接力入口
+
+- 用户可以用自然语言短句触发固定流程，例如结束 session、恢复 session、查阅某个历史细节。
+- Codex entry skill 负责把这些短句映射到 `auto-iter` 命令序列。
+- 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 等具体命令。
+
+### 9. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -120,6 +126,20 @@
 - 保留 reopen condition 输出；方法替代的自动判断后续可继续增强。
 - 建立 handoff、decision、run summary 的标题索引。
 - 先读目录和摘要，需要时再读详细内容。
+
+### v0.5：自然语言接力入口和细节读取入口
+
+状态：done。
+
+目标：用户不需要记具体命令，只用自然语言短句让 Codex agent 完成 session 结束、session 接力和历史细节查阅。
+
+任务：
+
+- 在 Codex entry skill 中写明自然语言触发短句和对应动作。
+- session 结束短句触发 handoff 生成、handoff 校验，以及按任务需要提交推送。
+- session 接力短句触发 doctor、resume、context index 和固定读取顺序。
+- 细节查阅短句触发 context index，然后由 agent 选择合适的文件和标题运行 context show。
+- README 添加好例子，说明如何结束 session、如何开启新 session、如何查阅某个细节。
 
 ### 后续可选：语义检索
 

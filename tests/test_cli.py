@@ -56,9 +56,10 @@ class CliTests(unittest.TestCase):
         active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
         version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
         global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
-        self.assertIn("当前版本：v0.4", active_plan)
-        self.assertIn("current_version: v0.4", version_tracking)
+        self.assertIn("当前版本：v0.5", active_plan)
+        self.assertIn("current_version: v0.5", version_tracking)
         self.assertIn("auto-iter handoff validate", active_plan)
+        self.assertIn("自然语言接力入口", version_tracking)
         self.assertIn("后续可选：语义检索", global_plan)
         self.assertNotIn("增加任务状态命令", global_plan)
 
@@ -89,6 +90,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("installed command", result.stdout)
         self.assertIn("installed skill", result.stdout)
         self.assertIn("auto-iter doctor", skill_path.read_text(encoding="utf-8"))
+        self.assertIn("结束当前 session", skill_path.read_text(encoding="utf-8"))
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")

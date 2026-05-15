@@ -26,18 +26,20 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前版本
 
-- 当前版本：v0.4。
+- 当前版本：v0.5。
 - v0.1 已完成：本地状态闭环、实验日志、结论记录和 handoff。
 - v0.2 已完成：Codex 入口 skill 和 `auto-iter` 短命令。
 - v0.3 已完成：`raw_input/` 读取边界和 handoff 完整性校验。
 - v0.4 已完成：参数空间路线拦截、上下文标题索引和按需读取。
+- v0.5 已完成：用自然语言短句触发 session 结束、session 接力和细节查阅流程。
 
 ## 下一步
 
-1. 正常任务继续使用 `auto-iter doctor`、`auto-iter resume`、`auto-iter context index`。
-2. 需要读取详细上下文时，用 `auto-iter context show --path <file> --heading "<heading>"`。
-3. 只有初次开始项目或明确缺失信息时才读取 `raw_input/`。
-4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
+1. 用户可直接说“结束当前 session”，agent 应生成并校验 handoff，并按任务需要提交推送。
+2. 用户可直接说“继续这个 auto-iteration 项目”，agent 应恢复上下文。
+3. 用户可直接说“查阅某个结论或实验细节”，agent 应先用上下文索引定位，再按需读取具体章节。
+4. 只有初次开始项目或明确缺失信息时才读取 `raw_input/`。
+5. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 """
 
 VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
@@ -58,9 +60,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.4
+- current_version: v0.5
 - status: done
-- goal: 完成 handoff 校验、raw_input 读取边界、路线关系增强和动态上下文载入。
+- goal: 完成自然语言短句触发 session 结束、session 接力和历史细节查阅。
 
 ## v0.1 任务清单
 
@@ -182,6 +184,31 @@ v0.4 已覆盖的全局能力：
 
 v0.4 之后仍未覆盖的全局能力：
 
+- 自然语言接力入口：用户只说结束 session、继续项目、查阅细节，agent 自动调用固定命令序列。
+- 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.5 任务清单
+
+- [x] 在 `auto-iteration-entry` skill 中增加自然语言触发短句。
+- [x] “结束当前 session”触发 handoff 生成、handoff 校验，并按任务需要提交推送。
+- [x] “继续这个 auto-iteration 项目”触发 doctor、resume、context index 和固定读取顺序。
+- [x] “查阅某个结论或实验细节”触发上下文索引，然后按需读取具体章节。
+- [x] README 增加好例子：如何结束 session、如何开启新 session、如何查阅细节。
+- [x] 初始化模板同步到 v0.5。
+
+## v0.5 距离 global plan
+
+v0.5 覆盖了自然语言接力入口和细节读取入口。
+
+v0.5 已覆盖的全局能力：
+
+- 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 的具体命令。
+- session 结束、session 接力、细节查阅都有自然语言触发短句。
+- Codex entry skill 明确这些短句对应的 agent 行为。
+- README 提供假设场景下的好例子。
+
+v0.5 之后仍未覆盖的全局能力：
+
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
 ## 后续版本方向
@@ -197,6 +224,10 @@ v0.4 之后仍未覆盖的全局能力：
 ### v0.4
 
 - done：路线关系增强和动态载入上下文已完成。
+
+### v0.5
+
+- done：自然语言接力入口和细节读取入口已完成。
 
 ### 后续可选
 
@@ -269,7 +300,13 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - handoff、decision、run summary、error summary 都应可被按需读取。
 - 避免一次性把所有历史塞进上下文。
 
-### 8. 后续可选语义检索
+### 8. 自然语言接力入口
+
+- 用户可以用自然语言短句触发固定流程，例如结束 session、恢复 session、查阅某个历史细节。
+- Codex entry skill 负责把这些短句映射到 `auto-iter` 命令序列。
+- 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 等具体命令。
+
+### 9. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -326,6 +363,20 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 保留 reopen condition 输出；方法替代的自动判断后续可继续增强。
 - 建立 handoff、decision、run summary 的标题索引。
 - 先读目录和摘要，需要时再读详细内容。
+
+### v0.5：自然语言接力入口和细节读取入口
+
+状态：done。
+
+目标：用户不需要记具体命令，只用自然语言短句让 Codex agent 完成 session 结束、session 接力和历史细节查阅。
+
+任务：
+
+- 在 Codex entry skill 中写明自然语言触发短句和对应动作。
+- session 结束短句触发 handoff 生成、handoff 校验，以及按任务需要提交推送。
+- session 接力短句触发 doctor、resume、context index 和固定读取顺序。
+- 细节查阅短句触发 context index，然后由 agent 选择合适的文件和标题运行 context show。
+- README 添加好例子，说明如何结束 session、如何开启新 session、如何查阅某个细节。
 
 ### 后续可选：语义检索
 

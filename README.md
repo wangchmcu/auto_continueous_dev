@@ -120,6 +120,66 @@ The source lives in this repository at `skills/auto-iteration-entry/`. The insta
 
 In Codex CLI, ask to continue an auto-iteration task; the agent should use that entry skill and call `auto-iter` commands inside the same Codex session.
 
+## Good Examples
+
+### Ending a long session
+
+User says in Codex CLI:
+
+```text
+结束当前 session。请生成并校验 handoff，提交并推送当前工作。
+```
+
+The agent should:
+
+- run `auto-iter handoff generate`
+- run `auto-iter handoff validate`
+- check git status
+- commit relevant changes
+- push to the configured remote when requested
+- report the current version, completed work, current-version remaining work, and remaining global plan capabilities
+
+### Starting a new session
+
+User starts Codex from the same algorithm project:
+
+```bash
+cd /path/to/algorithm_repo
+codex
+```
+
+Then says:
+
+```text
+继续这个 auto-iteration 项目，使用 auto-iteration-entry 恢复上下文。
+```
+
+The agent should:
+
+- run `auto-iter doctor`
+- run `auto-iter resume`
+- run `auto-iter context index`
+- read `plans/global_plan.md`, `plans/version_iterations.md`, `plans/active_plan.md`, and the relevant decisions
+- avoid `raw_input/` unless this is initial setup or explicit missing-information lookup
+- summarize current goal, active decisions, rejected routes, and next minimum experiment
+
+### Looking up details
+
+User says:
+
+```text
+查一下上次为什么否定高阈值区间，不要一次性读全部历史。
+```
+
+The agent should:
+
+- run `auto-iter context index`
+- choose the relevant decision, run summary, or handoff section
+- run `auto-iter context show --path <file> --heading "<heading>"`
+- answer from that section and cite the file path it used
+
+The user should not need to write the full `context show` command. The command is the agent's implementation detail.
+
 ## Version Task Tracking
 
 Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
