@@ -39,7 +39,7 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 说明
 
-这个文件记录每次版本迭代的目标、任务状态、验收证据和后续方向。
+这个文件记录每次版本迭代的目标、任务状态、验收证据、后续方向，以及当前版本整体距离 `global plan` 的差距。这里的 `global plan` 指整个长周期算法迭代上下文管理方案，不只指当前版本。
 
 - `pending` 表示还没开始。
 - `in_progress` 表示正在做。
@@ -76,8 +76,29 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 - [x] 十轮 demo：验证从多轮实验到结论沉淀的闭环。
 - [ ] 版本任务跟踪：每个版本都有任务状态、验收证据和下一步方向。
 - [ ] handoff 接入版本任务跟踪：新 session 能看到当前版本和下一步工程任务。
+- [ ] 结束汇报规则：每次任务结束前报告当前版本号、本次完成项、当前版本内部剩余项、当前版本整体距离 `global plan` 的差距。
 - [ ] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。
 - [ ] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
+
+## v0.1 距离 global plan
+
+v0.1 的定位是打底版本：先让实验事实、结论、计划和 handoff 有固定落点。它不是完整的 `global plan`。
+
+v0.1 已覆盖的全局能力：
+
+- 账本层基础：SQLite 已记录 run、metric、artifact、decision、handoff、route check。
+- 叙事层基础：`decisions/`、`handoffs/`、`plans/` 已有固定入口。
+- 流程层基础：`AGENTS.md`、skill、Stop hook 已有固定规则。
+- 重复路线拦截基础：能按配置哈希和 rejected/superseded 关键词阻断明显重复路线。
+
+v0.1 之后仍未覆盖的全局能力：
+
+- 自动执行实验命令并完整捕获日志。
+- 日志分级摘要：先读 summary 和 error_summary，需要时再读原始日志。
+- 按标题索引动态载入上下文，避免一次性塞入所有历史。
+- handoff 完整性校验，检查关键字段缺失。
+- 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+- 可选的语义检索：当 decision、handoff、retrospective 数量变多后再加入。
 
 ## v0.1 验收标准
 

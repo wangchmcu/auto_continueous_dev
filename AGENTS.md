@@ -5,7 +5,7 @@
 - 普通讨论使用中文；代码、命令、字段名和文件名保持英文。
 - 不要裸写自造实验名、缩写或参数标签。必须使用时，紧接着解释中文含义、对应代码或数据位置、每个数字或字母参数的含义。
 - 实验结果、参数对比、方案排序等包含数字列时，不使用普通 Markdown pipe table；改用对齐代码块或普通列表。
-- 每次结束任务前，最终回复必须报告当前版本号、本次完成了哪些、距离全局方案还有哪些未完成项。暂时使用 `global plan` 指代全局方案。
+- 每次结束任务前，最终回复必须报告当前版本号、本次完成了哪些、当前版本内部还剩哪些、当前版本整体距离 `global plan` 还有哪些全局能力未覆盖。这里的 `global plan` 暂时指整个长周期算法迭代上下文管理方案，不只指当前版本。
 
 ## Before Any Coding Or Experiment
 
@@ -25,6 +25,7 @@ python3 -m auto_iteration.cli route check --config <config.json> --summary "<中
 
 - `plans/version_iterations.md` is the version-level task tracker.
 - Every version entry must include the version name, status, goal, task checklist, acceptance checks, and next-version direction.
+- Every version entry must include a `global plan` distance section that states which global capabilities the current version covers and which global capabilities remain outside the current version.
 - When a task status changes, update `plans/version_iterations.md` in the same change.
 - Keep changing experiment history out of `AGENTS.md`; link to runs, decisions, artifacts, and plan files instead.
 
