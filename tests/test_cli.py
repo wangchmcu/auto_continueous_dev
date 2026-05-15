@@ -59,7 +59,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("当前版本：v0.5", active_plan)
         self.assertIn("current_version: v0.5", version_tracking)
         self.assertIn("auto-iter handoff validate", active_plan)
+        self.assertIn("self-improvement 系统改进沉淀能力", active_plan)
         self.assertIn("自然语言接力入口", version_tracking)
+        self.assertIn("v0.6 任务清单", version_tracking)
+        self.assertIn("Self-Improvement（系统改进沉淀能力）", global_plan)
         self.assertIn("后续可选：语义检索", global_plan)
         self.assertNotIn("增加任务状态命令", global_plan)
 
