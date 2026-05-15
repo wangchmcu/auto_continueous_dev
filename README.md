@@ -6,10 +6,29 @@ The goal is to stop treating chat history as project state. Experiment facts go 
 
 ## Minimum Workflow
 
-Initialize a project:
+Use inside this repository:
 
 ```bash
 python3 -m auto_iteration.cli init
+```
+
+Use from another algorithm repository by running the wrapper with an absolute path. The wrapper keeps the tool code in `/home/ryan/auto_iteration`, while the current working directory becomes the project whose experiments are recorded:
+
+```bash
+cd /path/to/algorithm_repo
+python3 /home/ryan/auto_iteration/tools/auto_iter.py init
+```
+
+For convenience, create a shell alias named `auto-iter` (only a shorter command name):
+
+```bash
+alias auto-iter='python3 /home/ryan/auto_iteration/tools/auto_iter.py'
+```
+
+Then run commands from the target project root:
+
+```bash
+auto-iter doctor
 ```
 
 Check state:
@@ -39,10 +58,11 @@ python3 -m auto_iteration.cli handoff generate
 python3 -m auto_iteration.cli resume
 ```
 
+When using the `auto-iter` alias in another repository, replace `python3 -m auto_iteration.cli` with `auto-iter`.
+
 ## Storage Rule
 
 - `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `decisions/`: readable decision projections.
 - `handoffs/latest_handoff.md`: fresh-session entry point.
 - `runs/<run_id>/`: per-run config snapshot and future logs/artifacts.
-

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -m auto_iteration.cli handoff generate",
+            "command": "python3 /home/ryan/auto_iteration/tools/auto_iter.py handoff generate",
             "statusMessage": "Generating latest auto-iteration handoff",
             "timeout": 30
           }
@@ -14,4 +14,3 @@
     ]
   }
 }
-
