@@ -60,9 +60,28 @@ python3 -m auto_iteration.cli resume
 
 When using the `auto-iter` alias in another repository, replace `python3 -m auto_iteration.cli` with `auto-iter`.
 
+## Version Task Tracking
+
+Use `plans/version_iterations.md` as the version-level task tracker. It records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
+
+Before changing implementation scope, update:
+
+```bash
+sed -n '1,220p' plans/version_iterations.md
+sed -n '1,160p' plans/active_plan.md
+```
+
+At session end, regenerate the handoff so the next Codex session sees the current version state:
+
+```bash
+python3 -m auto_iteration.cli handoff generate
+```
+
 ## Storage Rule
 
 - `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `decisions/`: readable decision projections.
 - `handoffs/latest_handoff.md`: fresh-session entry point.
+- `plans/version_iterations.md`: version-level task tracker.
+- `plans/active_plan.md`: current engineering direction.
 - `runs/<run_id>/`: per-run config snapshot and future logs/artifacts.

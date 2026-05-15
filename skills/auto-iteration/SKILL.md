@@ -21,7 +21,9 @@ python3 -m auto_iteration.cli doctor
 python3 -m auto_iteration.cli resume
 ```
 
-3. Read `decisions/active/`, `decisions/rejected/`, and `decisions/superseded/` before proposing a new route.
+3. Read `plans/version_iterations.md` and `plans/active_plan.md`.
+
+4. Read `decisions/active/`, `decisions/rejected/`, and `decisions/superseded/` before proposing a new route.
 
 ## Before A New Experiment
 
@@ -74,3 +76,4 @@ python3 -m auto_iteration.cli handoff generate
 
 The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads after `AGENTS.md`.
 
+When implementation scope changes, update `plans/version_iterations.md` before ending the session so the next session can see the current version tasks.

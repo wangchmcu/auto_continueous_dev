@@ -5,19 +5,28 @@
 - 普通讨论使用中文；代码、命令、字段名和文件名保持英文。
 - 不要裸写自造实验名、缩写或参数标签。必须使用时，紧接着解释中文含义、对应代码或数据位置、每个数字或字母参数的含义。
 - 实验结果、参数对比、方案排序等包含数字列时，不使用普通 Markdown pipe table；改用对齐代码块或普通列表。
+- 每次结束任务前，最终回复必须报告当前版本号、本次完成了哪些、距离全局方案还有哪些未完成项。暂时使用 `global plan` 指代全局方案。
 
 ## Before Any Coding Or Experiment
 
 1. Run `python3 -m auto_iteration.cli doctor` and read the result.
 2. Run `python3 -m auto_iteration.cli resume` if `handoffs/latest_handoff.md` exists.
-3. Read active decisions under `decisions/active/`.
-4. Before proposing or running a new experiment route, run:
+3. Read `plans/version_iterations.md` and `plans/active_plan.md`.
+4. Read active decisions under `decisions/active/`.
+5. Before proposing or running a new experiment route, run:
 
 ```bash
 python3 -m auto_iteration.cli route check --config <config.json> --summary "<中文路线说明>"
 ```
 
-5. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
+6. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
+
+## Version Task Tracking
+
+- `plans/version_iterations.md` is the version-level task tracker.
+- Every version entry must include the version name, status, goal, task checklist, acceptance checks, and next-version direction.
+- When a task status changes, update `plans/version_iterations.md` in the same change.
+- Keep changing experiment history out of `AGENTS.md`; link to runs, decisions, artifacts, and plan files instead.
 
 ## Experiment Protocol
 
@@ -36,5 +45,5 @@ python3 -m auto_iteration.cli handoff generate
 
 - SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
 - Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex.
+- Markdown files under `plans/` track version-level implementation work and current engineering direction.
 - `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.
-

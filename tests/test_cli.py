@@ -49,6 +49,8 @@ class CliTests(unittest.TestCase):
         self.assertTrue((self.tmp / "runs").is_dir())
         self.assertTrue((self.tmp / "decisions" / "rejected").is_dir())
         self.assertTrue((self.tmp / "handoffs" / "archive").is_dir())
+        self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
+        self.assertTrue((self.tmp / "plans" / "version_iterations.md").exists())
 
         doctor = run_cli(self.tmp, "doctor")
 
@@ -209,6 +211,8 @@ class CliTests(unittest.TestCase):
         text = handoff_path.read_text(encoding="utf-8")
         self.assertIn(str(handoff_path.resolve()), handoff.stdout)
         self.assertIn("## 当前目标", text)
+        self.assertIn("version_task_tracking", text)
+        self.assertIn(str((self.tmp / "plans" / "version_iterations.md").resolve()), text)
         self.assertIn("## 当前有效结论", text)
         self.assertIn("雨天阈值使用 0.58", text)
         self.assertIn(str(artifact.resolve()), text)

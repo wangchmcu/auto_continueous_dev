@@ -17,6 +17,90 @@ from typing import Any
 DB_PATH = Path("state") / "agent_state.db"
 DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
+ACTIVE_PLAN_TEMPLATE = """# Active Plan
+
+## 当前目标
+
+- 建立 Codex 长周期算法迭代的本地状态闭环。
+
+## 当前版本
+
+- 读取 `plans/version_iterations.md`，按当前版本的任务清单推进。
+
+## 下一步
+
+1. 使用 `python3 -m auto_iteration.cli init` 初始化目标算法仓库。
+2. 每次实验前运行 `route check`。
+3. 每次实验后运行 `run finish` 和 `decision add`。
+4. 会话结束前运行 `handoff generate`。
+"""
+
+VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
+
+## 说明
+
+这个文件记录每次版本迭代的目标、任务状态、验收证据和后续方向。
+
+- `pending` 表示还没开始。
+- `in_progress` 表示正在做。
+- `done` 表示已经完成并有证据。
+- `blocked` 表示被外部条件卡住。
+- `deferred` 表示明确放到后续版本。
+
+## 全局方案方向
+
+- 账本层：SQLite 数据库记录实验、指标、工件、结论和 handoff，是事实来源。
+- 叙事层：`decisions/`、`handoffs/`、`plans/` 记录人和 Codex 都能读懂的结论、交接和计划。
+- 流程层：`AGENTS.md`、skills、hooks 记录稳定规则和自动化入口。
+
+## 当前版本
+
+- current_version: v0.1
+- status: in_progress
+- goal: 建立最小可用的本地状态闭环，让长周期算法迭代不会只依赖聊天上下文。
+
+## v0.1 任务清单
+
+- [x] 初始化目录：`state/`、`runs/`、`handoffs/`、`decisions/`、`plans/`。
+- [x] 初始化 SQLite 数据库：记录 runs、metrics、artifacts、decisions、handoffs、route_checks。
+- [x] 记录实验开始：`run start` 写入配置、数据集、命令、Git commit 和 Git branch。
+- [x] 记录实验结束：`run finish` 写入状态、指标和工件路径。
+- [x] 查询实验：`run list` 和 `run show`。
+- [x] 记录结论：`decision add` 写入 active、rejected、superseded、open 状态。
+- [x] 替代旧结论：`decision supersede` 把旧结论移动到 superseded。
+- [x] 阻断重复路线：`route check` 检查重复配置以及 rejected/superseded 关键词。
+- [x] 生成交接：`handoff generate` 生成 `handoffs/latest_handoff.md`。
+- [x] 恢复交接：`resume` 输出下一轮应该先读的 handoff。
+- [x] Codex Stop hook：`.codex/hooks.json` 调用 handoff 生成命令。
+- [x] Codex skill：`skills/auto-iteration/SKILL.md` 记录使用流程。
+- [x] 十轮 demo：验证从多轮实验到结论沉淀的闭环。
+- [ ] 版本任务跟踪：每个版本都有任务状态、验收证据和下一步方向。
+- [ ] handoff 接入版本任务跟踪：新 session 能看到当前版本和下一步工程任务。
+- [ ] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。
+- [ ] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
+
+## v0.1 验收标准
+
+1. `python3 -m auto_iteration.cli doctor` 通过。
+2. `python3 -Wd -m unittest discover -s tests -v` 通过。
+3. `handoffs/latest_handoff.md` 包含版本任务跟踪文件路径。
+4. `plans/version_iterations.md` 明确列出当前版本状态、已完成任务、未完成任务和后续版本方向。
+
+## 后续版本方向
+
+### v0.2
+
+- 自动执行实验命令。
+- 自动捕获 stdout、stderr 和 debug 日志。
+- 自动生成实验摘要和错误摘要。
+- handoff 默认只引用摘要和证据路径，不粘贴原始日志。
+
+### v0.3
+
+- 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
+- 增加 handoff 校验，检查关键字段是否缺失。
+- 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+"""
 
 
 def now_iso() -> str:
@@ -120,6 +204,16 @@ def ensure_dirs() -> None:
         (root() / path).mkdir(parents=True, exist_ok=True)
 
 
+def write_if_missing(path: Path, text: str) -> None:
+    if not path.exists():
+        path.write_text(text.rstrip() + "\n", encoding="utf-8")
+
+
+def ensure_plan_files() -> None:
+    write_if_missing(root() / "plans" / "active_plan.md", ACTIVE_PLAN_TEMPLATE)
+    write_if_missing(root() / "plans" / "version_iterations.md", VERSION_ITERATIONS_TEMPLATE)
+
+
 def init_schema(db: sqlite3.Connection) -> None:
     db.executescript(
         """
@@ -198,6 +292,7 @@ def init_schema(db: sqlite3.Connection) -> None:
 
 def command_init(_args: argparse.Namespace) -> int:
     ensure_dirs()
+    ensure_plan_files()
     with database(require_existing=False) as db:
         init_schema(db)
         project_id = hashlib.sha256(str(root()).encode("utf-8")).hexdigest()[:12]
@@ -217,6 +312,9 @@ def command_doctor(_args: argparse.Namespace) -> int:
     missing = [name for name in ["state", "runs", "handoffs", "decisions", "plans"] if not (root() / name).exists()]
     if missing:
         raise UserError("missing directories: " + ", ".join(missing))
+    missing_files = [name for name in ["plans/active_plan.md", "plans/version_iterations.md"] if not (root() / name).exists()]
+    if missing_files:
+        raise UserError("missing plan files: " + ", ".join(missing_files))
     print("state: ok")
     with database() as db:
         row = db.execute("select count(*) from sqlite_master where type = 'table'").fetchone()
@@ -536,6 +634,8 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- commit: {git_commit()}",
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
+        f"- version_task_tracking: {root() / 'plans' / 'version_iterations.md'}",
+        f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
         "",
         "## 最近成功实验",
     ]
@@ -579,9 +679,11 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         "## 读取顺序",
         f"1. {root() / 'AGENTS.md'}",
         f"2. {root() / 'handoffs' / 'latest_handoff.md'}",
-        f"3. {root() / 'state' / 'agent_state.db'}",
-        f"4. {root() / 'decisions'}",
-        "5. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        f"3. {root() / 'plans' / 'version_iterations.md'}",
+        f"4. {root() / 'plans' / 'active_plan.md'}",
+        f"5. {root() / 'state' / 'agent_state.db'}",
+        f"6. {root() / 'decisions'}",
+        "7. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
         "",
     ]
     return "\n".join(lines), success["run_id"] if success else None
