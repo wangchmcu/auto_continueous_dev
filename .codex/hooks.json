@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m auto_iteration.cli handoff generate",
+            "statusMessage": "Generating latest auto-iteration handoff",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,40 @@
+# Auto Iteration Agent Rules
+
+## Communication
+
+- 普通讨论使用中文；代码、命令、字段名和文件名保持英文。
+- 不要裸写自造实验名、缩写或参数标签。必须使用时，紧接着解释中文含义、对应代码或数据位置、每个数字或字母参数的含义。
+- 实验结果、参数对比、方案排序等包含数字列时，不使用普通 Markdown pipe table；改用对齐代码块或普通列表。
+
+## Before Any Coding Or Experiment
+
+1. Run `python3 -m auto_iteration.cli doctor` and read the result.
+2. Run `python3 -m auto_iteration.cli resume` if `handoffs/latest_handoff.md` exists.
+3. Read active decisions under `decisions/active/`.
+4. Before proposing or running a new experiment route, run:
+
+```bash
+python3 -m auto_iteration.cli route check --config <config.json> --summary "<中文路线说明>"
+```
+
+5. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
+
+## Experiment Protocol
+
+- Every experiment must have one `run_id`.
+- Every experiment must save resolved config, metrics, logs, and artifacts.
+- Every conclusion must become a decision record with evidence run IDs.
+- Raw logs stay under `runs/<run_id>/logs/`; do not paste full logs into context by default.
+- Read summaries, metrics, artifacts, and decisions first; read raw logs only for a specific failure investigation.
+- At session end, generate a handoff with:
+
+```bash
+python3 -m auto_iteration.cli handoff generate
+```
+
+## State Ownership
+
+- SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
+- Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex.
+- `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.
+
