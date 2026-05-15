@@ -29,9 +29,9 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 下一步
 
-1. 使用 `python3 -m auto_iteration.cli init` 初始化目标算法仓库。
-2. 每次实验前运行 `route check`。
-3. 每次实验后运行 `run finish` 和 `decision add`。
+1. 每次实验前运行 `route check`。
+2. 优先用 `run exec` 执行实验并捕获日志。
+3. 如果实验必须手动运行，则使用 `run start` 和 `run finish`。
 4. 会话结束前运行 `handoff generate`。
 """
 
@@ -56,7 +56,7 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 ## 当前版本
 
 - current_version: v0.1
-- status: in_progress
+- status: done
 - goal: 建立最小可用的本地状态闭环，让长周期算法迭代不会只依赖聊天上下文。
 
 ## v0.1 任务清单
@@ -74,11 +74,11 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 - [x] Codex Stop hook：`.codex/hooks.json` 调用 handoff 生成命令。
 - [x] Codex skill：`skills/auto-iteration/SKILL.md` 记录使用流程。
 - [x] 十轮 demo：验证从多轮实验到结论沉淀的闭环。
-- [ ] 版本任务跟踪：每个版本都有任务状态、验收证据和下一步方向。
-- [ ] handoff 接入版本任务跟踪：新 session 能看到当前版本和下一步工程任务。
-- [ ] 结束汇报规则：每次任务结束前报告当前版本号、本次完成项、当前版本内部剩余项、当前版本整体距离 `global plan` 的差距。
-- [ ] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。
-- [ ] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
+- [x] 版本任务跟踪：每个版本都有任务状态、验收证据和下一步方向。
+- [x] handoff 接入版本任务跟踪：新 session 能看到当前版本和下一步工程任务。
+- [x] 结束汇报规则：每次任务结束前报告当前版本号、本次完成项、当前版本内部剩余项、当前版本整体距离 `global plan` 的差距。
+- [x] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。
+- [x] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
 
 ## v0.1 距离 global plan
 
@@ -90,11 +90,11 @@ v0.1 已覆盖的全局能力：
 - 叙事层基础：`decisions/`、`handoffs/`、`plans/` 已有固定入口。
 - 流程层基础：`AGENTS.md`、skill、Stop hook 已有固定规则。
 - 重复路线拦截基础：能按配置哈希和 rejected/superseded 关键词阻断明显重复路线。
+- 日志分级基础：每个 run 已有 `summary.md` 和 `logs/error_summary.md`，原始 stdout/stderr/debug 日志保留在 `logs/` 下。
+- 实验执行基础：`run exec` 能执行单条实验命令并自动写入状态库和日志文件。
 
 v0.1 之后仍未覆盖的全局能力：
 
-- 自动执行实验命令并完整捕获日志。
-- 日志分级摘要：先读 summary 和 error_summary，需要时再读原始日志。
 - 按标题索引动态载入上下文，避免一次性塞入所有历史。
 - handoff 完整性校验，检查关键字段缺失。
 - 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
@@ -111,16 +111,14 @@ v0.1 之后仍未覆盖的全局能力：
 
 ### v0.2
 
-- 自动执行实验命令。
-- 自动捕获 stdout、stderr 和 debug 日志。
-- 自动生成实验摘要和错误摘要。
-- handoff 默认只引用摘要和证据路径，不粘贴原始日志。
+- 增加 handoff 完整性校验，检查关键字段是否缺失。
+- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 
 ### v0.3
 
 - 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
-- 增加 handoff 校验，检查关键字段是否缺失。
 - 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+- 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 """
 
 
@@ -187,6 +185,14 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def run_dir(run_id: str) -> Path:
+    return root() / "runs" / run_id
+
+
+def logs_dir(run_id: str) -> Path:
+    return run_dir(run_id) / "logs"
 
 
 def git_value(args: list[str]) -> str:
@@ -353,40 +359,54 @@ def new_id(prefix: str) -> str:
 
 def command_run_start(args: argparse.Namespace) -> int:
     config = read_json(args.config)
-    run_id = new_id("R")
-    run_dir = root() / "runs" / run_id
-    (run_dir / "logs").mkdir(parents=True, exist_ok=True)
-    (run_dir / "artifacts").mkdir(parents=True, exist_ok=True)
-    config_text = json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True)
-    (run_dir / "config_resolved.json").write_text(config_text + "\n", encoding="utf-8")
-    config_hash = hash_data(config)
     with database() as db:
-        project = db.execute("select project_id from projects limit 1").fetchone()
-        project_id = project["project_id"] if project else "default"
-        db.execute(
-            """
-            insert into runs (
-                run_id, project_id, session_id, git_commit, git_branch, dataset_id,
-                seed, command, config_json, config_hash, status, started_at
-            )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
-            """,
-            (
-                run_id,
-                project_id,
-                args.session,
-                git_commit(),
-                git_branch(),
-                args.dataset,
-                args.seed,
-                args.command,
-                stable_json(config),
-                config_hash,
-                now_iso(),
-            ),
-        )
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
     print(f"started run {run_id}")
     return 0
+
+
+def create_run_record(
+    db: sqlite3.Connection,
+    config: Any,
+    dataset: str,
+    command: str,
+    seed: str | None = None,
+    session: str | None = None,
+) -> str:
+    run_id = new_id("R")
+    current_run_dir = run_dir(run_id)
+    logs_dir(run_id).mkdir(parents=True, exist_ok=True)
+    (current_run_dir / "artifacts").mkdir(parents=True, exist_ok=True)
+    for log_name in ["stdout.log", "stderr.log", "debug.jsonl"]:
+        (logs_dir(run_id) / log_name).touch()
+    config_text = json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True)
+    (current_run_dir / "config_resolved.json").write_text(config_text + "\n", encoding="utf-8")
+    config_hash = hash_data(config)
+    project = db.execute("select project_id from projects limit 1").fetchone()
+    project_id = project["project_id"] if project else "default"
+    db.execute(
+        """
+        insert into runs (
+            run_id, project_id, session_id, git_commit, git_branch, dataset_id,
+            seed, command, config_json, config_hash, status, started_at
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+        """,
+        (
+            run_id,
+            project_id,
+            session,
+            git_commit(),
+            git_branch(),
+            dataset,
+            seed,
+            command,
+            stable_json(config),
+            config_hash,
+            now_iso(),
+        ),
+    )
+    return run_id
 
 
 def normalize_metric(value: Any) -> tuple[float, str, str]:
@@ -412,32 +432,144 @@ def add_artifact(db: sqlite3.Connection, run_id: str, artifact_path: str, kind: 
     )
 
 
+def summarize_text(text: str, max_lines: int = 40, max_chars: int = 4000) -> str:
+    lines = text.splitlines()
+    if len(lines) > max_lines:
+        lines = ["... truncated earlier lines ...", *lines[-max_lines:]]
+    summarized = "\n".join(lines)
+    if len(summarized) > max_chars:
+        summarized = "... truncated earlier characters ...\n" + summarized[-max_chars:]
+    return summarized
+
+
+def write_debug_event(run_id: str, event: str, payload: dict[str, Any]) -> None:
+    path = logs_dir(run_id) / "debug.jsonl"
+    record = {"time": now_iso(), "event": event, **payload}
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def write_error_summary(run_id: str, returncode: int | None = None) -> None:
+    stderr_path = logs_dir(run_id) / "stderr.log"
+    stderr_text = stderr_path.read_text(encoding="utf-8", errors="replace") if stderr_path.exists() else ""
+    lines = [
+        "# Error Summary",
+        "",
+        f"- run_id: {run_id}",
+        f"- returncode: {returncode if returncode is not None else 'unknown'}",
+        "",
+        "## stderr",
+    ]
+    if stderr_text.strip():
+        lines += ["", "```text", summarize_text(stderr_text), "```"]
+    else:
+        lines.append("No stderr output.")
+    (logs_dir(run_id) / "error_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_run_summary(db: sqlite3.Connection, run_id: str) -> None:
+    run = db.execute("select * from runs where run_id = ?", (run_id,)).fetchone()
+    if not run:
+        raise UserError(f"unknown run_id: {run_id}")
+    metrics = db.execute("select * from metrics where run_id = ? order by metric_name", (run_id,)).fetchall()
+    artifacts = db.execute("select * from artifacts where run_id = ? order by path", (run_id,)).fetchall()
+    lines = [
+        "# Run Summary",
+        "",
+        f"- run_id: {run['run_id']}",
+        f"- status: {run['status']}",
+        f"- dataset_id: {run['dataset_id']}",
+        f"- git_commit: {run['git_commit']}",
+        f"- git_branch: {run['git_branch']}",
+        f"- config_hash: {run['config_hash']}",
+        f"- command: {run['command']}",
+        "",
+        "## Metrics",
+    ]
+    if metrics:
+        for row in metrics:
+            unit = f" {row['unit']}" if row["unit"] else ""
+            direction = f" direction={row['direction']}" if row["direction"] else ""
+            lines.append(f"- {row['metric_name']}: {row['metric_value']}{unit}{direction}")
+    else:
+        lines.append("- none")
+    lines += ["", "## Artifacts"]
+    if artifacts:
+        for row in artifacts:
+            lines.append(f"- {row['kind']}: {row['path']}")
+    else:
+        lines.append("- none")
+    lines += [
+        "",
+        "## Logs",
+        f"- stdout: {logs_dir(run_id) / 'stdout.log'}",
+        f"- stderr: {logs_dir(run_id) / 'stderr.log'}",
+        f"- debug: {logs_dir(run_id) / 'debug.jsonl'}",
+        f"- error_summary: {logs_dir(run_id) / 'error_summary.md'}",
+        "",
+    ]
+    (run_dir(run_id) / "summary.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def finish_run_record(
+    db: sqlite3.Connection,
+    run_id: str,
+    status: str,
+    metrics: dict[str, Any],
+    artifact_paths: list[str],
+    returncode: int | None = None,
+) -> None:
+    if status not in RUN_STATUSES:
+        raise UserError(f"invalid status: {status}")
+    existing = db.execute("select run_id from runs where run_id = ?", (run_id,)).fetchone()
+    if not existing:
+        raise UserError(f"unknown run_id: {run_id}")
+    for name, raw_value in metrics.items():
+        value, unit, direction = normalize_metric(raw_value)
+        db.execute(
+            """
+            insert or replace into metrics (run_id, metric_name, metric_value, unit, direction)
+            values (?, ?, ?, ?, ?)
+            """,
+            (run_id, name, value, unit, direction),
+        )
+    for path in artifact_paths:
+        add_artifact(db, run_id, path)
+    summary = f"status={status}; metrics={', '.join(sorted(metrics))}"
+    db.execute(
+        "update runs set status = ?, ended_at = ?, summary = ? where run_id = ?",
+        (status, now_iso(), summary, run_id),
+    )
+    write_error_summary(run_id, returncode)
+    write_run_summary(db, run_id)
+
+
 def command_run_finish(args: argparse.Namespace) -> int:
-    if args.status not in RUN_STATUSES:
-        raise UserError(f"invalid status: {args.status}")
     metrics = read_json(args.metrics) if args.metrics else {}
     with database() as db:
-        existing = db.execute("select run_id from runs where run_id = ?", (args.run_id,)).fetchone()
-        if not existing:
-            raise UserError(f"unknown run_id: {args.run_id}")
-        for name, raw_value in metrics.items():
-            value, unit, direction = normalize_metric(raw_value)
-            db.execute(
-                """
-                insert or replace into metrics (run_id, metric_name, metric_value, unit, direction)
-                values (?, ?, ?, ?, ?)
-                """,
-                (args.run_id, name, value, unit, direction),
-            )
-        for path in args.artifact:
-            add_artifact(db, args.run_id, path)
-        summary = f"status={args.status}; metrics={', '.join(sorted(metrics))}"
-        db.execute(
-            "update runs set status = ?, ended_at = ?, summary = ? where run_id = ?",
-            (args.status, now_iso(), summary, args.run_id),
-        )
+        finish_run_record(db, args.run_id, args.status, metrics, args.artifact)
     print(f"finished run {args.run_id}")
     return 0
+
+
+def command_run_exec(args: argparse.Namespace) -> int:
+    config = read_json(args.config)
+    with database() as db:
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
+        write_debug_event(run_id, "started", {"command": args.command})
+        result = subprocess.run(args.command, cwd=root(), text=True, capture_output=True, shell=True)
+        (logs_dir(run_id) / "stdout.log").write_text(result.stdout, encoding="utf-8")
+        (logs_dir(run_id) / "stderr.log").write_text(result.stderr, encoding="utf-8")
+        status = "success" if result.returncode == 0 else "failed"
+        write_debug_event(
+            run_id,
+            "finished",
+            {"returncode": result.returncode, "status": status},
+        )
+        metrics = read_json(args.metrics) if args.metrics and Path(args.metrics).exists() else {}
+        finish_run_record(db, run_id, status, metrics, args.artifact, result.returncode)
+    print(f"executed run {run_id} status={status} returncode={result.returncode}")
+    return result.returncode
 
 
 def command_run_list(args: argparse.Namespace) -> int:
@@ -750,6 +882,15 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     start.add_argument("--seed")
     start.add_argument("--session")
     start.set_defaults(func=command_run_start)
+    exec_cmd = run_sub.add_parser("exec")
+    exec_cmd.add_argument("--config", required=True)
+    exec_cmd.add_argument("--dataset", required=True)
+    exec_cmd.add_argument("--command", required=True)
+    exec_cmd.add_argument("--metrics")
+    exec_cmd.add_argument("--artifact", action="append", default=[])
+    exec_cmd.add_argument("--seed")
+    exec_cmd.add_argument("--session")
+    exec_cmd.set_defaults(func=command_run_exec)
     finish = run_sub.add_parser("finish")
     finish.add_argument("run_id")
     finish.add_argument("--status", required=True)

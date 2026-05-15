@@ -106,6 +106,89 @@ class CliTests(unittest.TestCase):
                 (run_id, "precision"),
             ).fetchone()
         self.assertEqual(metric, (0.91, "ratio", "higher_is_better"))
+        self.assertTrue((self.tmp / "runs" / run_id / "summary.md").exists())
+        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "error_summary.md").exists())
+        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "stdout.log").exists())
+        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "stderr.log").exists())
+        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "debug.jsonl").exists())
+
+    def test_run_exec_captures_logs_and_generates_summaries(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        script = self.tmp / "experiment.py"
+        write_json(config, {"sample_count": 50, "threshold": 0.42})
+        script.write_text(
+            "\n".join(
+                [
+                    "from pathlib import Path",
+                    "import json",
+                    "import sys",
+                    "metrics = Path(sys.argv[1])",
+                    "artifact = Path(sys.argv[2])",
+                    "print('stdout marker')",
+                    "print('stderr marker', file=sys.stderr)",
+                    "metrics.write_text(json.dumps({'score': {'value': 0.75, 'unit': 'ratio', 'direction': 'higher_is_better'}}), encoding='utf-8')",
+                    "artifact.write_text('# report\\n', encoding='utf-8')",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "exec-demo",
+            "--command",
+            f"{sys.executable} {script} {metrics} {artifact}",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        run_id = result.stdout.strip().split()[2]
+        run_dir = self.tmp / "runs" / run_id
+
+        self.assertIn("status=success", result.stdout)
+        self.assertIn("stdout marker", (run_dir / "logs" / "stdout.log").read_text(encoding="utf-8"))
+        self.assertIn("stderr marker", (run_dir / "logs" / "stderr.log").read_text(encoding="utf-8"))
+        self.assertIn('"event": "finished"', (run_dir / "logs" / "debug.jsonl").read_text(encoding="utf-8"))
+        self.assertIn("score", (run_dir / "summary.md").read_text(encoding="utf-8"))
+        self.assertIn("stderr marker", (run_dir / "logs" / "error_summary.md").read_text(encoding="utf-8"))
+
+    def test_run_exec_records_failed_run_and_error_summary(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        write_json(config, {"case": "failure"})
+
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "exec-demo",
+            "--command",
+            f"{sys.executable} -c \"import sys; print('fatal detail', file=sys.stderr); sys.exit(3)\"",
+            check=False,
+        )
+        run_id = result.stdout.strip().split()[2]
+        run_dir = self.tmp / "runs" / run_id
+
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("status=failed", result.stdout)
+        self.assertIn("fatal detail", (run_dir / "logs" / "stderr.log").read_text(encoding="utf-8"))
+        self.assertIn("fatal detail", (run_dir / "logs" / "error_summary.md").read_text(encoding="utf-8"))
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            status = db.execute("select status from runs where run_id = ?", (run_id,)).fetchone()[0]
+        self.assertEqual(status, "failed")
 
     def test_rejected_decision_blocks_matching_route(self):
         run_cli(self.tmp, "init")

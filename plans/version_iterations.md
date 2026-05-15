@@ -19,7 +19,7 @@
 ## 当前版本
 
 - current_version: v0.1
-- status: in_progress
+- status: done
 - goal: 建立最小可用的本地状态闭环，让长周期算法迭代不会只依赖聊天上下文。
 
 ## v0.1 任务清单
@@ -40,8 +40,8 @@
 - [x] 版本任务跟踪：每个版本都有任务状态、验收证据和下一步方向。证据：本文件。
 - [x] handoff 接入版本任务跟踪：新 session 能看到当前版本和下一步工程任务。证据：`auto_iteration/cli.py` 的 handoff 输出和测试。
 - [x] 结束汇报规则：每次任务结束前报告当前版本号、本次完成项、当前版本内部剩余项、当前版本整体距离 `global plan` 的差距。证据：`AGENTS.md`。
-- [ ] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。
-- [ ] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
+- [x] 日志摘要：自动生成 `runs/<run_id>/summary.md` 和 `runs/<run_id>/logs/error_summary.md`。证据：`run finish` 和 `run exec` 测试。
+- [x] 实验命令封装：自动执行命令并捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。证据：`run exec` 测试。
 
 ## v0.1 距离 global plan
 
@@ -53,11 +53,11 @@ v0.1 已覆盖的全局能力：
 - 叙事层基础：`decisions/`、`handoffs/`、`plans/` 已有固定入口。
 - 流程层基础：`AGENTS.md`、skill、Stop hook 已有固定规则。
 - 重复路线拦截基础：能按配置哈希和 rejected/superseded 关键词阻断明显重复路线。
+- 日志分级基础：每个 run 已有 `summary.md` 和 `logs/error_summary.md`，原始 stdout/stderr/debug 日志保留在 `logs/` 下。
+- 实验执行基础：`run exec` 能执行单条实验命令并自动写入状态库和日志文件。
 
 v0.1 之后仍未覆盖的全局能力：
 
-- 自动执行实验命令并完整捕获日志。
-- 日志分级摘要：先读 summary 和 error_summary，需要时再读原始日志。
 - 按标题索引动态载入上下文，避免一次性塞入所有历史。
 - handoff 完整性校验，检查关键字段缺失。
 - 更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
@@ -74,13 +74,11 @@ v0.1 之后仍未覆盖的全局能力：
 
 ### v0.2
 
-- 自动执行实验命令。
-- 自动捕获 stdout、stderr 和 debug 日志。
-- 自动生成实验摘要和错误摘要。
-- handoff 默认只引用摘要和证据路径，不粘贴原始日志。
+- 增加 handoff 完整性校验，检查关键字段是否缺失。
+- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 
 ### v0.3
 
 - 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
-- 增加 handoff 校验，检查关键字段是否缺失。
 - 增加任务状态命令，减少手工维护 Markdown 的出错概率。
+- 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。

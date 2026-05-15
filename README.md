@@ -37,7 +37,13 @@ Check state:
 python3 -m auto_iteration.cli doctor
 ```
 
-Record a run:
+Record a run by letting `auto_iteration` execute the command and capture logs:
+
+```bash
+python3 -m auto_iteration.cli run exec --config config.json --dataset demo --command "python experiment.py" --metrics metrics.json --artifact report.md
+```
+
+Or record a run manually:
 
 ```bash
 python3 -m auto_iteration.cli run start --config config.json --dataset demo --command "python experiment.py"
@@ -84,4 +90,9 @@ python3 -m auto_iteration.cli handoff generate
 - `handoffs/latest_handoff.md`: fresh-session entry point.
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.
-- `runs/<run_id>/`: per-run config snapshot and future logs/artifacts.
+- `runs/<run_id>/config_resolved.json`: resolved config snapshot.
+- `runs/<run_id>/summary.md`: per-run readable summary.
+- `runs/<run_id>/logs/stdout.log`: captured stdout.
+- `runs/<run_id>/logs/stderr.log`: captured stderr.
+- `runs/<run_id>/logs/debug.jsonl`: structured execution events.
+- `runs/<run_id>/logs/error_summary.md`: bounded stderr summary for default reading.

@@ -37,7 +37,15 @@ If the command returns `BLOCKED`, do not run that route unless the user explicit
 
 ## Recording A Run
 
-Start the run record before the experiment:
+Prefer `run exec` when the experiment can be launched from one shell command. It records the run, executes the command, captures stdout/stderr/debug logs, and generates summaries:
+
+```bash
+python3 -m auto_iteration.cli run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
+Use `run start` and `run finish` when the experiment must be launched manually.
+
+Start the manual run record before the experiment:
 
 ```bash
 python3 -m auto_iteration.cli run start --config <config.json> --dataset <dataset-id> --command "<exact command>"
