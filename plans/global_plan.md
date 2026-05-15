@@ -42,20 +42,28 @@
 - 新 Codex session 先读 `AGENTS.md`、handoff、global plan、version tracking、active plan。
 - 后续增加 handoff 完整性校验，检查关键字段缺失。
 
-### 5. Codex 入口能力
+### 5. 原始输入目录
+
+- 每个项目开发目录可以有 `raw_input/`，用于存放原始输入材料或老项目导入材料。
+- `raw_input/` 只在两种情况下读取：初次开始项目；后续开发中明确需要到原始输入里检索缺失信息。
+- 正常迭代时应优先读取 `plans/`、`handoffs/`、`decisions/`、run summaries 和 SQLite 状态库。
+- 理论上，工作 tracking 信息应该已经吸收并更新了 `raw_input/` 中的重要信息；如果二者冲突，默认以 tracking 信息为准，除非用户明确要求回到原始输入核对。
+- 从 `raw_input/` 找到的新信息，必须沉淀回 `plans/`、`decisions/`、handoff 或 run summary，避免下次再次回查原始材料。
+
+### 6. Codex 入口能力
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
 - 提供短命令入口 `auto-iter`，避免每次写 `python3 /home/ryan/auto_iteration/tools/auto_iter.py`。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
 
-### 6. 动态载入上下文
+### 7. 动态载入上下文
 
 - 建立按标题索引的上下文读取方式：先读目录和摘要，需要时再读详细内容。
 - handoff、decision、run summary、error summary 都应可被按需读取。
 - 避免一次性把所有历史塞进上下文。
 
-### 7. 后续可选语义检索
+### 8. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -87,21 +95,24 @@
 - 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
 - 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
 
-### v0.3：handoff 校验和路线关系增强
+### v0.3：raw_input 使用边界和 handoff 校验
 
-目标：减少交接字段缺失和重复路线误判。
+目标：让原始输入材料有固定落点和明确读取边界，同时减少交接字段缺失。
 
 任务：
 
+- `init` 创建 `raw_input/`。
+- `AGENTS.md` 和入口 skill 明确 `raw_input/` 只能在初次开始项目或明确缺失信息时读取。
+- 从 `raw_input/` 找到的新信息必须沉淀回 tracking 信息。
 - 增加 handoff 完整性校验。
-- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 
-### v0.4：动态载入上下文
+### v0.4：路线关系增强和动态载入上下文
 
-目标：按标题索引和摘要读取历史，减少 token 占用。
+目标：减少重复路线误判，并按标题索引和摘要读取历史，减少 token 占用。
 
 任务：
 
+- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 - 建立 handoff、decision、run summary 的标题索引。
 - 先读目录和摘要，需要时再读详细内容。
 - 增加任务状态命令，减少手工维护 Markdown 的出错概率。

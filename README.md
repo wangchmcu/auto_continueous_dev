@@ -94,11 +94,16 @@ At session end, regenerate the handoff so the next Codex session sees the curren
 python3 -m auto_iteration.cli handoff generate
 ```
 
+## Raw Input
+
+`raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. Normal work should use `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db` first. If useful information is recovered from `raw_input/`, write it back into tracking information.
+
 ## Storage Rule
 
 - `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `decisions/`: readable decision projections.
 - `handoffs/latest_handoff.md`: fresh-session entry point.
+- `raw_input/`: original input materials and old project imports.
 - `plans/global_plan.md`: global plan for the full context-management system.
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.

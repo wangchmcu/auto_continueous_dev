@@ -30,6 +30,14 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - When a task status changes, update `plans/version_iterations.md` in the same change.
 - Keep changing experiment history out of `AGENTS.md`; link to runs, decisions, artifacts, and plan files instead.
 
+## Raw Input
+
+- `raw_input/` stores original input materials or old project imports.
+- Read `raw_input/` only when starting a project for the first time or when later work explicitly needs missing information from the original input.
+- Normal work should read tracking information first: `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db`.
+- If `raw_input/` conflicts with tracking information, treat tracking information as newer unless the user explicitly asks to verify against the original input.
+- Any useful information found in `raw_input/` must be written back into tracking information so future sessions do not need to rediscover it.
+
 ## Experiment Protocol
 
 - Every experiment must have one `run_id`.

@@ -47,6 +47,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("initialized", result.stdout)
         self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
         self.assertTrue((self.tmp / "runs").is_dir())
+        self.assertTrue((self.tmp / "raw_input").is_dir())
         self.assertTrue((self.tmp / "decisions" / "rejected").is_dir())
         self.assertTrue((self.tmp / "handoffs" / "archive").is_dir())
         self.assertTrue((self.tmp / "plans" / "global_plan.md").exists())

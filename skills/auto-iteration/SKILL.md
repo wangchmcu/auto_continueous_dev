@@ -25,6 +25,8 @@ auto-iter resume
 
 4. Read `decisions/active/`, `decisions/rejected/`, and `decisions/superseded/` before proposing a new route.
 
+5. Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. Anything useful found there must be written back into tracking information.
+
 If `auto-iter` is missing, install it:
 
 ```bash

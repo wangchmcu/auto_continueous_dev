@@ -25,6 +25,8 @@ Then read:
 5. `decisions/rejected/`
 6. `decisions/superseded/`
 
+Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. If useful information is found there, write it back into plans, decisions, handoff, or run summaries.
+
 If `auto-iter` is missing, run:
 
 ```bash
