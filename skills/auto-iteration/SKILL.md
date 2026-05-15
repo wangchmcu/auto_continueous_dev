@@ -14,6 +14,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user asks to “查阅某个结论、实验、参数或历史细节”, run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
 - If the user asks to search `raw_input/`, do it only for initial setup or explicit missing-information lookup, then write useful information back into tracking information.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
+- If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 
 ## Required Start
 
@@ -42,6 +43,14 @@ python3 /home/ryan/auto_iteration/tools/auto_iter.py install
 ```
 
 ## Before A New Experiment
+
+If the user phrase is only “执行吧”, “实施吧”, “确定执行”, or a similar execution approval, first run:
+
+```bash
+auto-iter intent check --text "<用户原话>"
+```
+
+Then continue only when the concrete config, dataset, command, metrics, and artifact expectations are clear.
 
 Run a route check before executing the experiment:
 
@@ -98,6 +107,14 @@ auto-iter run finish <run_id> --status success --metrics <metrics.json> --artifa
 Use `failed` or `aborted` instead of `success` when the run did not complete.
 
 ## Recording A Decision
+
+If the user says “拿到结果了”, “跑完数据了”, “测试结束了”, or a similar result-complete phrase, first run:
+
+```bash
+auto-iter intent check --text "<用户原话>"
+```
+
+Then collect metrics, artifacts, and the evidence `run_id` before writing a decision.
 
 Every conclusion needs a decision with evidence:
 

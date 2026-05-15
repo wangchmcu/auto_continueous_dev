@@ -38,6 +38,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 
 ## Natural Language Entry
 
+- If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 - If the user says “结束当前 session” or “做 handoff”, run `auto-iter handoff generate` and `auto-iter handoff validate`; if the user asks to submit or push, also commit and push the relevant changes.
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run `auto-iter doctor`, `auto-iter resume`, and `auto-iter context index`, then restore context from plans, decisions, and run summaries.
 - If the user asks to inspect a historical detail, choose the relevant file and heading from `auto-iter context index`, then run `auto-iter context show --path <file> --heading "<heading>"`; do not ask the user to provide the full command.

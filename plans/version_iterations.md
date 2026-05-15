@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.6
+- current_version: v0.7
 - status: done
-- goal: 完成 `auto it self improve` 系统改进沉淀能力。
+- goal: 完成 intent checkpoint（意图检查点），让自然语言阶段切换先触发安全检查清单。
 
 ## v0.1 任务清单
 
@@ -196,7 +196,34 @@ v0.6 已覆盖的全局能力：
 
 v0.6 之后仍未覆盖的全局能力：
 
+- intent checkpoint（意图检查点）：用户说“更新计划”“执行吧”“拿到结果了”等阶段切换短句时，agent 先检查是否需要更新计划、route check、run exec、decision add 或 handoff。
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.7 任务清单
+
+- status: done
+- goal: 完成自然语言阶段切换的 intent checkpoint（意图检查点）。
+- [x] 新增 `auto-iter intent check --text "<用户原话>"`，识别计划、执行前、结果后、session 结束四类阶段。
+- [x] `intent check` 输出 agent 下一步检查清单，但不直接写数据库、不直接运行实验。
+- [x] 入口 skill 和 workflow skill 明确：用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”等相似短句时，agent 先运行 `intent check`。
+- [x] README 增加使用场景和好例子，说明用户不用记命令，agent 在 Codex CLI 内调用。
+- [x] 初始化模板、当前计划和版本跟踪同步到 v0.7。
+- [x] 用测试覆盖 `intent check` 输出和模板版本更新。
+
+## v0.7 距离 global plan
+
+v0.7 覆盖了自然语言阶段切换的安全检查入口。
+
+v0.7 已覆盖的全局能力：
+
+- 计划阶段：提醒 agent 检查 `plans/active_plan.md`、`plans/version_iterations.md` 和必要的 `plans/global_plan.md`。
+- 执行前阶段：提醒 agent 在实验路线前运行 `auto-iter route check`，并只在命令、配置、数据、指标和工件明确时使用 `auto-iter run exec`。
+- 结果后阶段：提醒 agent 收集 metrics 和 artifact，再用有证据的 `run_id` 写 decision。
+- session 结束阶段：提醒 agent 生成并校验 handoff，按用户要求提交和推送。
+
+v0.7 之后仍未覆盖的全局能力：
+
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
 
 ## 后续版本方向
 
@@ -219,6 +246,10 @@ v0.6 之后仍未覆盖的全局能力：
 ### v0.6
 
 - done：`auto it self improve` 系统改进沉淀能力。
+
+### v0.7
+
+- done：intent checkpoint（意图检查点），用于自然语言阶段切换前的安全检查。
 
 ### 后续可选
 

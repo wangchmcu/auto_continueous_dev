@@ -56,14 +56,17 @@ class CliTests(unittest.TestCase):
         active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
         version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
         global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
-        self.assertIn("当前版本：v0.6", active_plan)
-        self.assertIn("current_version: v0.6", version_tracking)
+        self.assertIn("当前版本：v0.7", active_plan)
+        self.assertIn("current_version: v0.7", version_tracking)
         self.assertIn("auto-iter handoff validate", active_plan)
         self.assertIn("auto it self improve", active_plan)
         self.assertIn("系统改进沉淀能力", active_plan)
+        self.assertIn("intent checkpoint", active_plan)
         self.assertIn("自然语言接力入口", version_tracking)
         self.assertIn("v0.6 任务清单", version_tracking)
+        self.assertIn("v0.7 任务清单", version_tracking)
         self.assertIn("Auto It Self Improve（系统改进沉淀能力）", global_plan)
+        self.assertIn("Intent Checkpoint（意图检查点）", global_plan)
         self.assertNotIn("self-improvement", global_plan)
         self.assertIn("后续可选：语义检索", global_plan)
         self.assertNotIn("增加任务状态命令", global_plan)
@@ -105,9 +108,11 @@ class CliTests(unittest.TestCase):
         improve_skill_text = improve_skill_path.read_text(encoding="utf-8")
         self.assertIn("auto-iter doctor", skill_text)
         self.assertIn("结束当前 session", skill_text)
+        self.assertIn("auto-iter intent check", skill_text)
         self.assertIn("fixed tool and skill names", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
+        self.assertIn("If skills changed, run the install command", improve_skill_text)
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
@@ -522,6 +527,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(blocked_raw.returncode, 1)
         self.assertIn("raw_input requires --allow-raw-input", blocked_raw.stderr)
         self.assertIn("legacy-only detail", allowed_raw.stdout)
+
+    def test_intent_check_suggests_safe_checkpoints_without_writing_state(self):
+        run_cli(self.tmp, "init")
+
+        before_execution = run_cli(self.tmp, "intent", "check", "--text", "确定执行，先跑实验")
+        after_result = run_cli(self.tmp, "intent", "check", "--text", "拿到结果了，测试结束了")
+
+        self.assertIn("INTENT CHECKPOINT", before_execution.stdout)
+        self.assertIn("intent: pre-execution", before_execution.stdout)
+        self.assertIn("auto-iter route check", before_execution.stdout)
+        self.assertIn("do not run or record only from this keyword", before_execution.stdout)
+        self.assertIn("intent: post-result", after_result.stdout)
+        self.assertIn("metrics", after_result.stdout)
+        self.assertIn("auto-iter decision add", after_result.stdout)
 
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")

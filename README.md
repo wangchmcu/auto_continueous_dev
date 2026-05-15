@@ -80,6 +80,19 @@ python3 /home/ryan/auto_iteration/tools/auto_iter.py install
 
 ## What The Agent Calls
 
+For natural-language stage changes, the agent should first run an intent checkpoint（意图检查点）. It is a reminder command: it prints what the agent should check next, but it does not write state, start experiments, or create conclusions by itself.
+
+```bash
+auto-iter intent check --text "<用户原话>"
+```
+
+Typical use:
+
+- User says “做个计划” or “更新计划”：the agent checks whether `plans/active_plan.md`, `plans/version_iterations.md`, or `plans/global_plan.md` should change.
+- User says “执行吧”, “实施吧”, or “确定执行”：the agent checks whether `route check` is needed and whether config, dataset, command, metrics, and artifacts are clear enough for `run exec`.
+- User says “拿到结果了”, “跑完数据了”, or “测试结束了”：the agent checks metrics, artifacts, and evidence `run_id` before writing a decision.
+- User says “结束当前 session” or “做 handoff”：the agent generates and validates handoff, then commits and pushes if requested.
+
 Before a new experiment route:
 
 ```bash
@@ -138,6 +151,40 @@ auto it self improve：把刚才解决的问题抽象成通用规则，更新 au
 The agent should use the installed `auto-it-self-improve` skill, choose the appropriate files to update, add tests when generated templates or installation behavior changes, and report which concrete details were intentionally excluded.
 
 ## Good Examples
+
+### Planning or execution checkpoint
+
+User says in Codex CLI:
+
+```text
+先更新计划，然后确定执行。
+```
+
+The agent should:
+
+- run `auto-iter intent check --text "先更新计划，然后确定执行。"`
+- update the relevant plan files if scope or task state changed
+- run `auto-iter route check --config <config.json> --summary "<中文路线说明>"` before an experiment route
+- use `auto-iter run exec` only when config, dataset, command, metrics, and artifacts are clear
+
+The user does not need to type the `intent check` command. It is the agent's implementation detail.
+
+### Recording completed results
+
+User says in Codex CLI:
+
+```text
+跑完数据了，拿到结果了。
+```
+
+The agent should:
+
+- run `auto-iter intent check --text "跑完数据了，拿到结果了。"`
+- collect metrics and artifact paths
+- identify the evidence `run_id`
+- write the reusable conclusion with `auto-iter decision add`
+
+The checkpoint is not a replacement for the decision record. It only reminds the agent what evidence must exist before writing the decision.
 
 ### Ending a long session
 

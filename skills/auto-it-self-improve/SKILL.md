@@ -23,8 +23,10 @@ Convert a resolved concrete problem into a general auto_iteration improvement. T
    - Version scope or future capability: `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
    - Session recovery behavior: handoff template code and handoff validation tests.
 4. Patch the selected files with generalized content.
-5. Add or update tests when generated templates, installation, CLI behavior, or contamination checks are affected.
-6. Run verification, then generate and validate handoff.
+5. When the improvement changes a CLI command, generated template, installed skill, or user-facing workflow, update the matching plan files too: `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
+6. Add or update tests when generated templates, installation, CLI behavior, or contamination checks are affected.
+7. If skills changed, run the install command so the installed Codex skills match the repository source.
+8. Run verification, then generate and validate handoff.
 
 ## Contamination Guard
 

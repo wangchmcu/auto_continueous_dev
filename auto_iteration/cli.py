@@ -26,19 +26,20 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前版本
 
-- 当前版本：v0.6。
+- 当前版本：v0.7。
 - v0.1 已完成：本地状态闭环、实验日志、结论记录和 handoff。
 - v0.2 已完成：Codex 入口 skill 和 `auto-iter` 短命令。
 - v0.3 已完成：`raw_input/` 读取边界和 handoff 完整性校验。
 - v0.4 已完成：参数空间路线拦截、上下文标题索引和按需读取。
 - v0.5 已完成：用自然语言短句触发 session 结束、session 接力和细节查阅流程。
 - v0.6 已完成：`auto it self improve` 系统改进沉淀能力。
+- v0.7 已完成：intent checkpoint（意图检查点），用于在计划、执行、结果和结束阶段提示 agent 先做安全检查。
 
 ## 下一步
 
-1. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
-2. 运行该流程时，先抽象具体问题，再选择 README、skill、CLI、模板、测试、plans 或 handoff 等落点。
-3. 不把具体项目名、数据集、一次性参数、临时路径或单次对话细节写进系统规则。
+1. 当用户话语像是在进入计划、执行、结果或结束阶段时，agent 先运行 `auto-iter intent check --text "<用户原话>"`。
+2. `intent check` 只给检查清单，不直接写数据库、不直接启动实验、不替代 `route check`、`run exec`、`decision add` 或 handoff 命令。
+3. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
 4. 若 tracking 信息规模明显变大，再评估语义检索。
 5. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 """
@@ -61,9 +62,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.6
+- current_version: v0.7
 - status: done
-- goal: 完成 `auto it self improve` 系统改进沉淀能力。
+- goal: 完成 intent checkpoint（意图检查点），让自然语言阶段切换先触发安全检查清单。
 
 ## v0.1 任务清单
 
@@ -241,7 +242,34 @@ v0.6 已覆盖的全局能力：
 
 v0.6 之后仍未覆盖的全局能力：
 
+- intent checkpoint（意图检查点）：用户说“更新计划”“执行吧”“拿到结果了”等阶段切换短句时，agent 先检查是否需要更新计划、route check、run exec、decision add 或 handoff。
 - 可选语义检索：当 decision、handoff、retrospective 数量变多后再加入。
+
+## v0.7 任务清单
+
+- status: done
+- goal: 完成自然语言阶段切换的 intent checkpoint（意图检查点）。
+- [x] 新增 `auto-iter intent check --text "<用户原话>"`，识别计划、执行前、结果后、session 结束四类阶段。
+- [x] `intent check` 输出 agent 下一步检查清单，但不直接写数据库、不直接运行实验。
+- [x] 入口 skill 和 workflow skill 明确：用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”等相似短句时，agent 先运行 `intent check`。
+- [x] README 增加使用场景和好例子，说明用户不用记命令，agent 在 Codex CLI 内调用。
+- [x] 初始化模板、当前计划和版本跟踪同步到 v0.7。
+- [x] 用测试覆盖 `intent check` 输出和模板版本更新。
+
+## v0.7 距离 global plan
+
+v0.7 覆盖了自然语言阶段切换的安全检查入口。
+
+v0.7 已覆盖的全局能力：
+
+- 计划阶段：提醒 agent 检查 `plans/active_plan.md`、`plans/version_iterations.md` 和必要的 `plans/global_plan.md`。
+- 执行前阶段：提醒 agent 在实验路线前运行 `auto-iter route check`，并只在命令、配置、数据、指标和工件明确时使用 `auto-iter run exec`。
+- 结果后阶段：提醒 agent 收集 metrics 和 artifact，再用有证据的 `run_id` 写 decision。
+- session 结束阶段：提醒 agent 生成并校验 handoff，按用户要求提交和推送。
+
+v0.7 之后仍未覆盖的全局能力：
+
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
 
 ## 后续版本方向
 
@@ -264,6 +292,10 @@ v0.6 之后仍未覆盖的全局能力：
 ### v0.6
 
 - done：`auto it self improve` 系统改进沉淀能力。
+
+### v0.7
+
+- done：intent checkpoint（意图检查点），用于自然语言阶段切换前的安全检查。
 
 ### 后续可选
 
@@ -351,7 +383,15 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
 - 每次执行都应说明“具体问题是什么”“抽象后的通用问题是什么”“为什么应该改这些文件”“哪些具体细节没有写入系统”。
 
-### 10. 后续可选语义检索
+### 10. Intent Checkpoint（意图检查点）
+
+- Intent checkpoint（意图检查点）指：用户话语像是在进入计划、执行前、结果后或 session 结束阶段时，agent 先运行检查命令获取下一步清单。
+- 该能力的目标是减少漏记计划、漏做 route check、漏写 decision、漏生成 handoff，而不是自动替代 agent 判断。
+- `auto-iter intent check --text "<用户原话>"` 只输出检查清单；它不直接写 SQLite、不启动实验、不生成结论。
+- Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
+- 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
+
+### 11. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -439,6 +479,20 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 增加检查清单，要求每次执行都说明抽象依据和被排除的具体细节。
 - 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
 - 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
+
+### v0.7：intent checkpoint 意图检查点
+
+状态：done。
+
+目标：用户用自然语言进入计划、执行、结果或结束阶段时，agent 先得到检查清单，再决定是否更新计划、检查路线、记录实验、记录结论或生成 handoff。
+
+任务：
+
+- 新增 `auto-iter intent check --text "<用户原话>"`。
+- 支持计划、执行前、结果后、session 结束四类阶段提示。
+- 明确该命令只输出检查清单，不直接写状态、不直接运行实验。
+- 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
+- 用测试覆盖命令输出和 v0.7 模板。
 
 ### 后续可选：语义检索
 
@@ -1505,6 +1559,66 @@ def command_context_show(args: argparse.Namespace) -> int:
     return 0
 
 
+INTENT_RULES: list[tuple[str, list[str], list[str]]] = [
+    (
+        "planning",
+        ["做个计划", "更新计划", "计划一下", "方案", "plan"],
+        [
+            "Check whether plans/active_plan.md or plans/version_iterations.md should change.",
+            "If the request changes global capability scope, update plans/global_plan.md first.",
+            "Do not record an experiment run only from a planning phrase.",
+        ],
+    ),
+    (
+        "pre-execution",
+        ["执行吧", "实施吧", "确定执行", "开始跑", "先跑", "run it", "execute"],
+        [
+            "If this is an experiment route, run auto-iter route check before executing.",
+            "Use auto-iter run exec only when config, dataset, command, metrics, and artifacts are clear.",
+            "do not run or record only from this keyword; first confirm missing command inputs.",
+        ],
+    ),
+    (
+        "post-result",
+        ["拿到结果", "跑完数据", "测试结束", "跑完了", "结果出来", "finished"],
+        [
+            "Collect metrics and artifact paths before writing final conclusions.",
+            "Use auto-iter run finish if a manual run was started.",
+            "Use auto-iter decision add after the conclusion is clear and evidence run_id is available.",
+        ],
+    ),
+    (
+        "session-end",
+        ["结束当前 session", "做 handoff", "准备关", "关 session"],
+        [
+            "Run auto-iter handoff generate.",
+            "Run auto-iter handoff validate.",
+            "If the user asked to submit or push, commit relevant changes and push configured remotes.",
+        ],
+    ),
+]
+
+
+def command_intent_check(args: argparse.Namespace) -> int:
+    text = args.text
+    normalized = text.lower()
+    matched: list[tuple[str, list[str]]] = []
+    for intent, keywords, actions in INTENT_RULES:
+        if any(keyword.lower() in normalized for keyword in keywords):
+            matched.append((intent, actions))
+    print("INTENT CHECKPOINT")
+    print(f"text: {text}")
+    if not matched:
+        print("intent: none")
+        print("- No checkpoint keyword matched. Continue normal reasoning.")
+        return 0
+    for intent, actions in matched:
+        print(f"intent: {intent}")
+        for action in actions:
+            print(f"- {action}")
+    return 0
+
+
 def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     run_parser = subparsers.add_parser("run")
     run_sub = run_parser.add_subparsers(dest="run_command", required=True)
@@ -1593,6 +1707,11 @@ def build_parser() -> argparse.ArgumentParser:
     show_context.add_argument("--heading", required=True)
     show_context.add_argument("--allow-raw-input", action="store_true")
     show_context.set_defaults(func=command_context_show)
+    intent = subparsers.add_parser("intent")
+    intent_sub = intent.add_subparsers(dest="intent_command", required=True)
+    intent_check = intent_sub.add_parser("check")
+    intent_check.add_argument("--text", required=True)
+    intent_check.set_defaults(func=command_intent_check)
     resume = subparsers.add_parser("resume")
     resume.set_defaults(func=command_resume)
     return parser

@@ -17,6 +17,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “查阅某个结论、实验、参数或历史细节”：run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
 - “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
+- Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 
 ## Required Start
 
@@ -49,6 +50,14 @@ python3 /home/ryan/auto_iteration/tools/auto_iter.py install
 Then retry `auto-iter doctor`.
 
 ## Before A New Experiment Route
+
+If the user phrase is only “执行吧”, “实施吧”, “确定执行”, or a similar execution approval, first run:
+
+```bash
+auto-iter intent check --text "<用户原话>"
+```
+
+Then continue only when the concrete config, dataset, command, metrics, and artifact expectations are clear.
 
 Run:
 
@@ -89,6 +98,14 @@ auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exa
 Use `run start` and `run finish` only when the experiment cannot be launched from one command.
 
 ## After Results
+
+If the user says “拿到结果了”, “跑完数据了”, “测试结束了”, or a similar result-complete phrase, first run:
+
+```bash
+auto-iter intent check --text "<用户原话>"
+```
+
+Then collect metrics, artifacts, and the evidence `run_id` before writing a decision.
 
 Record conclusions with evidence:
 

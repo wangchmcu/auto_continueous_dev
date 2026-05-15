@@ -78,7 +78,15 @@
 - 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
 - 每次执行都应说明“具体问题是什么”“抽象后的通用问题是什么”“为什么应该改这些文件”“哪些具体细节没有写入系统”。
 
-### 10. 后续可选语义检索
+### 10. Intent Checkpoint（意图检查点）
+
+- Intent checkpoint（意图检查点）指：用户话语像是在进入计划、执行前、结果后或 session 结束阶段时，agent 先运行检查命令获取下一步清单。
+- 该能力的目标是减少漏记计划、漏做 route check、漏写 decision、漏生成 handoff，而不是自动替代 agent 判断。
+- `auto-iter intent check --text "<用户原话>"` 只输出检查清单；它不直接写 SQLite、不启动实验、不生成结论。
+- Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
+- 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
+
+### 11. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -166,6 +174,20 @@
 - 增加检查清单，要求每次执行都说明抽象依据和被排除的具体细节。
 - 安装流程同步安装 `auto-it-self-improve` skill，并用测试覆盖。
 - 安装后自检 `python3`、`auto-iter` 命令和必要 skills 是否 ready。
+
+### v0.7：intent checkpoint 意图检查点
+
+状态：done。
+
+目标：用户用自然语言进入计划、执行、结果或结束阶段时，agent 先得到检查清单，再决定是否更新计划、检查路线、记录实验、记录结论或生成 handoff。
+
+任务：
+
+- 新增 `auto-iter intent check --text "<用户原话>"`。
+- 支持计划、执行前、结果后、session 结束四类阶段提示。
+- 明确该命令只输出检查清单，不直接写状态、不直接运行实验。
+- 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
+- 用测试覆盖命令输出和 v0.7 模板。
 
 ### 后续可选：语义检索
 
