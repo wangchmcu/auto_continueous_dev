@@ -86,7 +86,15 @@
 - Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
 - 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
 
-### 11. 后续可选语义检索
+### 11. 中途记录黑盒入口
+
+- 中途记录黑盒入口指：用户在对话中只说“中途记录一下”“先保存当前状态”“做个阶段记录”等自然语言短句，agent 自动保存当前接力点。
+- 这个入口和 session 结束使用相同的状态保存范围：检查当前计划、实验事实、结论和 handoff 是否需要更新，并生成可恢复的 handoff。
+- 它和 session 结束的区别是：中途记录不表示当前 session 结束，不默认提交，不默认推送。
+- `auto-iter checkpoint save --text "<用户原话>"` 是 agent 内部使用的命令；用户不需要记住它。
+- 如果用户同时明确要求“提交”或“推送”，agent 才在 checkpoint 后执行对应 git 操作。
+
+### 12. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -188,6 +196,19 @@
 - 明确该命令只输出检查清单，不直接写状态、不直接运行实验。
 - 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
 - 用测试覆盖命令输出和 v0.7 模板。
+
+### v0.8：中途记录黑盒入口
+
+状态：done。
+
+目标：用户在长对话中可以只说“中途记录一下”，agent 使用和 session 结束相同的状态保存范围保存当前接力点，但不默认提交或推送。
+
+任务：
+
+- 新增 `auto-iter checkpoint save --text "<用户原话>"`。
+- 让 `intent check` 识别中途记录类短句。
+- 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
+- 用测试覆盖命令输出、意图识别和 v0.8 模板。
 
 ### 后续可选：语义检索
 

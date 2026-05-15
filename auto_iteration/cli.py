@@ -26,7 +26,7 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前版本
 
-- 当前版本：v0.7。
+- 当前版本：v0.8。
 - v0.1 已完成：本地状态闭环、实验日志、结论记录和 handoff。
 - v0.2 已完成：Codex 入口 skill 和 `auto-iter` 短命令。
 - v0.3 已完成：`raw_input/` 读取边界和 handoff 完整性校验。
@@ -34,14 +34,15 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 - v0.5 已完成：用自然语言短句触发 session 结束、session 接力和细节查阅流程。
 - v0.6 已完成：`auto it self improve` 系统改进沉淀能力。
 - v0.7 已完成：intent checkpoint（意图检查点），用于在计划、执行、结果和结束阶段提示 agent 先做安全检查。
+- v0.8 已完成：中途记录黑盒入口，用户只说“中途记录一下”时，agent 保存当前接力点但不默认提交推送。
 
 ## 下一步
 
-1. 当用户话语像是在进入计划、执行、结果或结束阶段时，agent 先运行 `auto-iter intent check --text "<用户原话>"`。
-2. `intent check` 只给检查清单，不直接写数据库、不直接启动实验、不替代 `route check`、`run exec`、`decision add` 或 handoff 命令。
-3. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
-4. 若 tracking 信息规模明显变大，再评估语义检索。
-5. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
+1. 用户说“中途记录一下”“先保存当前状态”“做个阶段记录”等短句时，agent 运行 `auto-iter checkpoint save --text "<用户原话>"`，内部完成 `auto-iter handoff generate` 和 `auto-iter handoff validate` 对应的保存与校验。
+2. 中途记录和 session 结束使用相同的状态保存范围；区别是中途记录不默认结束会话、不默认提交、不默认推送。
+3. 当用户话语像是在进入计划、执行、结果或结束阶段时，agent 先运行 `auto-iter intent check --text "<用户原话>"`。
+4. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
+5. 若 tracking 信息规模明显变大，再评估语义检索。
 """
 
 VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
@@ -62,9 +63,9 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 当前版本
 
-- current_version: v0.7
+- current_version: v0.8
 - status: done
-- goal: 完成 intent checkpoint（意图检查点），让自然语言阶段切换先触发安全检查清单。
+- goal: 完成中途记录黑盒入口，让用户不用指明内部文件或命令也能保存当前接力点。
 
 ## v0.1 任务清单
 
@@ -269,6 +270,31 @@ v0.7 已覆盖的全局能力：
 
 v0.7 之后仍未覆盖的全局能力：
 
+- 中途记录黑盒入口：用户只说“中途记录一下”时，agent 使用和 session 结束相同的状态保存范围，但不默认提交推送。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.8 任务清单
+
+- status: done
+- goal: 完成中途记录黑盒入口。
+- [x] 新增 `auto-iter checkpoint save --text "<用户原话>"`，用于生成并校验当前接力点。
+- [x] 明确中途记录和 session 结束使用相同的状态保存范围；区别是中途记录不默认结束会话、不默认提交、不默认推送。
+- [x] `intent check` 能识别“中途记录一下”“先保存当前状态”“做个阶段记录”等短句，并提示 agent 调用 checkpoint save。
+- [x] 更新 entry skill、workflow skill、README、AGENTS 和初始化模板，让用户侧入口保持黑盒。
+- [x] 用测试覆盖 checkpoint save、意图识别和 v0.8 模板。
+
+## v0.8 距离 global plan
+
+v0.8 覆盖了中途主动记录的黑盒入口。
+
+v0.8 已覆盖的全局能力：
+
+- 用户不需要知道 `active_plan`、`version_iterations`、decision、handoff 等内部落点。
+- 用户可以只说“中途记录一下”，agent 在同一个 Codex session 内保存当前接力点。
+- 中途记录默认不提交、不推送，只有用户明确要求提交或推送时才执行 git 操作。
+
+v0.8 之后仍未覆盖的全局能力：
+
 - 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
 
 ## 后续版本方向
@@ -296,6 +322,10 @@ v0.7 之后仍未覆盖的全局能力：
 ### v0.7
 
 - done：intent checkpoint（意图检查点），用于自然语言阶段切换前的安全检查。
+
+### v0.8
+
+- done：中途记录黑盒入口。
 
 ### 后续可选
 
@@ -391,7 +421,15 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
 - 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
 
-### 11. 后续可选语义检索
+### 11. 中途记录黑盒入口
+
+- 中途记录黑盒入口指：用户在对话中只说“中途记录一下”“先保存当前状态”“做个阶段记录”等自然语言短句，agent 自动保存当前接力点。
+- 这个入口和 session 结束使用相同的状态保存范围：检查当前计划、实验事实、结论和 handoff 是否需要更新，并生成可恢复的 handoff。
+- 它和 session 结束的区别是：中途记录不表示当前 session 结束，不默认提交，不默认推送。
+- `auto-iter checkpoint save --text "<用户原话>"` 是 agent 内部使用的命令；用户不需要记住它。
+- 如果用户同时明确要求“提交”或“推送”，agent 才在 checkpoint 后执行对应 git 操作。
+
+### 12. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -493,6 +531,19 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 明确该命令只输出检查清单，不直接写状态、不直接运行实验。
 - 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
 - 用测试覆盖命令输出和 v0.7 模板。
+
+### v0.8：中途记录黑盒入口
+
+状态：done。
+
+目标：用户在长对话中可以只说“中途记录一下”，agent 使用和 session 结束相同的状态保存范围保存当前接力点，但不默认提交或推送。
+
+任务：
+
+- 新增 `auto-iter checkpoint save --text "<用户原话>"`。
+- 让 `intent check` 识别中途记录类短句。
+- 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
+- 用测试覆盖命令输出、意图识别和 v0.8 模板。
 
 ### 后续可选：语义检索
 
@@ -1421,6 +1472,12 @@ def validate_handoff_text(text: str) -> list[str]:
 
 
 def command_handoff_generate(_args: argparse.Namespace) -> int:
+    path, _based_on_run_id = save_handoff()
+    print(f"generated {path.resolve()}")
+    return 0
+
+
+def save_handoff() -> tuple[Path, str | None]:
     path = root() / "handoffs" / "latest_handoff.md"
     with database() as db:
         handoff_md, based_on_run_id = build_handoff(db)
@@ -1435,8 +1492,7 @@ def command_handoff_generate(_args: argparse.Namespace) -> int:
             """,
             (handoff_id, now_iso(), based_on_run_id, str(path.resolve()), handoff_md),
         )
-    print(f"generated {path.resolve()}")
-    return 0
+    return path, based_on_run_id
 
 
 def command_handoff_validate(_args: argparse.Namespace) -> int:
@@ -1453,6 +1509,24 @@ def command_handoff_validate(_args: argparse.Namespace) -> int:
         return 1
     print("VALID")
     print(f"validated {path.resolve()}")
+    return 0
+
+
+def command_checkpoint_save(args: argparse.Namespace) -> int:
+    path, _based_on_run_id = save_handoff()
+    errors = validate_handoff_text(path.read_text(encoding="utf-8"))
+    print("CHECKPOINT SAVED")
+    print(f"text: {args.text}")
+    print(f"handoff: {path.resolve()}")
+    print(f"handoff_valid: {'no' if errors else 'yes'}")
+    print("commit_push: not requested")
+    print("- This is a mid-session record; continue the current Codex session unless the user says to end it.")
+    print("- Use the same state-save scope as session end before or during this checkpoint.")
+    print("- Do not commit or push unless the user explicitly asks.")
+    if errors:
+        for error in errors:
+            print(f"- {error}")
+        return 1
     return 0
 
 
@@ -1588,6 +1662,15 @@ INTENT_RULES: list[tuple[str, list[str], list[str]]] = [
         ],
     ),
     (
+        "mid-session-record",
+        ["中途记录", "记录一下当前状态", "先保存当前状态", "做个阶段记录", "阶段记录", "保存当前接力点"],
+        [
+            "Run auto-iter checkpoint save --text \"<用户原话>\".",
+            "Use the same state-save scope as session end before or during this checkpoint.",
+            "do not commit or push unless the user explicitly asks.",
+        ],
+    ),
+    (
         "session-end",
         ["结束当前 session", "做 handoff", "准备关", "关 session"],
         [
@@ -1697,6 +1780,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate.set_defaults(func=command_handoff_generate)
     validate = handoff_sub.add_parser("validate")
     validate.set_defaults(func=command_handoff_validate)
+    checkpoint = subparsers.add_parser("checkpoint")
+    checkpoint_sub = checkpoint.add_subparsers(dest="checkpoint_command", required=True)
+    checkpoint_save = checkpoint_sub.add_parser("save")
+    checkpoint_save.add_argument("--text", required=True)
+    checkpoint_save.set_defaults(func=command_checkpoint_save)
     context = subparsers.add_parser("context")
     context_sub = context.add_subparsers(dest="context_command", required=True)
     index = context_sub.add_parser("index")

@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.7
+- current_version: v0.8
 - status: done
-- goal: 完成 intent checkpoint（意图检查点），让自然语言阶段切换先触发安全检查清单。
+- goal: 完成中途记录黑盒入口，让用户不用指明内部文件或命令也能保存当前接力点。
 
 ## v0.1 任务清单
 
@@ -223,6 +223,31 @@ v0.7 已覆盖的全局能力：
 
 v0.7 之后仍未覆盖的全局能力：
 
+- 中途记录黑盒入口：用户只说“中途记录一下”时，agent 使用和 session 结束相同的状态保存范围，但不默认提交推送。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.8 任务清单
+
+- status: done
+- goal: 完成中途记录黑盒入口。
+- [x] 新增 `auto-iter checkpoint save --text "<用户原话>"`，用于生成并校验当前接力点。
+- [x] 明确中途记录和 session 结束使用相同的状态保存范围；区别是中途记录不默认结束会话、不默认提交、不默认推送。
+- [x] `intent check` 能识别“中途记录一下”“先保存当前状态”“做个阶段记录”等短句，并提示 agent 调用 checkpoint save。
+- [x] 更新 entry skill、workflow skill、README、AGENTS 和初始化模板，让用户侧入口保持黑盒。
+- [x] 用测试覆盖 checkpoint save、意图识别和 v0.8 模板。
+
+## v0.8 距离 global plan
+
+v0.8 覆盖了中途主动记录的黑盒入口。
+
+v0.8 已覆盖的全局能力：
+
+- 用户不需要知道 `active_plan`、`version_iterations`、decision、handoff 等内部落点。
+- 用户可以只说“中途记录一下”，agent 在同一个 Codex session 内保存当前接力点。
+- 中途记录默认不提交、不推送，只有用户明确要求提交或推送时才执行 git 操作。
+
+v0.8 之后仍未覆盖的全局能力：
+
 - 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
 
 ## 后续版本方向
@@ -250,6 +275,10 @@ v0.7 之后仍未覆盖的全局能力：
 ### v0.7
 
 - done：intent checkpoint（意图检查点），用于自然语言阶段切换前的安全检查。
+
+### v0.8
+
+- done：中途记录黑盒入口。
 
 ### 后续可选
 

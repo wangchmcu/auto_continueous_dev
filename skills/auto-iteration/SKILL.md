@@ -15,6 +15,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user asks to search `raw_input/`, do it only for initial setup or explicit missing-information lookup, then write useful information back into tracking information.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
 ## Required Start
 
@@ -128,6 +129,18 @@ Decision status meanings:
 - `rejected`: tested and should not be repeated.
 - `superseded`: replaced by a newer conclusion.
 - `open`: not yet decided; only a minimum validation experiment is allowed.
+
+## Mid-Session Record
+
+When the user wants to save progress without ending the session, run:
+
+```bash
+auto-iter checkpoint save --text "<用户原话>"
+```
+
+This uses the same state-save scope as the end-of-session workflow, but it does not mean the current Codex session is ending. Do not commit or push unless the user explicitly asks.
+
+The user should not need to name internal files such as `active_plan`, `version_iterations`, decisions, or handoff. Choose and update the needed internal records yourself, then save the checkpoint.
 
 ## End Of Session
 

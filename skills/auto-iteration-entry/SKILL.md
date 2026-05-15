@@ -18,6 +18,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
 - “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
 ## Required Start
 
@@ -114,6 +115,18 @@ auto-iter decision add --status <active|rejected|open> --evidence <run_id> --tit
 ```
 
 Use `--route-keyword` and `--reopen-condition` for rejected routes.
+
+## Mid-Session Record
+
+When the user wants to save progress without ending the session, run:
+
+```bash
+auto-iter checkpoint save --text "<用户原话>"
+```
+
+This uses the same state-save scope as the end-of-task workflow, but it does not mean the current Codex session is ending. Do not commit or push unless the user explicitly asks.
+
+The user should not need to name internal files such as `active_plan`, `version_iterations`, decisions, or handoff. Choose and update the needed internal records yourself, then save the checkpoint.
 
 ## End Of Task
 

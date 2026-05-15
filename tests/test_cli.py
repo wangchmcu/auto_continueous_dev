@@ -56,17 +56,20 @@ class CliTests(unittest.TestCase):
         active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
         version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
         global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
-        self.assertIn("当前版本：v0.7", active_plan)
-        self.assertIn("current_version: v0.7", version_tracking)
+        self.assertIn("当前版本：v0.8", active_plan)
+        self.assertIn("current_version: v0.8", version_tracking)
         self.assertIn("auto-iter handoff validate", active_plan)
         self.assertIn("auto it self improve", active_plan)
         self.assertIn("系统改进沉淀能力", active_plan)
         self.assertIn("intent checkpoint", active_plan)
+        self.assertIn("中途记录", active_plan)
         self.assertIn("自然语言接力入口", version_tracking)
         self.assertIn("v0.6 任务清单", version_tracking)
         self.assertIn("v0.7 任务清单", version_tracking)
+        self.assertIn("v0.8 任务清单", version_tracking)
         self.assertIn("Auto It Self Improve（系统改进沉淀能力）", global_plan)
         self.assertIn("Intent Checkpoint（意图检查点）", global_plan)
+        self.assertIn("中途记录黑盒入口", global_plan)
         self.assertNotIn("self-improvement", global_plan)
         self.assertIn("后续可选：语义检索", global_plan)
         self.assertNotIn("增加任务状态命令", global_plan)
@@ -109,6 +112,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("auto-iter doctor", skill_text)
         self.assertIn("结束当前 session", skill_text)
         self.assertIn("auto-iter intent check", skill_text)
+        self.assertIn("中途记录一下", skill_text)
         self.assertIn("fixed tool and skill names", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
@@ -533,6 +537,7 @@ class CliTests(unittest.TestCase):
 
         before_execution = run_cli(self.tmp, "intent", "check", "--text", "确定执行，先跑实验")
         after_result = run_cli(self.tmp, "intent", "check", "--text", "拿到结果了，测试结束了")
+        mid_session_record = run_cli(self.tmp, "intent", "check", "--text", "中途记录一下当前状态")
 
         self.assertIn("INTENT CHECKPOINT", before_execution.stdout)
         self.assertIn("intent: pre-execution", before_execution.stdout)
@@ -541,6 +546,25 @@ class CliTests(unittest.TestCase):
         self.assertIn("intent: post-result", after_result.stdout)
         self.assertIn("metrics", after_result.stdout)
         self.assertIn("auto-iter decision add", after_result.stdout)
+        self.assertIn("intent: mid-session-record", mid_session_record.stdout)
+        self.assertIn("auto-iter checkpoint save", mid_session_record.stdout)
+        self.assertIn("do not commit or push unless the user explicitly asks", mid_session_record.stdout)
+
+    def test_checkpoint_save_generates_valid_handoff_without_commit_push(self):
+        run_cli(self.tmp, "init")
+
+        checkpoint = run_cli(self.tmp, "checkpoint", "save", "--text", "中途记录一下当前状态")
+
+        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        self.assertIn("CHECKPOINT SAVED", checkpoint.stdout)
+        self.assertIn("handoff_valid: yes", checkpoint.stdout)
+        self.assertIn("commit_push: not requested", checkpoint.stdout)
+        self.assertIn(str(handoff_path.resolve()), checkpoint.stdout)
+        self.assertTrue(handoff_path.exists())
+        self.assertIn("## 当前快照", handoff_path.read_text(encoding="utf-8"))
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            count = db.execute("select count(*) from handoffs").fetchone()[0]
+        self.assertEqual(count, 1)
 
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")

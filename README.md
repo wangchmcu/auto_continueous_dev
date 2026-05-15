@@ -91,7 +91,14 @@ Typical use:
 - User says “做个计划” or “更新计划”：the agent checks whether `plans/active_plan.md`, `plans/version_iterations.md`, or `plans/global_plan.md` should change.
 - User says “执行吧”, “实施吧”, or “确定执行”：the agent checks whether `route check` is needed and whether config, dataset, command, metrics, and artifacts are clear enough for `run exec`.
 - User says “拿到结果了”, “跑完数据了”, or “测试结束了”：the agent checks metrics, artifacts, and evidence `run_id` before writing a decision.
+- User says “中途记录一下”, “先保存当前状态”, or “做个阶段记录”：the agent saves the current handoff checkpoint without ending the session and without committing or pushing unless explicitly requested.
 - User says “结束当前 session” or “做 handoff”：the agent generates and validates handoff, then commits and pushes if requested.
+
+For a mid-session record, the agent uses the same state-save scope as session end, but the user does not need to name internal files or commands:
+
+```bash
+auto-iter checkpoint save --text "<用户原话>"
+```
 
 Before a new experiment route:
 
@@ -185,6 +192,23 @@ The agent should:
 - write the reusable conclusion with `auto-iter decision add`
 
 The checkpoint is not a replacement for the decision record. It only reminds the agent what evidence must exist before writing the decision.
+
+### Recording progress mid-session
+
+User says in Codex CLI:
+
+```text
+中途记录一下当前状态。
+```
+
+The agent should:
+
+- run `auto-iter intent check --text "中途记录一下当前状态。"`
+- update any needed tracking records using the same state-save scope as session end
+- run `auto-iter checkpoint save --text "中途记录一下当前状态。"`
+- continue the same Codex session
+
+The agent should not ask the user which internal file to update. The agent should not commit or push unless the user explicitly asks.
 
 ### Ending a long session
 
