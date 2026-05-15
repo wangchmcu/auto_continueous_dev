@@ -21,7 +21,7 @@ python3 -m auto_iteration.cli doctor
 python3 -m auto_iteration.cli resume
 ```
 
-3. Read `plans/version_iterations.md` and `plans/active_plan.md`.
+3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 
 4. Read `decisions/active/`, `decisions/rejected/`, and `decisions/superseded/` before proposing a new route.
 
@@ -84,6 +84,6 @@ python3 -m auto_iteration.cli handoff generate
 
 The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads after `AGENTS.md`.
 
-When implementation scope changes, update `plans/version_iterations.md` before ending the session so the next session can see the current version tasks.
+When implementation scope changes, update `plans/global_plan.md` if the global capability set changes, then update `plans/version_iterations.md` so the next session can see the current version tasks.
 
 Before ending a task, report the current version, what changed in this task, what remains inside the current version, and what global capabilities remain outside the current version. Use `global plan` to mean the full long-running algorithm iteration context-management plan.

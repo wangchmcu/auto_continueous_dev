@@ -2,7 +2,7 @@
 
 ## 说明
 
-这个文件记录每次版本迭代的目标、任务状态、验收证据、后续方向，以及当前版本整体距离 `global plan` 的差距。这里的 `global plan` 指整个长周期算法迭代上下文管理方案，不只指当前版本。它不是实验日志；实验事实仍然写入 `state/agent_state.db`，实验结论仍然写入 `decisions/`。
+这个文件记录每次版本迭代的目标、任务状态、验收证据、后续方向，以及当前版本整体距离 `global plan` 的差距。`global plan` 的定义和完整清单在 `plans/global_plan.md`。它不是实验日志；实验事实仍然写入 `state/agent_state.db`，实验结论仍然写入 `decisions/`。
 
 - `pending` 表示还没开始。
 - `in_progress` 表示正在做。
@@ -12,9 +12,7 @@
 
 ## 全局方案方向
 
-- 账本层：SQLite 数据库记录实验、指标、工件、结论和 handoff，是事实来源。
-- 叙事层：`decisions/`、`handoffs/`、`plans/` 记录人和 Codex 都能读懂的结论、交接和计划。
-- 流程层：`AGENTS.md`、skills、hooks 记录稳定规则和自动化入口。
+- 详见 `plans/global_plan.md`。
 
 ## 当前版本
 
@@ -74,10 +72,17 @@ v0.1 之后仍未覆盖的全局能力：
 
 ### v0.2
 
+- 提供可安装的短命令入口 `auto-iter`。
+- 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
+- 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+- 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+
+### v0.3
+
 - 增加 handoff 完整性校验，检查关键字段是否缺失。
 - 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 
-### v0.3
+### v0.4
 
 - 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
 - 增加任务状态命令，减少手工维护 Markdown 的出错概率。

@@ -25,21 +25,21 @@ ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前版本
 
-- 读取 `plans/version_iterations.md`，按当前版本的任务清单推进。
+- 读取 `plans/global_plan.md` 和 `plans/version_iterations.md`，按当前版本的任务清单推进。
 
 ## 下一步
 
-1. 每次实验前运行 `route check`。
-2. 优先用 `run exec` 执行实验并捕获日志。
-3. 如果实验必须手动运行，则使用 `run start` 和 `run finish`。
-4. 会话结束前运行 `handoff generate`。
+1. 提供可安装的短命令入口 `auto-iter`。
+2. 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
+3. 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+4. 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
 """
 
 VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 说明
 
-这个文件记录每次版本迭代的目标、任务状态、验收证据、后续方向，以及当前版本整体距离 `global plan` 的差距。这里的 `global plan` 指整个长周期算法迭代上下文管理方案，不只指当前版本。
+这个文件记录每次版本迭代的目标、任务状态、验收证据、后续方向，以及当前版本整体距离 `global plan` 的差距。`global plan` 的定义和完整清单在 `plans/global_plan.md`。
 
 - `pending` 表示还没开始。
 - `in_progress` 表示正在做。
@@ -49,9 +49,7 @@ VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 
 ## 全局方案方向
 
-- 账本层：SQLite 数据库记录实验、指标、工件、结论和 handoff，是事实来源。
-- 叙事层：`decisions/`、`handoffs/`、`plans/` 记录人和 Codex 都能读懂的结论、交接和计划。
-- 流程层：`AGENTS.md`、skills、hooks 记录稳定规则和自动化入口。
+- 详见 `plans/global_plan.md`。
 
 ## 当前版本
 
@@ -111,14 +109,128 @@ v0.1 之后仍未覆盖的全局能力：
 
 ### v0.2
 
+- 提供可安装的短命令入口 `auto-iter`。
+- 新增或调整 Codex 入口 skill，让 agent 在 Codex CLI 会话内自动调用 `auto-iter`。
+- 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+- 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+
+### v0.3
+
 - 增加 handoff 完整性校验，检查关键字段是否缺失。
 - 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
 
-### v0.3
+### v0.4
 
 - 增加按标题索引读取的上下文机制：先读目录和摘要，需要时再读详细记录。
 - 增加任务状态命令，减少手工维护 Markdown 的出错概率。
 - 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+"""
+
+GLOBAL_PLAN_TEMPLATE = """# Global Plan
+
+## 定义
+
+`global plan` 指整个长周期算法迭代上下文管理方案。它不是某一个版本，也不是单个 skill；它的目标是让 Codex agent 在长周期实验中能恢复状态、避免重复路线、保存证据、生成交接，并在 Codex CLI 会话内主动调用本地工具。
+
+## 总体形态
+
+最终形态是轻量本地编排系统加 Codex 入口能力。
+
+- 轻量本地编排系统：`auto_iteration` 负责写 SQLite、记录 runs、记录 decisions、保存 logs、生成 summaries、生成 handoff。
+- Codex 入口能力：Codex agent 在会话内知道何时调用 `auto-iter`，用户不需要退出 Codex CLI，也不需要每次手写绝对路径。
+
+## 全局能力清单
+
+### 1. 状态账本
+
+- 记录 run、config、dataset、command、git commit、git branch。
+- 记录 metrics 和 artifacts。
+- 记录 run 状态：running、success、failed、aborted。
+- 每个实验都有 `run_id`。
+
+### 2. 日志和摘要
+
+- 捕获 `stdout.log`、`stderr.log`、`debug.jsonl`。
+- 生成 `summary.md`。
+- 生成 `logs/error_summary.md`。
+- 默认读取 summary 和 error_summary；只有调查具体失败时才读原始日志。
+
+### 3. 结论和路线控制
+
+- 记录 active、rejected、superseded、open 状态的 decision。
+- 每个 decision 必须有 evidence run IDs。
+- 新路线前运行 route check。
+- 阻止明显重复配置和 rejected/superseded 路线。
+- 后续增强方法被替代、参数空间被部分否定、重开条件提示。
+
+### 4. 交接和恢复
+
+- 自动生成 `handoffs/latest_handoff.md`。
+- handoff 指向 run summaries、decisions、plans，而不是粘贴完整原始日志。
+- 新 Codex session 先读 `AGENTS.md`、handoff、global plan、version tracking、active plan。
+- 后续增加 handoff 完整性校验，检查关键字段缺失。
+
+### 5. Codex 入口能力
+
+- 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
+- 提供短命令入口 `auto-iter`，避免每次写 `python3 /home/ryan/auto_iteration/tools/auto_iter.py`。
+- 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
+- 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
+
+### 6. 动态载入上下文
+
+- 建立按标题索引的上下文读取方式：先读目录和摘要，需要时再读详细内容。
+- handoff、decision、run summary、error summary 都应可被按需读取。
+- 避免一次性把所有历史塞进上下文。
+
+### 7. 后续可选语义检索
+
+- 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+- 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
+
+## 版本路线
+
+### v0.1：本地状态闭环
+
+状态：done。
+
+范围：
+
+- SQLite 状态库。
+- run、metric、artifact、decision、handoff、route check。
+- `run exec` 执行命令并捕获日志。
+- run summary 和 error summary。
+- version task tracking。
+
+### v0.2：Codex 入口能力
+
+目标：用户在 Codex CLI 内只表达任务，Codex agent 根据入口 skill 自动调用 `auto-iter`，不需要用户退出 Codex 或手写绝对路径。
+
+任务：
+
+- 提供可安装的短命令入口 `auto-iter`。
+- 新增或调整 Codex 入口 skill，让 agent 在任务开始、实验前、实验后、任务结束时自动调用对应命令。
+- 更新 `AGENTS.md`、README、handoff 读取顺序，让 `plans/global_plan.md` 成为固定读取对象。
+- 提供一次端到端演示：从 Codex 会话内恢复状态、route check、run exec、decision add、handoff generate。
+
+### v0.3：handoff 校验和路线关系增强
+
+目标：减少交接字段缺失和重复路线误判。
+
+任务：
+
+- 增加 handoff 完整性校验。
+- 增加更强的路线关系管理，例如方法被替代、参数空间被部分否定、重开条件自动提示。
+
+### v0.4：动态载入上下文
+
+目标：按标题索引和摘要读取历史，减少 token 占用。
+
+任务：
+
+- 建立 handoff、decision、run summary 的标题索引。
+- 先读目录和摘要，需要时再读详细内容。
+- 增加任务状态命令，减少手工维护 Markdown 的出错概率。
 """
 
 
@@ -237,6 +349,7 @@ def write_if_missing(path: Path, text: str) -> None:
 
 
 def ensure_plan_files() -> None:
+    write_if_missing(root() / "plans" / "global_plan.md", GLOBAL_PLAN_TEMPLATE)
     write_if_missing(root() / "plans" / "active_plan.md", ACTIVE_PLAN_TEMPLATE)
     write_if_missing(root() / "plans" / "version_iterations.md", VERSION_ITERATIONS_TEMPLATE)
 
@@ -339,7 +452,11 @@ def command_doctor(_args: argparse.Namespace) -> int:
     missing = [name for name in ["state", "runs", "handoffs", "decisions", "plans"] if not (root() / name).exists()]
     if missing:
         raise UserError("missing directories: " + ", ".join(missing))
-    missing_files = [name for name in ["plans/active_plan.md", "plans/version_iterations.md"] if not (root() / name).exists()]
+    missing_files = [
+        name
+        for name in ["plans/global_plan.md", "plans/active_plan.md", "plans/version_iterations.md"]
+        if not (root() / name).exists()
+    ]
     if missing_files:
         raise UserError("missing plan files: " + ", ".join(missing_files))
     print("state: ok")
@@ -787,6 +904,7 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- commit: {git_commit()}",
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
+        f"- global_plan: {root() / 'plans' / 'global_plan.md'}",
         f"- version_task_tracking: {root() / 'plans' / 'version_iterations.md'}",
         f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
         "",
@@ -832,11 +950,12 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         "## 读取顺序",
         f"1. {root() / 'AGENTS.md'}",
         f"2. {root() / 'handoffs' / 'latest_handoff.md'}",
-        f"3. {root() / 'plans' / 'version_iterations.md'}",
-        f"4. {root() / 'plans' / 'active_plan.md'}",
-        f"5. {root() / 'state' / 'agent_state.db'}",
-        f"6. {root() / 'decisions'}",
-        "7. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        f"3. {root() / 'plans' / 'global_plan.md'}",
+        f"4. {root() / 'plans' / 'version_iterations.md'}",
+        f"5. {root() / 'plans' / 'active_plan.md'}",
+        f"6. {root() / 'state' / 'agent_state.db'}",
+        f"7. {root() / 'decisions'}",
+        "8. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
         "",
     ]
     return "\n".join(lines), success["run_id"] if success else None

@@ -6,9 +6,10 @@
 ## 当前快照
 - root: /home/ryan/auto_iteration
 - branch: master
-- commit: 51b87ed69611efbf3a3c9d50b195157d63ce65ba
+- commit: aec081518ed113abb6ee0a37ed576d55196e0d9b
 - latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
+- global_plan: /home/ryan/auto_iteration/plans/global_plan.md
 - version_task_tracking: /home/ryan/auto_iteration/plans/version_iterations.md
 - active_plan: /home/ryan/auto_iteration/plans/active_plan.md
 
@@ -35,8 +36,9 @@
 ## 读取顺序
 1. /home/ryan/auto_iteration/AGENTS.md
 2. /home/ryan/auto_iteration/handoffs/latest_handoff.md
-3. /home/ryan/auto_iteration/plans/version_iterations.md
-4. /home/ryan/auto_iteration/plans/active_plan.md
-5. /home/ryan/auto_iteration/state/agent_state.db
-6. /home/ryan/auto_iteration/decisions
-7. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
+3. /home/ryan/auto_iteration/plans/global_plan.md
+4. /home/ryan/auto_iteration/plans/version_iterations.md
+5. /home/ryan/auto_iteration/plans/active_plan.md
+6. /home/ryan/auto_iteration/state/agent_state.db
+7. /home/ryan/auto_iteration/decisions
+8. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。

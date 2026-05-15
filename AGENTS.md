@@ -11,7 +11,7 @@
 
 1. Run `python3 -m auto_iteration.cli doctor` and read the result.
 2. Run `python3 -m auto_iteration.cli resume` if `handoffs/latest_handoff.md` exists.
-3. Read `plans/version_iterations.md` and `plans/active_plan.md`.
+3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 4. Read active decisions under `decisions/active/`.
 5. Before proposing or running a new experiment route, run:
 
@@ -24,6 +24,7 @@ python3 -m auto_iteration.cli route check --config <config.json> --summary "<中
 ## Version Task Tracking
 
 - `plans/version_iterations.md` is the version-level task tracker.
+- `plans/global_plan.md` is the global plan for the whole long-running algorithm iteration context-management system.
 - Every version entry must include the version name, status, goal, task checklist, acceptance checks, and next-version direction.
 - Every version entry must include a `global plan` distance section that states which global capabilities the current version covers and which global capabilities remain outside the current version.
 - When a task status changes, update `plans/version_iterations.md` in the same change.

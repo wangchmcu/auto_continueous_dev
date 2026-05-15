@@ -68,11 +68,12 @@ When using the `auto-iter` alias in another repository, replace `python3 -m auto
 
 ## Version Task Tracking
 
-Use `plans/version_iterations.md` as the version-level task tracker. It records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
+Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
 
 Before changing implementation scope, update:
 
 ```bash
+sed -n '1,220p' plans/global_plan.md
 sed -n '1,220p' plans/version_iterations.md
 sed -n '1,160p' plans/active_plan.md
 ```
@@ -88,6 +89,7 @@ python3 -m auto_iteration.cli handoff generate
 - `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `decisions/`: readable decision projections.
 - `handoffs/latest_handoff.md`: fresh-session entry point.
+- `plans/global_plan.md`: global plan for the full context-management system.
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.
 - `runs/<run_id>/config_resolved.json`: resolved config snapshot.
