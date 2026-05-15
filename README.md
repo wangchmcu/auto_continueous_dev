@@ -33,6 +33,8 @@ In Codex CLI, ask the agent to use auto-iteration:
 Use auto-iteration for this project. If this is a new project, initialize it first. Then run doctor, resume, context index, and continue from the current plans and decisions.
 ```
 
+`auto-iteration` is the fixed tool and workflow name. It does not change with the target algorithm project. The part that changes per project is the directory you start Codex from, such as `/path/to/algorithm_repo`.
+
 The agent should call `auto-iter` inside the same Codex session. You do not need to exit Codex to run the commands manually.
 
 For a new project, the agent initializes the project root:
@@ -153,6 +155,8 @@ Then says:
 ```text
 继续这个 auto-iteration 项目，使用 auto-iteration-entry 恢复上下文。
 ```
+
+Here `auto-iteration` and `auto-iteration-entry` are fixed names. Do not replace them with the algorithm project's name.
 
 The agent should:
 

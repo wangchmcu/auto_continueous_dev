@@ -89,8 +89,10 @@ class CliTests(unittest.TestCase):
         self.assertTrue(skill_path.exists())
         self.assertIn("installed command", result.stdout)
         self.assertIn("installed skill", result.stdout)
-        self.assertIn("auto-iter doctor", skill_path.read_text(encoding="utf-8"))
-        self.assertIn("结束当前 session", skill_path.read_text(encoding="utf-8"))
+        skill_text = skill_path.read_text(encoding="utf-8")
+        self.assertIn("auto-iter doctor", skill_text)
+        self.assertIn("结束当前 session", skill_text)
+        self.assertIn("fixed tool and skill names", skill_text)
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")

@@ -139,6 +139,7 @@
 - session 结束短句触发 handoff 生成、handoff 校验，以及按任务需要提交推送。
 - session 接力短句触发 doctor、resume、context index 和固定读取顺序。
 - 细节查阅短句触发 context index，然后由 agent 选择合适的文件和标题运行 context show。
+- README 和 entry skill 明确 `auto-iteration` 是固定工具名，不随算法项目名称变化。
 - README 添加好例子，说明如何结束 session、如何开启新 session、如何查阅某个细节。
 
 ### 后续可选：语义检索

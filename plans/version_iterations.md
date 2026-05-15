@@ -150,6 +150,7 @@ v0.4 之后仍未覆盖的全局能力：
 - [x] “继续这个 auto-iteration 项目”触发 doctor、resume、context index 和固定读取顺序。
 - [x] “查阅某个结论或实验细节”触发上下文索引，然后按需读取具体章节。
 - [x] README 增加好例子：如何结束 session、如何开启新 session、如何查阅细节。
+- [x] README 和 entry skill 明确 `auto-iteration` 是固定工具名，不随算法项目名称变化。
 - [x] 初始化模板同步到 v0.5。
 
 ## v0.5 距离 global plan

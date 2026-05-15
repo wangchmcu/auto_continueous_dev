@@ -11,6 +11,7 @@ Use this skill as the Codex-side entry point for `auto_iteration`.
 
 When the user says one of these plain-language requests, treat it as a request to run the matching workflow. Do not ask the user to type the commands.
 
+- `auto-iteration` and `auto-iteration-entry` are fixed tool and skill names. They do not change with the target algorithm project's name.
 - “继续这个 auto-iteration 项目” or “接着上个 session”：run the required start workflow below.
 - “结束当前 session” or “做 handoff”：run the end-of-task workflow below.
 - “查阅某个结论、实验、参数或历史细节”：run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
