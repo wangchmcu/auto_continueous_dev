@@ -1,0 +1,6 @@
+{
+  "weight": 2.0,
+  "offset": 1.4,
+  "objective": "minimize_error"
+}
+
