@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.8。
+- 当前版本：v0.10。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -17,6 +17,8 @@
 - v0.6 已完成：`auto it self improve` 系统改进沉淀能力。
 - v0.7 已完成：intent checkpoint（意图检查点），用于在计划、执行、结果和结束阶段提示 agent 先做安全检查。
 - v0.8 已完成：中途记录黑盒入口，用户只说“中途记录一下”时，agent 保存当前接力点但不默认提交推送。
+- v0.9 已完成：低假设初始化和 bootstrap checkpoint 规则，避免 AIT 在目标项目中自动发明业务路线；self improve 也能记录并处理二阶改进。
+- v0.10 已完成：初始化 bootstrap 把已有 `raw_input/` 作为初期输入源索引和选择性沉淀，但 `init` 不自动吞入原始材料。
 - 下一阶段：等 tracking 信息规模变大后，再评估是否加入语义检索。
 
 ## 下一步
@@ -25,4 +27,7 @@
 2. 中途记录和 session 结束使用相同的状态保存范围；区别是中途记录不默认结束会话、不默认提交、不默认推送。
 3. 当用户话语像是在进入计划、执行、结果或结束阶段时，agent 先运行 `auto-iter intent check --text "<用户原话>"`。
 4. 用户明确说 `auto it self improve` 时，agent 才运行系统改进沉淀流程。
-5. 若 tracking 信息规模明显变大，再评估语义检索。
+5. 新项目初始化后保持 `当前业务目标：待用户定义`，直到用户明确确认。
+6. 新项目初始化时，agent 运行 `auto-iter context index --include-raw-input` 检查已有 raw input；只按需读取相关章节并用 `raw_input_source` 标注后沉淀。
+7. 如果 AIT 在对话中途接入，agent 先整理 bootstrap checkpoint，只记录已确认事实、未决问题和带来源标签的候选项。
+8. 若 tracking 信息规模明显变大，再评估语义检索。

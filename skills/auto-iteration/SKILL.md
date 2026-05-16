@@ -37,6 +37,17 @@ auto-iter resume
 
 5. Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. Anything useful found there must be written back into tracking information.
 
+For first project setup, inspect possible raw input with:
+
+```bash
+auto-iter context index --include-raw-input
+```
+
+If `raw_input/` has files, read only relevant sections with
+`auto-iter context show --path <file> --heading "<heading>" --allow-raw-input`.
+Do not ingest the whole directory. Mark recovered information as
+`raw_input_source` before writing it back into tracking information.
+
 If `auto-iter` is missing, install it:
 
 ```bash

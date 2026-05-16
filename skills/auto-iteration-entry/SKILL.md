@@ -42,13 +42,47 @@ If more detail is needed, use `auto-iter context index` first and then `auto-ite
 
 Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. If useful information is found there, write it back into plans, decisions, handoff, or run summaries.
 
+## New Project Initialization
+
+When initializing a target project, keep the initialization low-assumption:
+
+```bash
+auto-iter init
+auto-iter doctor
+auto-iter context index --include-raw-input
+```
+
+`auto-iter init` creates state and low-assumption tracking templates. It does not
+authorize the agent to invent a roadmap for the target project. Do not convert
+README observations or agent guesses into formal versions unless the user has
+confirmed them.
+
+During initial setup, treat `raw_input/` as a possible bootstrap input source.
+If it has no files, continue with the empty directory. If it has files, inspect
+the index first, then read only relevant raw input sections with
+`auto-iter context show --path <file> --heading "<heading>" --allow-raw-input`.
+Do not automatically ingest or summarize the whole directory.
+
+If init happens after the Codex conversation already contains useful context,
+perform a bootstrap checkpoint:
+
+1. Summarize confirmed facts, user-confirmed goals, exposed problems, open questions, and candidate checks.
+2. Include relevant existing raw input as `raw_input_source` when it was actually read.
+3. Update the tracking files with source labels such as `user_confirmed`, `repo_observed`, `raw_input_source`, `conversation_summary`, `agent_inferred`, and `proposed_not_accepted`.
+4. Keep `agent_inferred` and `proposed_not_accepted` items out of formal version routes.
+5. Run `auto-iter checkpoint save --text "<用户原话或bootstrap说明>"`.
+
 If `auto-iter` is missing, run:
 
 ```bash
 python3 /home/ryan/auto_iteration/tools/auto_iter.py install
 ```
 
-Then retry `auto-iter doctor`.
+Then retry `auto-iter doctor`. If the command is installed but the shell still
+prints `command not found`, do not stop or ask the user to type the path. Use
+the installed absolute command path printed by install, usually
+`~/.local/bin/auto-iter`, and continue the same workflow from the current
+project root.
 
 ## Before A New Experiment Route
 

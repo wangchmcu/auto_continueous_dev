@@ -38,17 +38,21 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 
 ## Natural Language Entry
 
+- If initializing AIT in a target project, keep it low-assumption: `auto-iter init` creates state and pending tracking templates only. Do not convert README observations or agent guesses into formal roadmap items unless the user confirms them.
+- During target project initialization, run `auto-iter context index --include-raw-input` after init/doctor. If `raw_input/` has files, read only relevant sections with `auto-iter context show --path <file> --heading "<heading>" --allow-raw-input`, then write useful information back into tracking with the `raw_input_source` label. If it has no files, continue with the empty directory.
+- If initialization happens in the middle of an existing conversation, create a bootstrap checkpoint: summarize confirmed facts, user-confirmed goals, exposed problems, open questions, and candidate checks with source labels. Keep `agent_inferred` and `proposed_not_accepted` items out of formal version routes.
 - If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 - If the user says “结束当前 session” or “做 handoff”, run `auto-iter handoff generate` and `auto-iter handoff validate`; if the user asks to submit or push, also commit and push the relevant changes.
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run `auto-iter doctor`, `auto-iter resume`, and `auto-iter context index`, then restore context from plans, decisions, and run summaries.
 - If the user asks to inspect a historical detail, choose the relevant file and heading from `auto-iter context index`, then run `auto-iter context show --path <file> --heading "<heading>"`; do not ask the user to provide the full command.
-- If the user says “auto it self improve”, use the `auto-it-self-improve` skill. This trigger is explicit; do not run system-improvement work automatically.
+- If the user says “auto it self improve”, use the `auto-it-self-improve` skill. This trigger is explicit; do not run system-improvement work automatically. If the improvement exposes a limitation in the self improve workflow itself, handle that as a second-order improvement or record it as an explicit pending plan item.
 
 ## Raw Input
 
 - `raw_input/` stores original input materials or old project imports.
 - Read `raw_input/` only when starting a project for the first time or when later work explicitly needs missing information from the original input.
+- Initial project setup should index raw input, not ingest it wholesale.
 - Normal work should read tracking information first: `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db`.
 - If `raw_input/` conflicts with tracking information, treat tracking information as newer unless the user explicitly asks to verify against the original input.
 - Any useful information found in `raw_input/` must be written back into tracking information so future sessions do not need to rediscover it.

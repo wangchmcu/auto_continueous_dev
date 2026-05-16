@@ -21,7 +21,7 @@ The install command creates:
 
 The install command also runs a self-check. It verifies that `python3` is available, `auto-iter` is executable, and the required skills have non-empty `SKILL.md` files. A healthy install prints `install check: ok`.
 
-Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command.
+Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command. If it is not on `PATH`, the installer prints a `path hint`; agents should use the printed absolute command path instead of asking the user to type it.
 
 Then start Codex from the target algorithm project:
 
@@ -45,6 +45,29 @@ For a new project, the agent initializes the project root:
 ```bash
 auto-iter init
 ```
+
+`auto-iter init` is intentionally low-assumption. It creates the state store and
+tracking files, but it must not invent a business roadmap for the target project.
+The generated plans start with the project's goal marked as pending user input.
+
+If initialization happens in the middle of an existing Codex conversation, the
+agent should create a bootstrap checkpoint after init. The checkpoint is a
+structured summary of confirmed facts, user-confirmed goals, exposed workflow
+problems, open questions, and candidate checks. Candidate checks inferred by the
+agent must stay marked as unaccepted until the user confirms them.
+
+Initial setup should also inspect `raw_input/` as a possible source of original
+materials:
+
+```bash
+auto-iter context index --include-raw-input
+```
+
+If `raw_input/` has files, the agent reads only relevant sections with
+`--allow-raw-input`, labels recovered facts as `raw_input_source`, and writes
+useful information back into tracking. If it is empty, initialization simply
+continues with the empty directory. `auto-iter init` itself does not ingest raw
+input automatically.
 
 For an existing project, the agent starts with:
 
@@ -156,6 +179,11 @@ auto it self improve：把刚才解决的问题抽象成通用规则，更新 au
 ```
 
 The agent should use the installed `auto-it-self-improve` skill, choose the appropriate files to update, add tests when generated templates or installation behavior changes, and report which concrete details were intentionally excluded.
+
+If the concrete problem also shows that the self improve workflow itself is
+insufficient, the agent should treat that as a second-order self improve item in
+the same run when feasible. If it is too large to complete immediately, it must
+be added to the plan files as an explicit pending item.
 
 ## Good Examples
 
@@ -291,7 +319,7 @@ auto-iter handoff validate
 
 ## Raw Input
 
-`raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. Normal work should use `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db` first. If useful information is recovered from `raw_input/`, write it back into tracking information.
+`raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. During first setup, index it with `auto-iter context index --include-raw-input`; read only relevant sections with `--allow-raw-input`. Normal work should use `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db` first. If useful information is recovered from `raw_input/`, label it as `raw_input_source` and write it back into tracking information.
 
 ## Context Loading
 

@@ -46,9 +46,11 @@
 
 - 每个项目开发目录可以有 `raw_input/`，用于存放原始输入材料或老项目导入材料。
 - `raw_input/` 只在两种情况下读取：初次开始项目；后续开发中明确需要到原始输入里检索缺失信息。
+- 初次开始项目时，agent 应先用 `context index --include-raw-input` 检查是否存在原始材料；如果存在，只选择性读取相关章节，不整目录吞入。
 - 正常迭代时应优先读取 `plans/`、`handoffs/`、`decisions/`、run summaries 和 SQLite 状态库。
 - 理论上，工作 tracking 信息应该已经吸收并更新了 `raw_input/` 中的重要信息；如果二者冲突，默认以 tracking 信息为准，除非用户明确要求回到原始输入核对。
 - 从 `raw_input/` 找到的新信息，必须沉淀回 `plans/`、`decisions/`、handoff 或 run summary，避免下次再次回查原始材料。
+- 从 `raw_input/` 沉淀的信息必须标注 `raw_input_source`，避免和用户确认目标或 agent 推断混在一起。
 
 ### 6. Codex 入口能力
 
@@ -94,7 +96,18 @@
 - `auto-iter checkpoint save --text "<用户原话>"` 是 agent 内部使用的命令；用户不需要记住它。
 - 如果用户同时明确要求“提交”或“推送”，agent 才在 checkpoint 后执行对应 git 操作。
 
-### 12. 后续可选语义检索
+### 12. 低假设初始化和 bootstrap checkpoint
+
+- `auto-iter init` 只创建状态结构和低假设 tracking 模板，不替目标项目发明业务 roadmap。
+- 初始化模板必须区分 `user_confirmed`、`repo_observed`、`conversation_summary`、`agent_inferred` 和 `proposed_not_accepted`。
+- 初始化模板必须区分 `raw_input_source`，并说明 raw input 是初期输入源而不是自动正式路线来源。
+- 只有 `user_confirmed` 能进入正式版本路线。
+- 如果 AIT 在已有对话中途接入，agent 应做 bootstrap checkpoint，把对话压缩成结构化 tracking 信息。
+- bootstrap checkpoint 同时检查已有 `raw_input/`，但只索引和选择性读取。
+- bootstrap checkpoint 记录已确认事实、用户目标、暴露问题、未决问题和候选检查项；候选项必须保持未确认状态。
+- `auto it self improve` 如果暴露出 self improve workflow itself 的不足，必须作为 second-order improvement 一并处理或写入后续计划。
+
+### 13. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -209,6 +222,33 @@
 - 让 `intent check` 识别中途记录类短句。
 - 更新 entry skill、workflow skill、README、AGENTS 和初始化模板。
 - 用测试覆盖命令输出、意图识别和 v0.8 模板。
+
+### v0.9：低假设初始化和 bootstrap checkpoint
+
+状态：done。
+
+目标：新目标项目初始化时不污染业务计划；中途接入已有对话时，通过 bootstrap checkpoint 记录已确认上下文；self improve 能处理自身流程不足的二阶改进。
+
+任务：
+
+- 将 `auto-iter init` 生成的 plans 模板改成低假设模板。
+- 在模板中增加来源标注规则和正式路线准入规则。
+- 在 entry skill 和 README 中说明中途初始化后的 bootstrap checkpoint。
+- 在 self improve skill 中增加 second-order improvement 处理规则。
+- 用测试覆盖低假设初始化模板和 self improve skill 安装内容。
+
+### v0.10：raw_input bootstrap 初期输入源
+
+状态：done。
+
+目标：新项目初始化时检查已有 `raw_input/`，把它作为初期输入源选择性沉淀，同时避免 `init` 自动读取或污染正式路线。
+
+任务：
+
+- 初始化模板加入 `raw_input_source` 来源标签。
+- entry skill 在新项目初始化流程中使用 `context index --include-raw-input`。
+- 有 raw input 时只读取相关章节，并用 `--allow-raw-input` 明示读取边界。
+- README、AGENTS 和 tests 覆盖该流程。
 
 ### 后续可选：语义检索
 

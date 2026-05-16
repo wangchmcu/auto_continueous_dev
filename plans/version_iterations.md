@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.8
+- current_version: v0.10
 - status: done
-- goal: 完成中途记录黑盒入口，让用户不用指明内部文件或命令也能保存当前接力点。
+- goal: 完成初始化 bootstrap 的 raw_input 初期输入源索引和选择性沉淀规则。
 
 ## v0.1 任务清单
 
@@ -248,6 +248,63 @@ v0.8 已覆盖的全局能力：
 
 v0.8 之后仍未覆盖的全局能力：
 
+- 低假设初始化：新目标项目初始化时不应自动生成业务路线。
+- bootstrap checkpoint：AIT 在对话中途接入时，应结构化记录已确认上下文。
+- self improve 二阶改进：self improve 暴露自身能力缺口时，应同时迭代 self improve 流程。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.9 任务清单
+
+- status: done
+- goal: 完成低假设初始化、bootstrap checkpoint 和 self improve 二阶改进规则。
+- [x] 将 `auto-iter init` 生成的 `plans/` 模板改为低假设模板。
+- [x] 初始化模板明确 `当前业务目标：待用户定义`。
+- [x] 初始化模板加入来源标注：`user_confirmed`、`repo_observed`、`conversation_summary`、`agent_inferred`、`proposed_not_accepted`。
+- [x] 初始化模板明确 `agent_inferred` 和 `proposed_not_accepted` 不能进入正式版本路线。
+- [x] entry skill 增加新项目初始化和中途接入 bootstrap checkpoint 流程。
+- [x] README 增加低假设 init 和 bootstrap checkpoint 说明。
+- [x] self improve skill 增加 second-order improvement 规则。
+- [x] 用测试覆盖低假设初始化模板和 self improve skill 安装内容。
+
+## v0.9 距离 global plan
+
+v0.9 覆盖了低假设初始化和 self improve 二阶改进能力。
+
+v0.9 已覆盖的全局能力：
+
+- 新目标项目初始化不再默认写入 AIT 自身版本路线。
+- 中途接入已有对话时，agent 有明确 bootstrap checkpoint 流程。
+- 候选检查项必须带来源标签，正式路线需要用户确认。
+- self improve 能识别并处理 self improve workflow itself 的不足。
+
+v0.9 之后仍未覆盖的全局能力：
+
+- 初始化 bootstrap 的 raw_input 初期输入源检查仍需明确：有 raw input 时应索引并选择性沉淀，不应让 `init` 自动吞入目录。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.10 任务清单
+
+- status: done
+- goal: 让新项目初始化时把已有 `raw_input/` 作为初期输入源检查，同时保持低假设和非自动吞入边界。
+- [x] 初始化模板加入 `raw_input_source` 来源标签。
+- [x] 初始化模板要求 agent 运行 `context index --include-raw-input` 检查已有原始材料。
+- [x] entry skill 要求只按需读取 raw input 相关章节，并用 `--allow-raw-input` 明示越过默认边界。
+- [x] README 和 AGENTS 明确：`raw_input/` 为空则继续；有内容则索引、选择性读取、沉淀回 tracking。
+- [x] 保持 `auto-iter init` 不自动读取 raw input，避免核心命令吞入大体量或未确认材料。
+- [x] 用测试覆盖初始化模板和安装后的 entry skill 内容。
+
+## v0.10 距离 global plan
+
+v0.10 覆盖了 raw input 作为初始 bootstrap 输入源的流程化入口。
+
+v0.10 已覆盖的全局能力：
+
+- 初次初始化时 raw input 不再只是“可选缺失信息来源”，而是被纳入 bootstrap 索引检查。
+- raw input 读取仍保持显式、选择性、可追踪。
+- `raw_input_source` 能和 `user_confirmed`、`repo_observed`、`conversation_summary` 等来源区分。
+
+v0.10 之后仍未覆盖的全局能力：
+
 - 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
 
 ## 后续版本方向
@@ -279,6 +336,14 @@ v0.8 之后仍未覆盖的全局能力：
 ### v0.8
 
 - done：中途记录黑盒入口。
+
+### v0.9
+
+- done：低假设初始化、bootstrap checkpoint 和 self improve 二阶改进规则。
+
+### v0.10
+
+- done：初始化 bootstrap 的 raw_input 初期输入源索引和选择性沉淀规则。
 
 ### 后续可选
 

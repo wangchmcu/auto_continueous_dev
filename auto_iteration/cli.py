@@ -555,6 +555,136 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
 """
 
+LOW_ASSUMPTION_ACTIVE_PLAN_TEMPLATE = """# Active Plan
+
+## 当前目标
+
+- 当前业务目标：待用户定义。
+- AIT 只负责建立可恢复的项目状态，不替用户发明开发路线。
+
+## 低假设初始化
+
+- 初始化只记录确定事实、未决问题和候选检查项。
+- 正式版本路线必须来自 `user_confirmed` 的目标或后续明确决策。
+- repo 观察和 agent 推断可以保留，但必须降级为候选内容。
+- 如果 `raw_input/` 已有文件，它是初期输入源之一；先索引，再选择性读取，不自动整目录吞入。
+
+## 对话中途接入
+
+- 如果 AIT 在已有 Codex 对话中途接入，agent 应整理一次 bootstrap checkpoint。
+- checkpoint 应总结已确认事实、用户目标、已暴露问题、未决问题和候选事项。
+- 不应把完整聊天记录当作事实库；agent 应将对话压缩为结构化 tracking 信息。
+
+## 来源标注
+
+- `user_confirmed`：用户明确确认。
+- `repo_observed`：从仓库文件或命令输出观察到。
+- `raw_input_source`：从 `raw_input/` 原始材料选择性读取后沉淀。
+- `conversation_summary`：agent 对当前对话的结构化摘要。
+- `agent_inferred`：agent 推断，不能进入正式路线。
+- `proposed_not_accepted`：候选建议，尚未被用户接受。
+
+## candidate_checks
+
+- 暂无已确认检查项。
+- 后续 agent 可添加候选项，但必须标注 `agent_inferred` 或 `proposed_not_accepted`，直到用户确认。
+"""
+
+LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
+
+## 说明
+
+这个文件记录当前目标项目的版本级工作。初始化阶段采用低假设原则：不要把 agent 推断写成正式路线。
+
+## 当前版本
+
+- current_version: bootstrap-v0
+- status: pending_user_plan
+- goal: 初始化 AIT 状态结构，等待用户定义当前项目的业务开发方向。
+
+## bootstrap-v0 任务清单
+
+- [x] 创建 `state/`、`runs/`、`handoffs/`、`raw_input/`、`decisions/`、`plans/`。
+- [x] 初始化 SQLite 状态库。
+- [x] 创建低假设 `plans/global_plan.md`。
+- [x] 创建低假设 `plans/active_plan.md`。
+- [x] 创建低假设 `plans/version_iterations.md`。
+- [ ] agent 运行 `context index --include-raw-input` 检查是否存在初期 raw input。
+- [ ] 如果初始化发生在对话中途，agent 需要整理一次 bootstrap checkpoint。
+
+## 正式路线准入规则
+
+- 只有 `user_confirmed` 的目标才能成为正式版本路线。
+- `repo_observed` 只能作为事实背景。
+- `raw_input_source` 只能作为原始材料证据，必须沉淀成 tracking 信息后再作为后续默认上下文。
+- `conversation_summary` 只能作为当前对话摘要。
+- `agent_inferred` 和 `proposed_not_accepted` 只能进入候选区。
+- 不要把 agent 推断写成正式路线。
+
+## 未决问题
+
+- 当前项目的业务开发目标尚未定义。
+- 当前项目的验收标准尚未定义。
+- 当前项目是否需要实验 run、decision 或 handoff 仍待用户确认。
+"""
+
+LOW_ASSUMPTION_GLOBAL_PLAN_TEMPLATE = """# Global Plan
+
+## 定义
+
+`global plan` 描述当前目标项目如何使用 AIT 进行长期状态管理。初始化时采用低假设项目初始化：只建立结构，不替用户规划业务路线。
+
+## 低假设项目初始化
+
+- `ait init` 只创建状态结构和低假设 tracking 模板。
+- 初始化模板不得包含 AIT 自身版本路线。
+- 初始化模板不得根据仓库 README 自动生成正式业务 roadmap。
+- 候选建议必须标注来源，并保持未确认状态。
+
+## 来源标注
+
+- `user_confirmed`：可进入正式计划。
+- `repo_observed`：事实背景，不自动成为任务。
+- `conversation_summary`：中途接入时的压缩摘要。
+- `agent_inferred`：推断，只能作为候选。
+- `proposed_not_accepted`：建议，等待用户接受或删除。
+
+## bootstrap checkpoint
+
+- 如果 AIT 在已有对话中途接入，agent 应做一次 bootstrap checkpoint。
+- checkpoint 的目标是把当前对话中的已确认事实、用户目标、暴露问题和未决问题写入 tracking 信息。
+- 如果 `raw_input/` 中已有材料，bootstrap 应先运行 `context index --include-raw-input`，再按需用 `--allow-raw-input` 读取相关章节。
+- checkpoint 不能把 agent 推断出的检查项提升为正式版本路线。
+
+## raw_input 初期输入
+
+- `raw_input/` 有内容时是初始化 bootstrap 的输入源；没有内容时保留为空目录。
+- 不要让 `auto-iter init` 自动读取或概括整个 `raw_input/`。
+- 读取 raw input 后必须标注 `raw_input_source`，并把有用信息写回 plans、decisions、handoff 或 run summaries。
+
+## 全局能力清单
+
+### 1. 状态账本
+
+- 记录 run、metric、artifact、decision、handoff 和 route check。
+
+### 2. 低假设计划
+
+- 初始化只创建待用户定义的计划框架。
+- 正式路线由用户确认或后续 evidence-backed decision 产生。
+
+### 3. 中途接管
+
+- 支持在项目对话中途接入 AIT。
+- 支持将对话历史压缩成结构化 checkpoint。
+- 支持把已存在的 `raw_input/` 作为初期输入源检查并选择性沉淀。
+
+### 4. 上下文恢复
+
+- 新 session 先读取 handoff、plans、decisions 和状态库。
+- 默认不读取 raw_input，除非是初始导入或明确缺失信息查询。
+"""
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
@@ -672,9 +802,9 @@ def write_if_missing(path: Path, text: str) -> None:
 
 
 def ensure_plan_files() -> None:
-    write_if_missing(root() / "plans" / "global_plan.md", GLOBAL_PLAN_TEMPLATE)
-    write_if_missing(root() / "plans" / "active_plan.md", ACTIVE_PLAN_TEMPLATE)
-    write_if_missing(root() / "plans" / "version_iterations.md", VERSION_ITERATIONS_TEMPLATE)
+    write_if_missing(root() / "plans" / "global_plan.md", LOW_ASSUMPTION_GLOBAL_PLAN_TEMPLATE)
+    write_if_missing(root() / "plans" / "active_plan.md", LOW_ASSUMPTION_ACTIVE_PLAN_TEMPLATE)
+    write_if_missing(root() / "plans" / "version_iterations.md", LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE)
 
 
 def init_schema(db: sqlite3.Connection) -> None:
@@ -854,6 +984,9 @@ def verify_installation(command_path: Path, installed_skills: list[tuple[str, Pa
     print("install check: ok")
     print(f"dependency ready: python3 ({python3_path})")
     print(f"command ready: auto-iter ({command_path})")
+    path_entries = [Path(entry).expanduser() for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    if command_path.parent not in path_entries:
+        print(f"path hint: {command_path.parent} is not on PATH; use {command_path} or add that directory to PATH")
     for skill_name, skill_dir in installed_skills:
         print(f"skill ready: {skill_name} ({skill_dir})")
 

@@ -15,6 +15,8 @@ Convert a resolved concrete problem into a general auto_iteration improvement. T
 
 1. Restate the concrete problem that was solved.
 2. Extract the general problem shape.
+   - If the concrete problem shows that the self improve workflow itself cannot fully express or complete the improvement, record that as a second-order improvement requirement in the same run.
+   - A second-order improvement means the process for improving AIT also needs to change, not only the target workflow being improved.
 3. Choose the system files that should change:
    - User-facing usage confusion: README.
    - Agent behavior or trigger wording: `skills/auto-iteration-entry/` or `skills/auto-iteration/`.
@@ -27,6 +29,20 @@ Convert a resolved concrete problem into a general auto_iteration improvement. T
 6. Add or update tests when generated templates, installation, CLI behavior, or contamination checks are affected.
 7. If skills changed, run the install command so the installed Codex skills match the repository source.
 8. Run verification, then generate and validate handoff.
+
+## Second-Order Improvements
+
+When self improve exposes a limitation in the self improve workflow itself, do not stop at documenting the limitation.
+
+Handle it as part of the same improvement when feasible:
+
+- name the second-order limitation explicitly
+- update this skill if the workflow needs a new step, guardrail, or report item
+- update README or entry skills if users need different trigger wording
+- update CLI templates or tests if the limitation affects generated state
+- report what part was completed now and what part remains for a later iteration
+
+If the second-order improvement is too large to complete in the same run, add it to the plan files as an explicit pending item rather than hiding it in the final prose.
 
 ## Contamination Guard
 
@@ -57,6 +73,7 @@ Every run must report:
 
 - concrete issue used as evidence
 - generalized issue added to the system
+- second-order self improve limitation, if any, and how it was handled
 - files changed and why
 - concrete details intentionally excluded
 - verification commands and results
