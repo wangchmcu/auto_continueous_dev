@@ -6,7 +6,7 @@
 ## 当前快照
 - root: /Users/ryan/Documents/auto_continueous_dev
 - branch: dev
-- commit: 1628908b776157a7d17d6e18c8af7f5977638c4b
+- commit: eb5f17f1041c0375713ac78ca373039bc7f3c68a
 - latest_successful_run_id: none
 - latest_failed_run_id: none
 - global_plan: /Users/ryan/Documents/auto_continueous_dev/plans/global_plan.md
@@ -44,8 +44,8 @@
 5. /Users/ryan/Documents/auto_continueous_dev/plans/active_plan.md
 6. /Users/ryan/Documents/auto_continueous_dev/topics/active_topic.md
 7. /Users/ryan/Documents/auto_continueous_dev/state/agent_state.db
-8. /Users/ryan/Documents/auto_continueous_dev/decisions
-9. 用 `auto-iter context index` 查看可按需读取的标题索引。
+8. /Users/ryan/Documents/auto_continueous_dev/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
+9. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。
 10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
 11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
 12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。

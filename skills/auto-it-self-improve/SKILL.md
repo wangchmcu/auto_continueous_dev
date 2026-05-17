@@ -27,8 +27,12 @@ Convert a resolved concrete problem into a general auto_iteration improvement. T
 4. Patch the selected files with generalized content.
 5. When the improvement changes a CLI command, generated template, installed skill, or user-facing workflow, update the matching plan files too: `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 6. Add or update tests when generated templates, installation, CLI behavior, or contamination checks are affected.
-7. If skills changed, run the install command so the installed Codex skills match the repository source.
-8. Run verification, then generate and validate handoff.
+7. If the concrete issue involves demo/test history or generated projections, classify each record before preserving it:
+   - current project state: must have matching SQLite facts and valid projections
+   - example/demo history: keep under `examples/` or docs with the test purpose and data boundary
+   - orphan/stale projection: remove it or add CLI validation that skips and reports it
+8. If skills changed, run the install command so the installed Codex skills match the repository source.
+9. Run verification, then generate and validate handoff.
 
 ## Second-Order Improvements
 

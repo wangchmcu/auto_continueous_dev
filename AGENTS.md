@@ -12,7 +12,7 @@
 1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, install from the AIT source checkout with the platform-appropriate Python command: Windows Codex app uses `py -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; WSL/Linux Codex CLI and macOS Codex app use `python3 -m auto_iteration.cli install` or `python -m auto_iteration.cli install`.
 2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
 3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
-4. Read active decisions under `decisions/active/`.
+4. Read decisions through `auto-iter context index` and `auto-iter context show`; do not treat Markdown files under `decisions/` as current context if `context index` reports them as orphan or stale projections.
 5. Before proposing or running a new experiment route, run:
 
 ```bash
@@ -78,7 +78,8 @@ auto-iter handoff validate
 ## State Ownership
 
 - SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
-- Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex.
+- Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex. A decision projection is valid current context only if the matching record still exists in SQLite with the same status.
 - Markdown files under `topics/` are readable topic projections; `topics/active_topic.md` is default context, and `topics/archive/` is loaded only on user request or confirmed topic switch.
 - Markdown files under `plans/` track version-level implementation work and current engineering direction.
+- Demo or test histories may live under `examples/` when they document the test purpose and data boundary. Their sample IDs or parameters are not current project conclusions unless the current SQLite state contains matching records.
 - `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.

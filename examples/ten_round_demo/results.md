@@ -1,6 +1,8 @@
 # Ten Round Demo Results
 
-本次验收任务：用 `预测值 = weight * x + offset` 拟合固定数据 `目标值 = 2.0 * x + 1.5`。核心指标是 `mean_absolute_error`（平均绝对误差，单位是目标值单位，越低越好）。
+本次验收任务用于验证 AIT 能连续记录多轮 run、metrics、artifacts、decisions、route check 和 handoff。示例数据是人为构造的线性拟合任务，不代表本项目自身的算法目标，也不应作为当前项目结论进入根目录 `decisions/` 上下文。
+
+示例任务：用 `预测值 = weight * x + offset` 拟合固定数据 `目标值 = 2.0 * x + 1.5`。核心指标是 `mean_absolute_error`（平均绝对误差，单位是目标值单位，越低越好）。
 
 第 6 轮故意偏离设计：`max_value_reward`（错误目标函数，含义是奖励预测值变大，而不是最小化误差）让误差明显变差。该路线已写入 `rejected` 结论，并通过 `route check` 验证会被拦截。
 
@@ -18,7 +20,9 @@ round09  R-8935b891ae   minimize_error                    0.100000
 round10  R-9723365f8f   minimize_error                    0.000000
 ```
 
-## 记录到状态库的结论
+## 演示中记录到状态库的结论
+
+这些 ID 是当次 demo 运行的证据链样例，只说明 AIT 具备把实验结论写入状态库和 projection 的能力。它们不属于当前项目根状态库的有效结论；如果要保留这类历史，应保留在 `examples/` 文档中，并写明测试目的和示例数据边界。
 
 - `D-74cadc923e`: `rejected`，放弃 `max_value_reward` 错误目标函数。证据 run 是 `R-e037afb46d`。
 - `D-7188530483`: `active`，十轮示例收敛到 `weight=2.0` 和 `offset=1.5`。证据 run 是 `R-9723365f8f`。
@@ -42,4 +46,3 @@ BLOCKED
 修正：时间戳改为微秒级；当已有历史数据存在相同时间戳时，最新 run 查询增加数据库插入顺序作为并列排序。回归测试是 `test_handoff_uses_newest_success_when_runs_share_timestamp`。
 
 修正后 `handoffs/latest_handoff.md` 指向第 10 轮 `R-9723365f8f`。
-

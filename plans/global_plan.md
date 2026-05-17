@@ -118,7 +118,15 @@
 - bootstrap checkpoint 记录已确认事实、用户目标、暴露问题、未决问题和候选检查项；候选项必须保持未确认状态。
 - `auto it self improve` 如果暴露出 self improve workflow itself 的不足，必须作为 second-order improvement 一并处理或写入后续计划。
 
-### 14. 后续可选语义检索
+### 14. Projection Consistency（投影一致性）
+
+- SQLite 是 run、decision、handoff 等事实的唯一来源；Markdown projection 只是可读投影。
+- `context index` 只把与 SQLite 中 `decision_id` 和 status 一致的 decision projection 作为当前上下文。
+- orphan/stale projection 必须被跳过并报告，避免测试、demo 或旧环境留下的 Markdown 文件伪装成当前结论。
+- `handoff validate` 应把 orphan/stale projection 作为无效状态提示，推动 agent 在交接前清理或迁移记录。
+- demo/test 历史可以保存在 `examples/` 或文档中，但必须说明测试目的和数据边界，不能默认成为当前项目 decision。
+
+### 15. 后续可选语义检索
 
 - 当 topic、decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -338,6 +346,21 @@
 - README、AGENTS、entry/workflow skills 明确三个平台的安装命令。
 - 清理稳定文档、skills、hook 中的单机绝对路径。
 - 测试覆盖 wrapper 生成和稳定文档扫描。
+
+### v0.15：投影一致性和 demo 历史边界
+
+状态：done。
+
+目标：避免 Markdown projection 与 SQLite 事实账本不一致时污染恢复上下文，同时允许 demo/test 历史保留为能力验证材料。
+
+任务：
+
+- `context index` 只索引仍能在 SQLite 中找到同 `decision_id` 和 status 的 decision projection。
+- `context index` 对 orphan/stale decision projection 输出 warning，不把其标题当作当前上下文。
+- `handoff validate` 将 orphan/stale decision projection 视为无效状态。
+- README、AGENTS、entry/workflow skills 说明 SQLite 是事实来源，projection 需要一致性校验。
+- demo/test 历史保留在 `examples/`，并明确测试目的和示例数据边界。
+- 测试覆盖孤儿 projection 的跳过、warning 和 handoff 校验失败。
 
 ### 后续可选：语义检索
 

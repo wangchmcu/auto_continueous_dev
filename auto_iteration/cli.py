@@ -27,7 +27,7 @@ PROJECT_STATE_DIRS = [
     ("plans", "planning documents such as global, active, and version plans"),
     ("topics", "active and archived topic projections for on-demand context loading"),
     ("raw_input", "original input materials and imported old project notes"),
-    ("decisions", "readable decision records for active, rejected, superseded, and open conclusions"),
+    ("decisions", "readable decision projections validated against the SQLite state database"),
     ("runs", "experiment run summaries, logs, metrics, and artifacts"),
     ("handoffs", "session handoff documents for context recovery"),
 ]
@@ -1966,8 +1966,8 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"5. {root() / 'plans' / 'active_plan.md'}",
         f"6. {active_topic_path()}",
         f"7. {root() / 'state' / 'agent_state.db'}",
-        f"8. {root() / 'decisions'}",
-        "9. 用 `auto-iter context index` 查看可按需读取的标题索引。",
+        f"8. {root() / 'decisions'}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
+        "9. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
         "11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
         "12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。",
@@ -2041,6 +2041,8 @@ def command_handoff_validate(_args: argparse.Namespace) -> int:
         print(f"- handoff missing: {path.resolve()}")
         return 1
     errors = validate_handoff_text(path.read_text(encoding="utf-8"))
+    _valid_decisions, projection_warnings = decision_projection_consistency()
+    errors.extend(projection_warnings)
     if errors:
         print("INVALID")
         for error in errors:
@@ -2088,19 +2090,54 @@ def is_under(path: Path, parent: Path) -> bool:
         return False
 
 
+def decision_projection_files() -> list[Path]:
+    return sorted(path.resolve() for path in root().glob("decisions/*/*.md") if path.is_file())
+
+
+def decision_statuses_from_db() -> dict[str, str]:
+    try:
+        with database() as db:
+            rows = db.execute("select decision_id, status from decisions").fetchall()
+    except (sqlite3.Error, UserError):
+        return {}
+    return {row["decision_id"]: row["status"] for row in rows}
+
+
+def decision_projection_consistency() -> tuple[list[Path], list[str]]:
+    statuses = decision_statuses_from_db()
+    valid: list[Path] = []
+    warnings: list[str] = []
+    for path in decision_projection_files():
+        rel = path.relative_to(root())
+        decision_id = path.stem
+        projected_status = path.parent.name
+        actual_status = statuses.get(decision_id)
+        if actual_status is None:
+            warnings.append(f"orphan decision projection skipped: {rel} (missing SQLite decision {decision_id})")
+        elif actual_status != projected_status:
+            warnings.append(
+                f"stale decision projection skipped: {rel} "
+                f"(SQLite status is {actual_status})"
+            )
+        else:
+            valid.append(path)
+    return valid, warnings
+
+
 def context_files(include_raw_input: bool) -> list[Path]:
     patterns = [
         "plans/*.md",
         "handoffs/latest_handoff.md",
         "topics/*.md",
         "topics/archive/*.md",
-        "decisions/*/*.md",
         "runs/*/summary.md",
         "runs/*/logs/error_summary.md",
     ]
     files: list[Path] = []
     for pattern in patterns:
         files.extend(root().glob(pattern))
+    valid_decisions, _warnings = decision_projection_consistency()
+    files.extend(valid_decisions)
     if include_raw_input:
         files.extend(path for path in (root() / "raw_input").glob("**/*") if path.is_file())
     return sorted({path.resolve() for path in files if path.is_file()})
@@ -2130,6 +2167,11 @@ def command_context_index(args: argparse.Namespace) -> int:
                 print(f"  - {heading}")
         else:
             print("  - no markdown headings")
+    _valid_decisions, warnings = decision_projection_consistency()
+    if warnings:
+        print("# Projection Warnings")
+        for warning in warnings:
+            print(f"- {warning}")
     return 0
 
 

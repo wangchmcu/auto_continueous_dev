@@ -39,11 +39,9 @@ Then read:
 2. `plans/version_iterations.md`
 3. `plans/active_plan.md`
 4. `topics/active_topic.md` if it exists
-5. `decisions/active/`
-6. `decisions/rejected/`
-7. `decisions/superseded/`
+5. decision entries listed by `auto-iter context index`
 
-If more detail is needed, use `auto-iter context index` first and then `auto-iter context show --path <file> --heading "<heading>"` for only the needed section.
+If more detail is needed, use `auto-iter context index` first and then `auto-iter context show --path <file> --heading "<heading>"` for only the needed section. If `context index` reports an orphan or stale decision projection, do not treat that Markdown file as current context; SQLite is the factual source.
 
 Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. If useful information is found there, write it back into plans, decisions, handoff, or run summaries.
 

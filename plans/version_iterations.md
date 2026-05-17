@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.14
+- current_version: v0.15
 - status: done
-- goal: 完成 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 的跨平台安装和运行入口。
+- goal: 完成 projection consistency（投影一致性）和 demo/test 历史边界，避免孤儿 Markdown projection 污染恢复上下文。
 
 ## v0.1 任务清单
 
@@ -434,6 +434,43 @@ v0.14 之后仍未覆盖的全局能力：
 2. 稳定文档扫描不再发现单用户源码路径。
 3. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.15 任务清单
+
+- status: done
+- goal: 让 context index 和 handoff validate 以 SQLite 为事实来源校验 decision projection，并把 demo/test 历史保存在带目的说明的 example 文档中。
+- [x] `context index` 跳过 SQLite 中不存在的 orphan decision projection，并输出 warning。
+- [x] `context index` 跳过 SQLite status 不一致的 stale decision projection，并输出 warning。
+- [x] `handoff validate` 把 orphan/stale decision projection 视为 invalid。
+- [x] 清理根目录 `decisions/` 中十轮 demo 的孤儿 projection。
+- [x] `examples/ten_round_demo` 明确测试目的和示例数据边界。
+- [x] README、AGENTS、entry skill、workflow skill 说明 projection 只在 SQLite 一致时才是当前上下文。
+- [x] self improve skill 增加 demo/test 历史与 projection 分类步骤。
+- [x] 测试覆盖孤儿 projection 的跳过、warning 和 handoff 校验失败。
+
+## v0.15 距离 global plan
+
+v0.15 覆盖了 projection consistency（投影一致性）能力：Markdown 投影不再能脱离 SQLite 事实账本独立污染上下文。
+
+v0.15 已覆盖的全局能力：
+
+- SQLite 是 decision 的事实来源，`decisions/` 只是可读投影。
+- `context index` 默认只列出 SQLite 中仍存在且 status 一致的 decision projection。
+- orphan/stale projection 会被报告，且 `handoff validate` 会失败提醒清理。
+- demo/test 历史可以保留，但必须放在 `examples/` 或文档中说明测试目的和数据边界。
+
+v0.15 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配。
+- topic 与 run/decision/artifact 的强关联查询。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+
+## v0.15 验收标准
+
+1. 孤儿 decision projection 不进入 `context index` 的当前上下文标题。
+2. `context index` 对孤儿或状态不一致的 decision projection 输出 warning。
+3. `handoff validate` 对孤儿或状态不一致的 decision projection 返回 invalid。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -487,6 +524,10 @@ v0.14 之后仍未覆盖的全局能力：
 ### v0.14
 
 - done：跨平台安装和运行入口，覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app。
+
+### v0.15
+
+- done：projection consistency（投影一致性）和 demo/test 历史边界。
 
 ### 后续可选
 

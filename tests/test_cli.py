@@ -608,7 +608,7 @@ class CliTests(unittest.TestCase):
             "python experiment.py",
         ).stdout.strip().split()[-1]
 
-        run_cli(
+        decision_id = run_cli(
             self.tmp,
             "decision",
             "add",
@@ -664,7 +664,7 @@ class CliTests(unittest.TestCase):
             "python experiment.py",
         ).stdout.strip().split()[-1]
 
-        run_cli(
+        decision_id = run_cli(
             self.tmp,
             "decision",
             "add",
@@ -728,6 +728,68 @@ class CliTests(unittest.TestCase):
         self.assertEqual(invalid.returncode, 1)
         self.assertIn("INVALID", invalid.stdout)
         self.assertIn("missing section: ## 读取顺序", invalid.stdout)
+
+    def test_context_index_and_handoff_validate_flag_orphan_decision_projections(self):
+        run_cli(self.tmp, "init")
+        orphan = self.tmp / "decisions" / "active" / "D-orphan.md"
+        orphan.write_text(
+            "# 演示测试结论\n\n"
+            "- decision_id: D-orphan\n"
+            "- status: active\n"
+            "- evidence_run_ids: R-missing\n\n"
+            "## 结论\n"
+            "这是测试数据，不应被当成当前项目结论。\n",
+            encoding="utf-8",
+        )
+        config = self.tmp / "config.json"
+        write_json(config, {"kind": "real-context"})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "real-context",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "真实账本结论",
+            "--claim",
+            "这个结论存在于 SQLite，因此可以进入上下文索引。",
+        ).stdout.strip().split()[-1]
+        stale = self.tmp / "decisions" / "rejected" / f"{decision_id}.md"
+        stale.write_text(
+            "# 状态错误的投影\n\n"
+            f"- decision_id: {decision_id}\n"
+            "- status: rejected\n"
+            f"- evidence_run_ids: {run_id}\n\n"
+            "## 结论\n"
+            "这个 projection 的目录状态和 SQLite 不一致。\n",
+            encoding="utf-8",
+        )
+        run_cli(self.tmp, "handoff", "generate")
+
+        index = run_cli(self.tmp, "context", "index")
+        validated = run_cli(self.tmp, "handoff", "validate", check=False)
+
+        self.assertNotIn("# 演示测试结论", index.stdout)
+        self.assertIn("# 真实账本结论", index.stdout)
+        self.assertIn("orphan decision projection skipped", index.stdout)
+        self.assertIn("stale decision projection skipped", index.stdout)
+        self.assertEqual(validated.returncode, 1)
+        self.assertIn("INVALID", validated.stdout)
+        self.assertIn("orphan decision projection", validated.stdout)
+        self.assertIn("stale decision projection", validated.stdout)
 
     def test_context_index_and_show_exclude_raw_input_by_default(self):
         run_cli(self.tmp, "init")
