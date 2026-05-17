@@ -48,10 +48,14 @@ If `raw_input/` has files, read only relevant sections with
 Do not ingest the whole directory. Mark recovered information as
 `raw_input_source` before writing it back into tracking information.
 
-If `auto-iter` is missing, install it:
+If `auto-iter` is missing, install it from the AIT source checkout with the
+platform-appropriate Python command:
 
-```bash
-python3 /home/ryan/auto_iteration/tools/auto_iter.py install
+```text
+Windows Codex app: py -m auto_iteration.cli install
+Windows Codex app fallback: python -m auto_iteration.cli install
+WSL/Linux Codex CLI: python3 -m auto_iteration.cli install
+macOS Codex app: python3 -m auto_iteration.cli install
 ```
 
 To remove the installed command and Codex skills without deleting project

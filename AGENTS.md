@@ -9,7 +9,7 @@
 
 ## Before Any Coding Or Experiment
 
-1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, run `python3 /home/ryan/auto_iteration/tools/auto_iter.py install` first.
+1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, install from the AIT source checkout with the platform-appropriate Python command: Windows Codex app uses `py -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; WSL/Linux Codex CLI and macOS Codex app use `python3 -m auto_iteration.cli install` or `python -m auto_iteration.cli install`.
 2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
 3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 4. Read active decisions under `decisions/active/`.

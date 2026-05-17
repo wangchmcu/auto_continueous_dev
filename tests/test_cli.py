@@ -6,7 +6,9 @@ import sys
 import tempfile
 import unittest
 from contextlib import closing
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+
+from auto_iteration import cli
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -106,7 +108,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("installed command", result.stdout)
         self.assertIn("installed skill", result.stdout)
         self.assertIn("install check: ok", result.stdout)
-        self.assertIn("dependency ready: python3", result.stdout)
+        self.assertIn("dependency ready: python", result.stdout)
         self.assertIn("command ready: auto-iter", result.stdout)
         self.assertIn("path hint:", result.stdout)
         self.assertIn("skill ready: auto-iteration-entry", result.stdout)
@@ -154,6 +156,43 @@ class CliTests(unittest.TestCase):
         self.assertIn("semantic retrieval", global_plan)
         self.assertIn("topic evidence link", global_plan)
         self.assertIn("topic lifecycle management", global_plan)
+
+    def test_command_wrappers_are_platform_aware(self):
+        posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
+        windows = cli.command_wrapper_spec(PureWindowsPath("C:/repo/tools/auto_iter.py"), platform_name="windows")
+
+        self.assertEqual(posix.filename, "auto-iter")
+        self.assertIn("#!/usr/bin/env sh", posix.text)
+        self.assertIn(str(Path("/repo/tools/auto_iter.py")), posix.text)
+        self.assertIn('"$@"', posix.text)
+        self.assertTrue(posix.executable)
+
+        self.assertEqual(windows.filename, "auto-iter.cmd")
+        self.assertIn("@echo off", windows.text)
+        self.assertIn("C:\\repo\\tools\\auto_iter.py", windows.text)
+        self.assertIn("%*", windows.text)
+        self.assertFalse(windows.executable)
+
+    def test_stable_install_docs_avoid_single_platform_source_paths(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+            REPO_ROOT / ".codex" / "hooks.json",
+            REPO_ROOT / "auto_iteration" / "cli.py",
+            REPO_ROOT / "plans" / "global_plan.md",
+            REPO_ROOT / "plans" / "version_iterations.md",
+            REPO_ROOT / "plans" / "active_plan.md",
+        ]
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("/home/ryan/auto_iteration", text, str(path))
+            self.assertNotIn("/Users/ryan/Documents/auto_continueous_dev", text, str(path))
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Windows Codex app", readme)
+        self.assertIn("WSL/Linux Codex CLI", readme)
+        self.assertIn("macOS Codex app", readme)
 
     def test_uninstall_removes_installed_command_and_skills_only(self):
         run_cli(self.tmp, "init")

@@ -55,7 +55,8 @@
 ### 6. Codex 入口能力
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
-- 提供短命令入口 `auto-iter`，避免每次写 `python3 /home/ryan/auto_iteration/tools/auto_iter.py`。
+- 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
+- 安装和运行入口必须覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境；wrapper、Python 命令和文档不能写死某一个用户或系统路径。
 - 提供安装管理入口：可安装、卸载并重新安装命令和 Codex skills，且卸载不删除项目状态。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
@@ -323,6 +324,20 @@
 - 生成 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md` Markdown 投影。
 - `context index` 和 handoff 接入 topic 摘要，但不默认展开 archived topic。
 - README、AGENTS、entry skill 和 tests 覆盖 topic 切换确认规则。
+
+### v0.14：跨平台安装和运行入口
+
+状态：done。
+
+目标：安装和运行入口同时覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app，避免 Linux-only 或单用户绝对路径导致安装失败。
+
+任务：
+
+- 安装时按平台生成命令 wrapper：Windows 使用 `auto-iter.cmd`，WSL/Linux/macOS 使用 `auto-iter`。
+- wrapper 使用当前 Python 解释器路径，不假设 `python3` 一定存在。
+- README、AGENTS、entry/workflow skills 明确三个平台的安装命令。
+- 清理稳定文档、skills、hook 中的单机绝对路径。
+- 测试覆盖 wrapper 生成和稳定文档扫描。
 
 ### 后续可选：语义检索
 

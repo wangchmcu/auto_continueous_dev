@@ -8,20 +8,35 @@ The goal is to stop treating chat history as project state. Experiment facts go 
 
 Install once from this repository:
 
-```bash
-cd /home/ryan/auto_iteration
-python3 -m auto_iteration.cli install
+```text
+cd <this-repo>
+python -m auto_iteration.cli install
 ```
+
+Use `python3` instead of `python` on WSL/Linux or macOS when that is the Python
+command available in your shell. On Windows, `py -m auto_iteration.cli install`
+is also acceptable.
 
 The install command creates:
 
-- command: `/home/ryan/.local/bin/auto-iter`
+- command wrapper: `auto-iter` on macOS/Linux/WSL, `auto-iter.cmd` on Windows
 - Codex entry skill: `~/.codex/skills/auto-iteration-entry`
 - system-improvement skill: `~/.codex/skills/auto-it-self-improve`
 
-The install command also runs a self-check. It verifies that `python3` is available, `auto-iter` is executable, and the required skills have non-empty `SKILL.md` files. A healthy install prints `install check: ok`.
+The install command also runs a self-check. It verifies that a Python
+interpreter is available, the command wrapper exists, and the required skills
+have non-empty `SKILL.md` files. A healthy install prints `install check: ok`.
 
-Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command. If it is not on `PATH`, the installer prints a `path hint`; agents should use the printed absolute command path instead of asking the user to type it.
+Make sure the printed command directory is on `PATH` before expecting
+`auto-iter` to be found by a shell or Codex-launched command. If it is not on
+`PATH`, the installer prints a `path hint`; agents should use the printed
+absolute command path instead of asking the user to type it.
+
+Supported install/run environments:
+
+- Windows Codex app: install from the repository with `py -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; the command wrapper is `auto-iter.cmd`.
+- WSL/Linux Codex CLI: install with `python3 -m auto_iteration.cli install`; the command wrapper is `auto-iter`.
+- macOS Codex app: install with `python3 -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; the command wrapper is `auto-iter`.
 
 To remove the installed command and Codex skills without deleting any project
 tracking state:
@@ -121,9 +136,11 @@ Manual commands are for installation, debugging, CI, or cases where you intentio
 
 Inside this repository, this works:
 
-```bash
-python3 -m auto_iteration.cli init
+```text
+python -m auto_iteration.cli init
 ```
+
+Use `python3` on WSL/Linux or macOS when that is the available command.
 
 In another algorithm repository, use the installed command from the target project root:
 
@@ -136,7 +153,7 @@ auto-iter doctor
 If `auto-iter` is not installed yet, run the wrapper once:
 
 ```bash
-python3 /home/ryan/auto_iteration/tools/auto_iter.py install
+python -m auto_iteration.cli install
 ```
 
 ## What The Agent Calls

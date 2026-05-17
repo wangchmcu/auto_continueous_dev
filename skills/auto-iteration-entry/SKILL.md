@@ -77,17 +77,21 @@ perform a bootstrap checkpoint:
 4. Keep `agent_inferred` and `proposed_not_accepted` items out of formal version routes.
 5. Run `auto-iter checkpoint save --text "<用户原话或bootstrap说明>"`.
 
-If `auto-iter` is missing, run:
+If `auto-iter` is missing, install from the AIT source checkout with the
+platform-appropriate Python command:
 
-```bash
-python3 /home/ryan/auto_iteration/tools/auto_iter.py install
+```text
+Windows Codex app: py -m auto_iteration.cli install
+Windows Codex app fallback: python -m auto_iteration.cli install
+WSL/Linux Codex CLI: python3 -m auto_iteration.cli install
+macOS Codex app: python3 -m auto_iteration.cli install
 ```
 
 Then retry `auto-iter doctor`. If the command is installed but the shell still
 prints `command not found`, do not stop or ask the user to type the path. Use
-the installed absolute command path printed by install, usually
-`~/.local/bin/auto-iter`, and continue the same workflow from the current
-project root.
+the installed absolute command path printed by install. On Windows this is
+usually an `auto-iter.cmd` wrapper; on WSL/Linux and macOS it is usually an
+`auto-iter` wrapper. Continue the same workflow from the current project root.
 
 ## Install Management
 
@@ -114,10 +118,12 @@ auto-iter uninstall --remove-project-state
 Only use `--remove-project-state` when the user confirms that local tracking
 documents, topic projections, raw inputs, decisions, runs, and handoffs can be deleted.
 
-To reinstall after uninstall, run from the AIT source checkout:
+To reinstall after uninstall, use the same platform-appropriate install command
+from the AIT source checkout:
 
-```bash
-python3 -m auto_iteration.cli install
+```text
+Windows Codex app: py -m auto_iteration.cli install
+WSL/Linux Codex CLI or macOS Codex app: python3 -m auto_iteration.cli install
 ```
 
 ## Topic Archive

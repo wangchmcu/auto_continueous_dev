@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.13
+- current_version: v0.14
 - status: done
-- goal: 完成 Topic Archive MVP，让长期上下文可按 topic 归档和按需载入。
+- goal: 完成 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 的跨平台安装和运行入口。
 
 ## v0.1 任务清单
 
@@ -313,7 +313,7 @@ v0.10 之后仍未覆盖的全局能力：
 - status: done
 - goal: 增加 `auto-iter uninstall`，支持卸载后重新安装 AIT。
 - [x] 新增 `uninstall` CLI 子命令。
-- [x] 卸载默认移除 `~/.local/bin/auto-iter` 和安装到 Codex 的 AIT skills。
+- [x] 卸载默认移除安装目录中的 `auto-iter` wrapper 和安装到 Codex 的 AIT skills。
 - [x] 卸载不删除项目状态目录：`state/`、`plans/`、`raw_input/`、`decisions/`、`runs/`、`handoffs/`。
 - [x] 卸载拒绝删除不是当前 AIT checkout 安装的 `auto-iter` wrapper。
 - [x] README、AGENTS 和 entry/workflow skills 说明卸载边界。
@@ -400,6 +400,40 @@ v0.13 之后仍未覆盖的全局能力：
 4. `auto-iter context index` 能索引 topic 投影，handoff 能输出 active topic 和 topic index 路径。
 5. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.14 任务清单
+
+- status: done
+- goal: 让安装和运行入口覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境。
+- [x] 安装时按平台生成 wrapper：Windows 为 `auto-iter.cmd`，WSL/Linux/macOS 为 `auto-iter`。
+- [x] wrapper 使用当前 Python 解释器路径，不再假设 `python3` 一定存在。
+- [x] 卸载时能识别并移除当前 checkout 安装的 POSIX 和 Windows wrapper。
+- [x] README、AGENTS、entry skill、workflow skill 明确三个平台安装命令。
+- [x] 清理稳定文档、skills、hook 中的 Linux-only 和单用户绝对路径。
+- [x] 测试覆盖 wrapper 生成逻辑和稳定安装文档扫描。
+
+## v0.14 距离 global plan
+
+v0.14 覆盖了 Codex 入口能力的跨平台安装和运行要求。
+
+v0.14 已覆盖的全局能力：
+
+- Windows Codex app：安装入口支持 `py -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`，命令 wrapper 为 `auto-iter.cmd`。
+- WSL/Linux Codex CLI：安装入口支持 `python3 -m auto_iteration.cli install`，命令 wrapper 为 `auto-iter`。
+- macOS Codex app：安装入口支持 `python3 -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`，命令 wrapper 为 `auto-iter`。
+- 稳定规则和文档不再写死某个 Linux 用户源码路径或当前 macOS checkout 路径。
+
+v0.14 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配。
+- topic 与 run/decision/artifact 的强关联查询。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+
+## v0.14 验收标准
+
+1. wrapper 生成测试覆盖 POSIX 和 Windows 两种命令文件。
+2. 稳定文档扫描不再发现单用户源码路径。
+3. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -449,6 +483,10 @@ v0.13 之后仍未覆盖的全局能力：
 ### v0.13
 
 - done：Topic Archive MVP，支持单 active topic、archive 双状态、topic CLI、Markdown 投影和按需上下文入口。
+
+### v0.14
+
+- done：跨平台安装和运行入口，覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app。
 
 ### 后续可选
 

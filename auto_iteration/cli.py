@@ -4,11 +4,13 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
 import sys
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -399,7 +401,7 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 ### 6. Codex 入口能力
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
-- 提供短命令入口 `auto-iter`，避免每次写 `python3 /home/ryan/auto_iteration/tools/auto_iter.py`。
+- 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
 
@@ -970,25 +972,61 @@ def default_skills_dir() -> Path:
     return Path.home() / ".codex" / "skills"
 
 
+@dataclass(frozen=True)
+class CommandWrapperSpec:
+    filename: str
+    text: str
+    executable: bool
+
+
+def is_windows_platform(platform_name: str | None = None) -> bool:
+    if platform_name:
+        return platform_name.lower().startswith(("win", "nt"))
+    return os.name == "nt" or sys.platform.startswith("win")
+
+
+def python_executable() -> str:
+    return sys.executable or shutil.which("python3") or shutil.which("python") or "python"
+
+
+def command_wrapper_spec(tool_path: Any, platform_name: str | None = None) -> CommandWrapperSpec:
+    tool_text = str(tool_path)
+    python_text = python_executable()
+    if is_windows_platform(platform_name):
+        return CommandWrapperSpec(
+            filename="auto-iter.cmd",
+            text="\r\n".join(["@echo off", f'"{python_text}" "{tool_text}" %*', ""]),
+            executable=False,
+        )
+    return CommandWrapperSpec(
+        filename="auto-iter",
+        text="\n".join(
+            [
+                "#!/usr/bin/env sh",
+                f"exec {shlex.quote(python_text)} {shlex.quote(tool_text)} \"$@\"",
+                "",
+            ]
+        ),
+        executable=True,
+    )
+
+
+def command_paths(bin_dir: Path) -> list[Path]:
+    return [bin_dir / "auto-iter", bin_dir / "auto-iter.cmd"]
+
+
 def command_install(args: argparse.Namespace) -> int:
     bin_dir = Path(args.bin_dir).expanduser().resolve()
     skills_dir = Path(args.skills_dir).expanduser().resolve()
     bin_dir.mkdir(parents=True, exist_ok=True)
     skills_dir.mkdir(parents=True, exist_ok=True)
 
-    command_path = bin_dir / "auto-iter"
     tool_path = TOOL_ROOT / "tools" / "auto_iter.py"
-    command_path.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                f'exec python3 "{tool_path}" "$@"',
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    command_path.chmod(0o755)
+    wrapper = command_wrapper_spec(tool_path)
+    command_path = bin_dir / wrapper.filename
+    command_path.write_text(wrapper.text, encoding="utf-8")
+    if wrapper.executable:
+        command_path.chmod(0o755)
 
     print(f"installed command: {command_path}")
     installed_skills: list[tuple[str, Path]] = []
@@ -1007,17 +1045,20 @@ def command_install(args: argparse.Namespace) -> int:
 def command_uninstall(args: argparse.Namespace) -> int:
     bin_dir = Path(args.bin_dir).expanduser().resolve()
     skills_dir = Path(args.skills_dir).expanduser().resolve()
-    command_path = bin_dir / "auto-iter"
-
-    if command_path.exists():
+    removed_command = False
+    for command_path in command_paths(bin_dir):
+        if not command_path.exists():
+            print(f"command not installed: {command_path}")
+            continue
         command_text = command_path.read_text(encoding="utf-8", errors="replace")
         expected_target = str(TOOL_ROOT / "tools" / "auto_iter.py")
         if expected_target not in command_text:
             raise UserError(f"refusing to remove command not installed by this AIT checkout: {command_path}")
         command_path.unlink()
         print(f"removed command: {command_path}")
-    else:
-        print(f"command not installed: {command_path}")
+        removed_command = True
+    if not removed_command:
+        print("no installed command wrappers removed")
 
     for skill_name in INSTALLED_SKILLS:
         skill_dir = skills_dir / skill_name
@@ -1312,18 +1353,20 @@ def command_topic_show(args: argparse.Namespace) -> int:
 
 
 def verify_installation(command_path: Path, installed_skills: list[tuple[str, Path]]) -> None:
-    python3_path = shutil.which("python3")
-    if not python3_path:
-        raise UserError("install check failed: dependency missing: python3")
-    if not command_path.exists() or not os.access(command_path, os.X_OK):
+    python_path = python_executable()
+    if not python_path:
+        raise UserError("install check failed: dependency missing: python")
+    if not command_path.exists():
+        raise UserError(f"install check failed: command wrapper missing: {command_path}")
+    if not is_windows_platform() and not os.access(command_path, os.X_OK):
         raise UserError(f"install check failed: command is not executable: {command_path}")
     for skill_name, skill_dir in installed_skills:
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists() or not skill_md.read_text(encoding="utf-8").strip():
             raise UserError(f"install check failed: skill not ready: {skill_name}")
     print("install check: ok")
-    print(f"dependency ready: python3 ({python3_path})")
-    print(f"command ready: auto-iter ({command_path})")
+    print(f"dependency ready: python ({python_path})")
+    print(f"command ready: {command_path.name} ({command_path})")
     path_entries = [Path(entry).expanduser() for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
     if command_path.parent not in path_entries:
         print(f"path hint: {command_path.parent} is not on PATH; use {command_path} or add that directory to PATH")

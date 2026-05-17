@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.13。
+- 当前版本：v0.14。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -22,6 +22,7 @@
 - v0.11 已完成：AIT 安装管理增加 `uninstall`，可删除安装命令和 Codex skills，但保留项目状态。
 - v0.12 已完成：卸载时给用户选择是否一并删除项目状态目录，并说明各目录存放内容。
 - v0.13 已完成：Topic Archive MVP，任何时刻只有一个 active topic，其它 topic 进入 archive 并按需恢复。
+- v0.14 已完成：跨平台安装和运行入口，覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app。
 - 下一阶段：等 topic、tracking 信息规模变大后，再评估是否加入语义检索。
 
 ## 下一步
@@ -37,4 +38,5 @@
 9. 用户显式开启、切换、回到或满足 topic 时，agent 使用 `auto-iter topic current/list/show/start/switch/satisfy` 保存和恢复现场。
 10. 如果用户 prompt 只是语义上像切换到新 topic，agent 必须先问“是不是已经切入新的 topic 了？”，确认后才切换。
 11. 新 session 默认读取 `topics/active_topic.md`，只在用户要求或确认切回 archived topic 时读取 `topics/archive/`。
-12. 若 topic 和 tracking 信息规模明显变大，再评估语义检索。
+12. 安装或恢复 AIT 时，按平台选择入口：Windows Codex app 使用 `py -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`，WSL/Linux Codex CLI 和 macOS Codex app 使用 `python3 -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`。
+13. 若 topic 和 tracking 信息规模明显变大，再评估语义检索。
