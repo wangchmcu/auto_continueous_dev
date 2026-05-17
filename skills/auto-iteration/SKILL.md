@@ -73,6 +73,11 @@ directories too and prints a short description of each directory. In
 non-interactive runs, use `--keep-project-state` or `--remove-project-state` to
 make the choice explicit.
 
+Install should prefer an operating-system-appropriate command directory already
+on `PATH` and writable. If it falls back to a user-owned directory, use the
+printed absolute command path; do not edit shell startup files unless the user
+explicitly opts in.
+
 ## Topic Archive
 
 Use topic archive when the user wants to keep only one current issue/direction
@@ -85,6 +90,8 @@ auto-iter topic show --topic-id <id>
 auto-iter topic start --title "<标题>" --summary "<新 topic 摘要>" --current-summary "<当前现场摘要>"
 auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
 auto-iter topic satisfy --summary "<阶段性达到的预期>"
+auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"
+auto-iter topic evidence --topic-id <id>
 ```
 
 Rules:
@@ -94,6 +101,7 @@ Rules:
 - `archived_satisfied` means stage expectations are met; it can still be reopened.
 - When a prompt only seems to change topic semantically, ask “是不是已经切入新的 topic 了？” before switching.
 - Read `topics/active_topic.md` by default; load `topics/archive/` only on user request or confirmed topic switch.
+- Link clear supporting runs, decisions, and artifacts with `auto-iter topic link`; inspect the evidence chain later with `auto-iter topic evidence`.
 
 ## Before A New Experiment
 

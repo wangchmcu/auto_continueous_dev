@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.15。
+- 当前版本：v0.17。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -24,7 +24,9 @@
 - v0.13 已完成：Topic Archive MVP，任何时刻只有一个 active topic，其它 topic 进入 archive 并按需恢复。
 - v0.14 已完成：跨平台安装和运行入口，覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app。
 - v0.15 已完成：projection consistency（投影一致性）和 demo/test 历史边界，避免孤儿 Markdown projection 污染恢复上下文。
-- 下一阶段：等 topic、tracking 信息规模变大后，再评估是否加入语义检索。
+- v0.16 已完成：topic evidence link（topic 证据关联）MVP，让 topic 能直接关联并查询相关 run、decision 和 artifact。
+- v0.17 已完成：多操作系统安装路径体验增强，优先使用已在 `PATH` 且可写的系统推荐命令目录，避免默认落到当前 shell 找不到的位置。
+- 下一阶段：等 topic、tracking 信息规模变大再评估是否加入语义检索，或继续 topic 生命周期管理增强。
 
 ## 下一步
 
@@ -41,4 +43,6 @@
 11. 新 session 默认读取 `topics/active_topic.md`，只在用户要求或确认切回 archived topic 时读取 `topics/archive/`。
 12. 安装或恢复 AIT 时，按平台选择入口：Windows Codex app 使用 `py -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`，WSL/Linux Codex CLI 和 macOS Codex app 使用 `python3 -m auto_iteration.cli install` 或 `python -m auto_iteration.cli install`。
 13. 恢复上下文或查阅历史时，如果 `context index` 报告 orphan/stale decision projection，agent 不把该 Markdown 文件当作当前结论；先以 SQLite 和 handoff 为准，必要时清理 projection 或把 demo/test 历史迁移到 `examples/` 并写明测试目的。
-14. 若 topic 和 tracking 信息规模明显变大，再评估语义检索。
+14. 当某个 topic 有明确相关的 run、decision 或 artifact 时，使用 `auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<摘要>"` 建立证据关联；查阅时用 `auto-iter topic evidence --topic-id <id>`。
+15. 安装 AIT 时优先选择操作系统/当前 shell 已认可的命令目录；没有合适目录时只安装到用户目录并提示路径，不默认修改 shell 启动文件。
+16. 若 topic 和 tracking 信息规模明显变大，再评估语义检索。

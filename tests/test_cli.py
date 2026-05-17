@@ -128,9 +128,13 @@ class CliTests(unittest.TestCase):
         self.assertIn("does not remove project state", skill_text)
         self.assertIn("--keep-project-state", skill_text)
         self.assertIn("--remove-project-state", skill_text)
+        self.assertIn("already on `PATH` and writable", skill_text)
+        self.assertIn("without explicit user opt-in", skill_text)
         self.assertIn("plans/version_iterations.md", skill_text)
         self.assertIn("global plan backlog", skill_text)
         self.assertIn("do not start a separate plan branch", skill_text)
+        self.assertIn("auto-iter topic link", skill_text)
+        self.assertIn("auto-iter topic evidence", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
         self.assertIn("If skills changed, run the install command", improve_skill_text)
@@ -172,6 +176,47 @@ class CliTests(unittest.TestCase):
         self.assertIn("C:\\repo\\tools\\auto_iter.py", windows.text)
         self.assertIn("%*", windows.text)
         self.assertFalse(windows.executable)
+
+    def test_recommended_bin_dir_prefers_writable_standard_path_already_on_path(self):
+        home = self.tmp / "home"
+        homebrew_bin = self.tmp / "opt" / "homebrew" / "bin"
+        local_bin = home / ".local" / "bin"
+        path_text = os.pathsep.join([str(homebrew_bin), str(local_bin)])
+
+        selected = cli.recommended_bin_dir(
+            platform_name="posix",
+            path_text=path_text,
+            home=home,
+            is_writable=lambda path: path == homebrew_bin,
+        )
+
+        self.assertEqual(selected, homebrew_bin)
+
+    def test_recommended_bin_dir_falls_back_to_user_local_without_path_mutation(self):
+        home = self.tmp / "home"
+        path_text = os.pathsep.join([str(self.tmp / "not-writable"), "/usr/bin"])
+
+        selected = cli.recommended_bin_dir(
+            platform_name="posix",
+            path_text=path_text,
+            home=home,
+            is_writable=lambda _path: False,
+        )
+
+        self.assertEqual(selected, home / ".local" / "bin")
+
+    def test_recommended_bin_dir_uses_windows_user_app_bin_fallback(self):
+        home = PureWindowsPath("C:/Users/Ryan")
+
+        selected = cli.recommended_bin_dir(
+            platform_name="windows",
+            path_text=r"C:\Windows\System32",
+            home=home,
+            environ={"LOCALAPPDATA": r"C:\Users\Ryan\AppData\Local"},
+            is_writable=lambda _path: False,
+        )
+
+        self.assertEqual(selected, PureWindowsPath(r"C:\Users\Ryan\AppData\Local\Programs\auto-iteration\bin"))
 
     def test_stable_install_docs_avoid_single_platform_source_paths(self):
         stable_files = [
@@ -376,6 +421,108 @@ class CliTests(unittest.TestCase):
         self.assertIn("是不是已经切入新的 topic 了", skill_text)
         self.assertIn("auto-iter topic", skill_text)
         self.assertIn("install check: ok", installed.stdout)
+
+    def test_topic_evidence_links_runs_decisions_and_artifacts(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Evidence linked topic",
+            "--summary",
+            "需要能查到相关 run、decision 和 artifact",
+        ).stdout.strip().split()[-1]
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        write_json(config, {"route": "topic-evidence"})
+        write_json(metrics, {"score": 0.88})
+        artifact.write_text("# linked report\n", encoding="utf-8")
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "topic-evidence",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            run_id,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "Evidence link decision",
+            "--claim",
+            "topic 可以直接关联相关结论。",
+        ).stdout.strip().split()[-1]
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            artifact_id = db.execute("select artifact_id from artifacts where run_id = ?", (run_id,)).fetchone()[0]
+
+        linked = run_cli(
+            self.tmp,
+            "topic",
+            "link",
+            "--topic-id",
+            topic_id,
+            "--run-id",
+            run_id,
+            "--decision-id",
+            decision_id,
+            "--artifact-id",
+            artifact_id,
+            "--summary",
+            "v0.16 evidence bundle",
+        )
+        evidence = run_cli(self.tmp, "topic", "evidence", "--topic-id", topic_id)
+        current = run_cli(self.tmp, "topic", "current")
+        index = run_cli(self.tmp, "context", "index")
+        handoff = run_cli(self.tmp, "handoff", "generate")
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+
+        self.assertIn("linked topic evidence", linked.stdout)
+        self.assertIn(run_id, evidence.stdout)
+        self.assertIn(decision_id, evidence.stdout)
+        self.assertIn(artifact_id, evidence.stdout)
+        self.assertIn("v0.16 evidence bundle", evidence.stdout)
+        self.assertIn("## Evidence Links", current.stdout)
+        self.assertIn(run_id, current.stdout)
+        self.assertIn("Evidence Links", index.stdout)
+        self.assertIn("## Topic Evidence Links", handoff_text)
+        self.assertIn(run_id, handoff_text)
+        self.assertIn("generated", handoff.stdout)
+
+        missing = run_cli(
+            self.tmp,
+            "topic",
+            "link",
+            "--topic-id",
+            topic_id,
+            "--run-id",
+            "R-missing",
+            check=False,
+        )
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("unknown run evidence_id: R-missing", missing.stderr)
 
     def test_run_finish_persists_config_metrics_and_artifacts(self):
         run_cli(self.tmp, "init")

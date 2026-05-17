@@ -90,6 +90,10 @@ prints `command not found`, do not stop or ask the user to type the path. Use
 the installed absolute command path printed by install. On Windows this is
 usually an `auto-iter.cmd` wrapper; on WSL/Linux and macOS it is usually an
 `auto-iter` wrapper. Continue the same workflow from the current project root.
+The installer should prefer an operating-system-appropriate command directory
+that is already on `PATH` and writable. If it falls back to a user-owned
+directory and prints a path hint, use the printed absolute command path rather
+than editing shell startup files without explicit user opt-in.
 
 ## Install Management
 
@@ -138,6 +142,8 @@ auto-iter topic show --topic-id <id>
 auto-iter topic start --title "<标题>" --summary "<新 topic 摘要>" --current-summary "<当前现场摘要>"
 auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
 auto-iter topic satisfy --summary "<阶段性达到的预期>"
+auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"
+auto-iter topic evidence --topic-id <id>
 ```
 
 Rules:
@@ -148,6 +154,7 @@ Rules:
 - `archived_satisfied` means the current expectation is satisfied, not permanently finished; switching back reopens it.
 - If a new prompt only looks like a new topic semantically, ask “是不是已经切入新的 topic 了？” before running any topic switch command.
 - New sessions read `handoffs/latest_handoff.md` and `topics/active_topic.md`; archived topic files under `topics/archive/` are loaded only on demand.
+- When a topic has clear supporting evidence, link the relevant run, decision, or artifact with `auto-iter topic link` so future sessions can use `auto-iter topic evidence` instead of manually searching all history.
 
 ## Before A New Experiment Route
 

@@ -57,6 +57,7 @@
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
 - 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
 - 安装和运行入口必须覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境；wrapper、Python 命令和文档不能写死某一个用户或系统路径。
+- 安装器应优先使用当前操作系统和 shell 已认可的命令目录；如果没有合适目录，回落到用户目录并提示路径，不默认修改用户 shell 配置。
 - 提供安装管理入口：可安装、卸载并重新安装命令和 Codex skills，且卸载不删除项目状态。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
@@ -75,6 +76,7 @@
 - `archived_satisfied` 表示阶段性达到预期，不等于永久结束；切回时记录重开事件并恢复为 active。
 - topic 事实记录在 SQLite，Markdown 投影写入 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md`。
 - 显式 topic 切换短句可直接触发 topic 命令；语义疑似切换时必须先问用户“是不是已经切入新的 topic 了？”。
+- topic evidence link（topic 证据关联）把 topic 与相关 run、decision、artifact 建立可查询关联，避免恢复 topic 时逐个翻找历史。
 
 ### 9. 自然语言接力入口
 
@@ -145,7 +147,7 @@
 
 - topic 证据关联：把 topic 与相关 run、decision、artifact、handoff 建立可查询关联。
 - 目标是让 agent 能回答“这个 topic 当时依据哪些实验、结论和工件”，而不需要人工逐个翻找。
-- MVP 之后再做；v0.13 只保存 topic 摘要和恢复入口。
+- v0.16 已覆盖 run、decision、artifact 的最小可用关联；handoff 强关联可在后续按需要补充。
 
 ### topic lifecycle management
 
@@ -361,6 +363,33 @@
 - README、AGENTS、entry/workflow skills 说明 SQLite 是事实来源，projection 需要一致性校验。
 - demo/test 历史保留在 `examples/`，并明确测试目的和示例数据边界。
 - 测试覆盖孤儿 projection 的跳过、warning 和 handoff 校验失败。
+
+### v0.16：Topic Evidence Link
+
+状态：done。
+
+目标：让 topic 与相关 run、decision、artifact 形成可查询证据链，并在 topic projection 和 handoff 中暴露摘要。
+
+任务：
+
+- 新增 topic evidence link 的 SQLite 记录。
+- 新增 `auto-iter topic link` 和 `auto-iter topic evidence`。
+- 在 topic projection、context index 和 handoff 中暴露证据关联入口。
+- 更新文档、entry skill 和测试。
+
+### v0.17：多操作系统安装路径体验增强
+
+状态：done。
+
+目标：安装器优先选择当前 shell 已在 `PATH` 中且可写的系统常见命令目录，避免默认安装到裸命令不可见的位置，同时不默认修改用户环境。
+
+任务：
+
+- 新增安装目录推荐逻辑。
+- macOS/Linux/WSL 优先使用 `/opt/homebrew/bin`、`/usr/local/bin` 或用户本地命令目录中已在 `PATH` 且可写的目录。
+- Windows 回落到用户 AppData 下的 AIT 应用命令目录。
+- 保留 path hint，不默认写 shell startup 文件。
+- 更新文档和测试。
 
 ### 后续可选：语义检索
 

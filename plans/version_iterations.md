@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.15
+- current_version: v0.17
 - status: done
-- goal: 完成 projection consistency（投影一致性）和 demo/test 历史边界，避免孤儿 Markdown projection 污染恢复上下文。
+- goal: 改善多操作系统安装路径选择，让 `auto-iter` 优先安装到当前 shell 已认可的标准命令目录，同时避免默认修改用户环境。
 
 ## v0.1 任务清单
 
@@ -471,6 +471,77 @@ v0.15 之后仍未覆盖的全局能力：
 3. `handoff validate` 对孤儿或状态不一致的 decision projection 返回 invalid。
 4. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.16 任务清单
+
+- status: done
+- goal: 实现 topic evidence link（topic 证据关联）MVP，让 topic 与 run、decision、artifact 形成可查询证据链。
+- [x] 新增 `topic_evidence_links` SQLite 表，记录 `topic_id`、`evidence_type`、`evidence_id`、摘要和创建时间。
+- [x] 新增 `auto-iter topic link`，可把 run、decision、artifact 关联到指定 topic。
+- [x] 新增 `auto-iter topic evidence`，按 topic 查询已关联证据。
+- [x] `topics/active_topic.md` 和 archive topic projection 增加 `Evidence Links` 章节。
+- [x] handoff 增加当前 topic 的 `Topic Evidence Links` 摘要。
+- [x] README、AGENTS、entry skill 和 workflow skill 说明证据关联入口。
+- [x] 测试覆盖 topic evidence link、projection、handoff 和安装后的 skill 文案。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.16 距离 global plan
+
+v0.16 覆盖 topic evidence link（topic 证据关联）的最小可用闭环。
+
+v0.16 已覆盖的全局能力：
+
+- topic 可以显式关联相关 run、decision 和 artifact。
+- agent 可以通过 `auto-iter topic evidence --topic-id <id>` 查询某个 topic 的证据链。
+- 当前 active topic projection 和 handoff 能暴露证据摘要，恢复上下文时不需要逐个翻找 SQLite 表。
+
+v0.16 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+
+## v0.16 验收标准
+
+1. `auto-iter topic link` 能把已有 run、decision、artifact 绑定到 topic，并拒绝不存在的证据 ID。
+2. `auto-iter topic evidence` 能列出 topic 关联的 run、decision、artifact 和摘要。
+3. topic projection、context index 和 handoff 都能暴露 topic evidence link 入口。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.17 任务清单
+
+- status: done
+- goal: 改善多操作系统安装路径选择，让 `auto-iter` 优先安装到当前 shell 已认可的标准命令目录，同时避免默认修改用户环境。
+- [x] 新增安装目录选择逻辑：优先使用已在 `PATH` 且可写的系统常见命令目录。
+- [x] macOS/Linux/WSL 无合适目录时回落到 `~/.local/bin`，并继续使用 path hint。
+- [x] Windows 无合适目录时回落到用户 `LOCALAPPDATA` 下的 AIT 应用命令目录。
+- [x] 保持安装器默认不修改 shell 启动文件、不注入 PATH。
+- [x] README、AGENTS、entry skill 和 workflow skill 说明安装路径选择规则。
+- [x] 测试覆盖 POSIX 标准目录优先、用户目录回落、Windows 用户目录回落。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.17 距离 global plan
+
+v0.17 覆盖 Codex 入口能力中“跨平台安装和运行入口”的体验增强部分。
+
+v0.17 已覆盖的全局能力：
+
+- 安装器不再固定落到可能不在当前 shell `PATH` 中的用户目录。
+- 在 macOS/Linux/WSL 上，优先使用当前 shell 已认可且可写的标准命令目录。
+- 在 Windows 上，保守回落到用户 AppData 下的应用命令目录。
+- 默认不修改用户 shell 配置，减少对用户环境的侵入。
+
+v0.17 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令；当前版本只提示，不自动写。
+
+## v0.17 验收标准
+
+1. 安装目录选择测试覆盖 POSIX 标准目录优先和用户目录回落。
+2. 安装目录选择测试覆盖 Windows 用户目录回落。
+3. `install` 不默认修改 shell 启动文件。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -528,6 +599,14 @@ v0.15 之后仍未覆盖的全局能力：
 ### v0.15
 
 - done：projection consistency（投影一致性）和 demo/test 历史边界。
+
+### v0.16
+
+- done：topic evidence link（topic 证据关联）MVP。
+
+### v0.17
+
+- done：多操作系统安装路径体验增强。
 
 ### 后续可选
 

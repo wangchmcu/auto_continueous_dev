@@ -23,6 +23,14 @@ The install command creates:
 - Codex entry skill: `~/.codex/skills/auto-iteration-entry`
 - system-improvement skill: `~/.codex/skills/auto-it-self-improve`
 
+By default, the installer first looks for an operating-system-appropriate
+command directory that is already on `PATH` and writable, such as
+`/opt/homebrew/bin` on Apple Silicon macOS, `/usr/local/bin` on traditional
+Unix installs, or a user-local command directory. If no suitable directory is
+available, it falls back to a user-owned location and prints a path hint. The
+installer does not edit shell startup files or mutate the user's environment
+unless a future explicit opt-in flag is added for that behavior.
+
 The install command also runs a self-check. It verifies that a Python
 interpreter is available, the command wrapper exists, and the required skills
 have non-empty `SKILL.md` files. A healthy install prints `install check: ok`.
@@ -67,6 +75,8 @@ auto-iter topic current
 auto-iter topic list
 auto-iter topic switch --topic-id <id> --current-summary "当前现场摘要"
 auto-iter topic satisfy --summary "阶段性达到预期"
+auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "证据摘要"
+auto-iter topic evidence --topic-id <id>
 ```
 
 Starting or switching topics archives the previous active topic as
@@ -74,7 +84,9 @@ Starting or switching topics archives the previous active topic as
 `archived_satisfied`; that means the current expectation is satisfied, not that
 the topic can never be reopened. If an agent only suspects that the user has
 changed topic semantically, it should ask “是不是已经切入新的 topic 了？” before
-running a topic switch command.
+running a topic switch command. Use `topic link` when a topic has clear
+evidence in recorded runs, decisions, or artifacts; use `topic evidence` to
+recover that evidence chain without searching every run summary by hand.
 
 Then start Codex from the target algorithm project:
 

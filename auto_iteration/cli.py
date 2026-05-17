@@ -12,7 +12,7 @@ import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
@@ -21,6 +21,7 @@ TOOL_ROOT = Path(__file__).resolve().parents[1]
 DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
 TOPIC_STATUSES = {"active", "archived_open", "archived_satisfied"}
+TOPIC_EVIDENCE_TYPES = {"run", "decision", "artifact"}
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
 PROJECT_STATE_DIRS = [
     ("state", "SQLite state database for runs, decisions, route checks, and handoffs"),
@@ -913,6 +914,15 @@ def init_schema(db: sqlite3.Connection) -> None:
             summary text not null default '',
             created_at text not null
         );
+
+        create table if not exists topic_evidence_links (
+            topic_id text not null,
+            evidence_type text not null,
+            evidence_id text not null,
+            summary text not null default '',
+            created_at text not null,
+            primary key (topic_id, evidence_type, evidence_id)
+        );
         """
     )
 
@@ -961,8 +971,51 @@ def command_doctor(_args: argparse.Namespace) -> int:
     return 0
 
 
+def path_entries(path_text: str, platform_name: str | None = None) -> list[Any]:
+    windows = is_windows_platform(platform_name)
+    separator = ";" if windows else os.pathsep
+    path_type = PureWindowsPath if windows else Path
+    if windows:
+        return [path_type(entry) for entry in path_text.split(separator) if entry]
+    return [path_type(entry).expanduser() for entry in path_text.split(separator) if entry]
+
+
+def is_standard_command_dir(path: Any, home: Any, platform_name: str | None = None) -> bool:
+    text = str(path).replace("\\", "/").rstrip("/")
+    home_text = str(home).replace("\\", "/").rstrip("/")
+    if is_windows_platform(platform_name):
+        return text.lower().endswith("/scripts") or text.lower().endswith("/auto-iteration/bin")
+    return text.endswith("/opt/homebrew/bin") or text.endswith("/usr/local/bin") or text == f"{home_text}/.local/bin"
+
+
+def recommended_bin_dir(
+    platform_name: str | None = None,
+    path_text: str | None = None,
+    home: Any | None = None,
+    environ: dict[str, str] | None = None,
+    is_writable: Any | None = None,
+) -> Any:
+    env = os.environ if environ is None else environ
+    windows = is_windows_platform(platform_name)
+    path_type = PureWindowsPath if windows else Path
+    resolved_home = home if home is not None else path_type(Path.home())
+    current_path = path_text if path_text is not None else env.get("PATH", "")
+    writable = is_writable or (lambda candidate: Path(candidate).is_dir() and os.access(candidate, os.W_OK))
+
+    for entry in path_entries(current_path, platform_name):
+        if is_standard_command_dir(entry, resolved_home, platform_name) and writable(entry):
+            return entry
+
+    if windows:
+        local_app_data = env.get("LOCALAPPDATA")
+        if local_app_data:
+            return PureWindowsPath(local_app_data) / "Programs" / "auto-iteration" / "bin"
+        return PureWindowsPath(resolved_home) / "AppData" / "Local" / "Programs" / "auto-iteration" / "bin"
+    return Path(resolved_home) / ".local" / "bin"
+
+
 def default_bin_dir() -> Path:
-    return Path.home() / ".local" / "bin"
+    return Path(recommended_bin_dir())
 
 
 def default_skills_dir() -> Path:
@@ -1161,6 +1214,40 @@ def topic_event_lines(db: sqlite3.Connection, topic_id: str) -> list[str]:
     return [f"- {row['created_at']} {row['event_type']}: {row['summary'] or 'none'}" for row in rows]
 
 
+def topic_evidence_lines(db: sqlite3.Connection, topic_id: str, limit: int = 12) -> list[str]:
+    rows = db.execute(
+        """
+        select evidence_type, evidence_id, summary, created_at
+        from topic_evidence_links
+        where topic_id = ?
+        order by created_at desc, rowid desc
+        limit ?
+        """,
+        (topic_id, limit),
+    ).fetchall()
+    if not rows:
+        return ["- none"]
+    lines: list[str] = []
+    for row in rows:
+        detail = topic_evidence_detail(db, row["evidence_type"], row["evidence_id"])
+        summary = f" summary={row['summary']}" if row["summary"] else ""
+        lines.append(f"- {row['evidence_type']} {row['evidence_id']}: {detail}{summary}")
+    return lines
+
+
+def topic_evidence_detail(db: sqlite3.Connection, evidence_type: str, evidence_id: str) -> str:
+    if evidence_type == "run":
+        row = db.execute("select status, dataset_id from runs where run_id = ?", (evidence_id,)).fetchone()
+        return f"status={row['status']} dataset={row['dataset_id']}" if row else "missing"
+    if evidence_type == "decision":
+        row = db.execute("select status, title from decisions where decision_id = ?", (evidence_id,)).fetchone()
+        return f"status={row['status']} title={row['title']}" if row else "missing"
+    if evidence_type == "artifact":
+        row = db.execute("select kind, path from artifacts where artifact_id = ?", (evidence_id,)).fetchone()
+        return f"{row['kind']} path={row['path']}" if row else "missing"
+    return "unknown evidence type"
+
+
 def render_topic_projection(db: sqlite3.Connection, topic: sqlite3.Row, active_projection: bool = False) -> str:
     title = "Active Topic" if active_projection else topic["title"]
     lines = [
@@ -1177,6 +1264,9 @@ def render_topic_projection(db: sqlite3.Connection, topic: sqlite3.Row, active_p
         "",
         "## Recent Events",
         *topic_event_lines(db, topic["topic_id"]),
+        "",
+        "## Evidence Links",
+        *topic_evidence_lines(db, topic["topic_id"]),
         "",
     ]
     return "\n".join(lines)
@@ -1349,6 +1439,59 @@ def command_topic_show(args: argparse.Namespace) -> int:
     with database() as db:
         topic = get_topic(db, args.topic_id)
         print(render_topic_projection(db, topic, active_projection=topic["status"] == "active"))
+    return 0
+
+
+def validate_topic_evidence_id(db: sqlite3.Connection, evidence_type: str, evidence_id: str) -> None:
+    if evidence_type not in TOPIC_EVIDENCE_TYPES:
+        raise UserError(f"invalid topic evidence type: {evidence_type}")
+    table_and_column = {
+        "run": ("runs", "run_id"),
+        "decision": ("decisions", "decision_id"),
+        "artifact": ("artifacts", "artifact_id"),
+    }[evidence_type]
+    table, column = table_and_column
+    row = db.execute(f"select 1 from {table} where {column} = ?", (evidence_id,)).fetchone()
+    if not row:
+        raise UserError(f"unknown {evidence_type} evidence_id: {evidence_id}")
+
+
+def command_topic_link(args: argparse.Namespace) -> int:
+    evidence_items = [("run", item) for item in args.run_id]
+    evidence_items += [("decision", item) for item in args.decision_id]
+    evidence_items += [("artifact", item) for item in args.artifact_id]
+    if not evidence_items:
+        raise UserError("at least one --run-id, --decision-id, or --artifact-id is required")
+    with database() as db:
+        get_topic(db, args.topic_id)
+        timestamp = now_iso()
+        for evidence_type, evidence_id in evidence_items:
+            validate_topic_evidence_id(db, evidence_type, evidence_id)
+            db.execute(
+                """
+                insert into topic_evidence_links (topic_id, evidence_type, evidence_id, summary, created_at)
+                values (?, ?, ?, ?, ?)
+                on conflict(topic_id, evidence_type, evidence_id)
+                do update set summary = excluded.summary, created_at = excluded.created_at
+                """,
+                (args.topic_id, evidence_type, evidence_id, args.summary or "", timestamp),
+            )
+        add_topic_event(db, args.topic_id, "evidence_link", args.summary or "")
+        write_topic_projections(db)
+    print(f"linked topic evidence {args.topic_id} count={len(evidence_items)}")
+    return 0
+
+
+def command_topic_evidence(args: argparse.Namespace) -> int:
+    with database() as db:
+        topic = get_topic(db, args.topic_id)
+        print(f"# Topic Evidence Links")
+        print()
+        print(f"- topic_id: {topic['topic_id']}")
+        print(f"- title: {topic['title']}")
+        print()
+        for line in topic_evidence_lines(db, args.topic_id, limit=args.latest):
+            print(line)
     return 0
 
 
@@ -1918,6 +2061,14 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         lines.append("- none")
     lines += [
         "",
+        "## Topic Evidence Links",
+    ]
+    if current_topic:
+        lines += topic_evidence_lines(db, current_topic["topic_id"], limit=8)
+    else:
+        lines.append("- none")
+    lines += [
+        "",
         "## 最近成功实验",
     ]
     if success:
@@ -1982,6 +2133,7 @@ def validate_handoff_text(text: str) -> list[str]:
         "## 当前目标",
         "## 当前快照",
         "## 当前 Topic",
+        "## Topic Evidence Links",
         "## 最近成功实验",
         "## 当前有效结论",
         "## 已废弃且不要重复的路线",
@@ -2345,6 +2497,17 @@ def build_parser() -> argparse.ArgumentParser:
     topic_show = topic_sub.add_parser("show")
     topic_show.add_argument("--topic-id", required=True)
     topic_show.set_defaults(func=command_topic_show)
+    topic_link = topic_sub.add_parser("link")
+    topic_link.add_argument("--topic-id", required=True)
+    topic_link.add_argument("--run-id", action="append", default=[])
+    topic_link.add_argument("--decision-id", action="append", default=[])
+    topic_link.add_argument("--artifact-id", action="append", default=[])
+    topic_link.add_argument("--summary", default="")
+    topic_link.set_defaults(func=command_topic_link)
+    topic_evidence = topic_sub.add_parser("evidence")
+    topic_evidence.add_argument("--topic-id", required=True)
+    topic_evidence.add_argument("--latest", type=int, default=20)
+    topic_evidence.set_defaults(func=command_topic_evidence)
     topic_start = topic_sub.add_parser("start")
     topic_start.add_argument("--title", required=True)
     topic_start.add_argument("--summary", default="")
