@@ -20,6 +20,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “卸载 AIT”, “卸载 auto-iter”, or “重新安装 AIT”：run the install management workflow. `auto-iter uninstall` removes installed command and Codex skills only; it does not remove project state.
 - “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”：run the topic archive workflow below.
 - If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
+- If the user asks for new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 - “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 

@@ -119,8 +119,30 @@
 
 ### 14. 后续可选语义检索
 
-- 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+- 当 topic、decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
+
+## 后续 Backlog
+
+这些条目是 `global plan backlog`（全局计划待办）。当用户以后提出上下文管理、历史检索、topic 管理或证据关联相关的新能力时，agent 必须先检查这里和 `plans/version_iterations.md` 的未覆盖能力，再决定是否延续已有路线；如果匹配，不要另开独立 plan 分支。
+
+### semantic retrieval
+
+- 语义检索：当 topic、decision、handoff、retrospective 数量变多后，用语义相似度帮助找到相关历史。
+- 它只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
+- 触发前提：历史规模已经明显影响人工索引和标题检索效率。
+
+### topic evidence link
+
+- topic 证据关联：把 topic 与相关 run、decision、artifact、handoff 建立可查询关联。
+- 目标是让 agent 能回答“这个 topic 当时依据哪些实验、结论和工件”，而不需要人工逐个翻找。
+- MVP 之后再做；v0.13 只保存 topic 摘要和恢复入口。
+
+### topic lifecycle management
+
+- topic 生命周期管理：支持 topic rename、merge、delete、prune，以及更明确的 reopen history。
+- 目标是长期维护 topic archive，避免 archive 自身变成新的上下文噪音。
+- 所有删除或 prune 行为必须保守，不能破坏已有证据链。
 
 ## 版本路线
 

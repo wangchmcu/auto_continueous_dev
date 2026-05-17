@@ -126,6 +126,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("does not remove project state", skill_text)
         self.assertIn("--keep-project-state", skill_text)
         self.assertIn("--remove-project-state", skill_text)
+        self.assertIn("plans/version_iterations.md", skill_text)
+        self.assertIn("global plan backlog", skill_text)
+        self.assertIn("do not start a separate plan branch", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
         self.assertIn("If skills changed, run the install command", improve_skill_text)
@@ -143,6 +146,14 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(doctor.returncode, 0)
         self.assertIn("state: ok", doctor.stdout)
+
+    def test_source_global_plan_names_future_backlog(self):
+        global_plan = (REPO_ROOT / "plans" / "global_plan.md").read_text(encoding="utf-8")
+
+        self.assertIn("## 后续 Backlog", global_plan)
+        self.assertIn("semantic retrieval", global_plan)
+        self.assertIn("topic evidence link", global_plan)
+        self.assertIn("topic lifecycle management", global_plan)
 
     def test_uninstall_removes_installed_command_and_skills_only(self):
         run_cli(self.tmp, "init")

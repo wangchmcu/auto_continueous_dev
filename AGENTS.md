@@ -49,6 +49,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill. This trigger is explicit; do not run system-improvement work automatically. If the improvement exposes a limitation in the self improve workflow itself, handle that as a second-order improvement or record it as an explicit pending plan item.
 - If the user asks to uninstall or reinstall AIT, use `auto-iter uninstall` for installed command and skill removal. In interactive use, let the uninstall prompt ask whether to remove project state directories and explain what they contain. In non-interactive use, pass `--keep-project-state` unless the user explicitly asks to delete project state; only then use `--remove-project-state`.
 - If the user explicitly says “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”, use `auto-iter topic current/list/show/start/switch/satisfy` as appropriate. If the prompt only semantically appears to move to a new issue or direction, first ask “是不是已经切入新的 topic 了？” and switch only after the user confirms.
+- If the user proposes new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 
 ## Raw Input
 
