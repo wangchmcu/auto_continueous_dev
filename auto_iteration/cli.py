@@ -18,6 +18,17 @@ DB_PATH = Path("state") / "agent_state.db"
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
+TOPIC_STATUSES = {"active", "archived_open", "archived_satisfied"}
+INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
+PROJECT_STATE_DIRS = [
+    ("state", "SQLite state database for runs, decisions, route checks, and handoffs"),
+    ("plans", "planning documents such as global, active, and version plans"),
+    ("topics", "active and archived topic projections for on-demand context loading"),
+    ("raw_input", "original input materials and imported old project notes"),
+    ("decisions", "readable decision records for active, rejected, superseded, and open conclusions"),
+    ("runs", "experiment run summaries, logs, metrics, and artifacts"),
+    ("handoffs", "session handoff documents for context recovery"),
+]
 ACTIVE_PLAN_TEMPLATE = """# Active Plan
 
 ## 当前目标
@@ -714,6 +725,7 @@ def database(require_existing: bool = True) -> sqlite3.Connection:
     else:
         db = sqlite3.connect(db_path())
         db.row_factory = sqlite3.Row
+    init_schema(db)
     try:
         yield db
         db.commit()
@@ -786,6 +798,7 @@ def ensure_dirs() -> None:
         "state",
         "runs",
         "handoffs/archive",
+        "topics/archive",
         "raw_input",
         "decisions/active",
         "decisions/rejected",
@@ -879,6 +892,25 @@ def init_schema(db: sqlite3.Connection) -> None:
             result text not null,
             matched_decision_ids_json text not null
         );
+
+        create table if not exists topics (
+            topic_id text primary key,
+            title text not null,
+            status text not null,
+            summary text not null default '',
+            current_goal text not null default '',
+            restore_hint text not null default '',
+            created_at text not null,
+            updated_at text not null
+        );
+
+        create table if not exists topic_events (
+            event_id text primary key,
+            topic_id text not null,
+            event_type text not null,
+            summary text not null default '',
+            created_at text not null
+        );
         """
     )
 
@@ -897,6 +929,7 @@ def command_init(_args: argparse.Namespace) -> int:
             """,
             (project_id, str(root())),
         )
+        write_topic_projections(db)
     print(f"initialized {root()}")
     return 0
 
@@ -959,7 +992,7 @@ def command_install(args: argparse.Namespace) -> int:
 
     print(f"installed command: {command_path}")
     installed_skills: list[tuple[str, Path]] = []
-    for skill_name in ["auto-iteration-entry", "auto-it-self-improve"]:
+    for skill_name in INSTALLED_SKILLS:
         source_skill = TOOL_ROOT / "skills" / skill_name
         if not source_skill.exists():
             raise UserError(f"skill source does not exist: {source_skill}")
@@ -968,6 +1001,313 @@ def command_install(args: argparse.Namespace) -> int:
         installed_skills.append((skill_name, target_skill))
         print(f"installed skill: {target_skill}")
     verify_installation(command_path, installed_skills)
+    return 0
+
+
+def command_uninstall(args: argparse.Namespace) -> int:
+    bin_dir = Path(args.bin_dir).expanduser().resolve()
+    skills_dir = Path(args.skills_dir).expanduser().resolve()
+    command_path = bin_dir / "auto-iter"
+
+    if command_path.exists():
+        command_text = command_path.read_text(encoding="utf-8", errors="replace")
+        expected_target = str(TOOL_ROOT / "tools" / "auto_iter.py")
+        if expected_target not in command_text:
+            raise UserError(f"refusing to remove command not installed by this AIT checkout: {command_path}")
+        command_path.unlink()
+        print(f"removed command: {command_path}")
+    else:
+        print(f"command not installed: {command_path}")
+
+    for skill_name in INSTALLED_SKILLS:
+        skill_dir = skills_dir / skill_name
+        if skill_dir.exists():
+            shutil.rmtree(skill_dir)
+            print(f"removed skill: {skill_name} ({skill_dir})")
+        else:
+            print(f"skill not installed: {skill_name} ({skill_dir})")
+
+    remove_project_state = should_remove_project_state(args)
+    if remove_project_state:
+        remove_project_state_dirs()
+    else:
+        print("project state preserved")
+
+    print("uninstall check: ok")
+    return 0
+
+
+def print_project_state_summary() -> None:
+    print("Project state directories:")
+    for name, description in PROJECT_STATE_DIRS:
+        print(f"- {name}/: {description}")
+
+
+def should_remove_project_state(args: argparse.Namespace) -> bool:
+    print_project_state_summary()
+    if args.remove_project_state:
+        return True
+    if args.keep_project_state:
+        return False
+    if sys.stdin.isatty():
+        answer = input("Remove these project state directories too? [y/N] ").strip().lower()
+        return answer in {"y", "yes"}
+    print("non-interactive uninstall: keeping project state; pass --remove-project-state to delete it")
+    return False
+
+
+def remove_project_state_dirs() -> None:
+    for name, _description in PROJECT_STATE_DIRS:
+        path = root() / name
+        if path.is_dir():
+            shutil.rmtree(path)
+            print(f"removed project state: {name}")
+        elif path.exists():
+            path.unlink()
+            print(f"removed project state: {name}")
+        else:
+            print(f"project state not found: {name}")
+
+
+def topics_dir() -> Path:
+    return root() / "topics"
+
+
+def topic_archive_dir() -> Path:
+    return topics_dir() / "archive"
+
+
+def topic_archive_path(topic_id: str) -> Path:
+    return topic_archive_dir() / f"{topic_id}.md"
+
+
+def active_topic_path() -> Path:
+    return topics_dir() / "active_topic.md"
+
+
+def topic_index_path() -> Path:
+    return topics_dir() / "index.md"
+
+
+def active_topic(db: sqlite3.Connection) -> sqlite3.Row | None:
+    return db.execute("select * from topics where status = 'active' order by updated_at desc limit 1").fetchone()
+
+
+def get_topic(db: sqlite3.Connection, topic_id: str) -> sqlite3.Row:
+    row = db.execute("select * from topics where topic_id = ?", (topic_id,)).fetchone()
+    if not row:
+        raise UserError(f"unknown topic_id: {topic_id}")
+    return row
+
+
+def add_topic_event(db: sqlite3.Connection, topic_id: str, event_type: str, summary: str = "") -> None:
+    db.execute(
+        """
+        insert into topic_events (event_id, topic_id, event_type, summary, created_at)
+        values (?, ?, ?, ?, ?)
+        """,
+        (new_id("TE"), topic_id, event_type, summary, now_iso()),
+    )
+
+
+def topic_event_lines(db: sqlite3.Connection, topic_id: str) -> list[str]:
+    rows = db.execute(
+        "select event_type, summary, created_at from topic_events where topic_id = ? order by created_at desc, rowid desc limit 8",
+        (topic_id,),
+    ).fetchall()
+    if not rows:
+        return ["- none"]
+    return [f"- {row['created_at']} {row['event_type']}: {row['summary'] or 'none'}" for row in rows]
+
+
+def render_topic_projection(db: sqlite3.Connection, topic: sqlite3.Row, active_projection: bool = False) -> str:
+    title = "Active Topic" if active_projection else topic["title"]
+    lines = [
+        f"# {title}",
+        "",
+        f"## {topic['title']}",
+        "",
+        f"- topic_id: {topic['topic_id']}",
+        f"- status: {topic['status']}",
+        f"- summary: {topic['summary'] or 'none'}",
+        f"- current_goal: {topic['current_goal'] or 'none'}",
+        f"- restore_hint: {topic['restore_hint'] or 'none'}",
+        f"- updated_at: {topic['updated_at']}",
+        "",
+        "## Recent Events",
+        *topic_event_lines(db, topic["topic_id"]),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def render_no_active_topic() -> str:
+    return "\n".join(
+        [
+            "# Active Topic",
+            "",
+            "## None",
+            "",
+            "- status: none",
+            "- restore_hint: start a new topic or switch to an archived topic.",
+            "",
+        ]
+    )
+
+
+def write_topic_projections(db: sqlite3.Connection) -> None:
+    topics_dir().mkdir(parents=True, exist_ok=True)
+    topic_archive_dir().mkdir(parents=True, exist_ok=True)
+    rows = db.execute("select * from topics order by updated_at desc, created_at desc").fetchall()
+    active = [row for row in rows if row["status"] == "active"]
+    if active:
+        active_topic_path().write_text(render_topic_projection(db, active[0], active_projection=True), encoding="utf-8")
+    else:
+        active_topic_path().write_text(render_no_active_topic(), encoding="utf-8")
+    index_lines = ["# Topic Index", ""]
+    if not rows:
+        index_lines += ["## No Topics", "", "- none", ""]
+    for row in rows:
+        index_lines += [
+            f"## {row['title']}",
+            "",
+            f"- topic_id: {row['topic_id']}",
+            f"- status: {row['status']}",
+            f"- summary: {row['summary'] or 'none'}",
+            f"- restore_hint: {row['restore_hint'] or 'none'}",
+            "",
+        ]
+        archive_path = topic_archive_path(row["topic_id"])
+        if row["status"] == "active":
+            if archive_path.exists():
+                archive_path.unlink()
+        else:
+            archive_path.write_text(render_topic_projection(db, row), encoding="utf-8")
+    topic_index_path().write_text("\n".join(index_lines), encoding="utf-8")
+
+
+def archive_current_topic(db: sqlite3.Connection, summary: str) -> sqlite3.Row | None:
+    current = active_topic(db)
+    if not current:
+        return None
+    if not summary:
+        raise UserError("--current-summary is required when an active topic exists")
+    updated_at = now_iso()
+    restore_hint = f"Use `auto-iter topic switch --topic-id {current['topic_id']} --current-summary <summary>` to continue this topic."
+    db.execute(
+        """
+        update topics
+        set status = 'archived_open', summary = ?, restore_hint = ?, updated_at = ?
+        where topic_id = ?
+        """,
+        (summary, restore_hint, updated_at, current["topic_id"]),
+    )
+    add_topic_event(db, current["topic_id"], "archive_open", summary)
+    return current
+
+
+def ensure_single_active_topic(db: sqlite3.Connection) -> None:
+    active_count = db.execute("select count(*) from topics where status = 'active'").fetchone()[0]
+    if active_count > 1:
+        raise UserError("topic invariant violated: more than one active topic")
+
+
+def command_topic_start(args: argparse.Namespace) -> int:
+    with database() as db:
+        archive_current_topic(db, args.current_summary or "")
+        topic_id = new_id("T")
+        timestamp = now_iso()
+        restore_hint = f"Current active topic. Use `auto-iter topic satisfy --summary <summary>` when this stage is satisfied."
+        db.execute(
+            """
+            insert into topics (topic_id, title, status, summary, current_goal, restore_hint, created_at, updated_at)
+            values (?, ?, 'active', ?, ?, ?, ?, ?)
+            """,
+            (topic_id, args.title, args.summary or "", args.current_goal or "", restore_hint, timestamp, timestamp),
+        )
+        add_topic_event(db, topic_id, "create", args.summary or "")
+        add_topic_event(db, topic_id, "switch_in", "new topic activated")
+        ensure_single_active_topic(db)
+        write_topic_projections(db)
+    print(f"started topic {topic_id}")
+    return 0
+
+
+def command_topic_switch(args: argparse.Namespace) -> int:
+    with database() as db:
+        target = get_topic(db, args.topic_id)
+        current = active_topic(db)
+        if current and current["topic_id"] == target["topic_id"]:
+            write_topic_projections(db)
+            print(f"topic already active {target['topic_id']}")
+            return 0
+        archive_current_topic(db, args.current_summary or "")
+        previous_status = target["status"]
+        timestamp = now_iso()
+        restore_hint = f"Current active topic. Use `auto-iter topic satisfy --summary <summary>` when this stage is satisfied."
+        db.execute(
+            "update topics set status = 'active', restore_hint = ?, updated_at = ? where topic_id = ?",
+            (restore_hint, timestamp, target["topic_id"]),
+        )
+        if previous_status == "archived_satisfied":
+            add_topic_event(db, target["topic_id"], "reopen", "reopened from archived_satisfied")
+        add_topic_event(db, target["topic_id"], "switch_in", "topic activated")
+        ensure_single_active_topic(db)
+        write_topic_projections(db)
+    print(f"switched topic {args.topic_id}")
+    return 0
+
+
+def command_topic_satisfy(args: argparse.Namespace) -> int:
+    with database() as db:
+        current = active_topic(db)
+        if not current:
+            raise UserError("no active topic")
+        timestamp = now_iso()
+        restore_hint = f"Use `auto-iter topic switch --topic-id {current['topic_id']} --current-summary <summary>` to reopen this satisfied topic."
+        db.execute(
+            """
+            update topics
+            set status = 'archived_satisfied', summary = ?, restore_hint = ?, updated_at = ?
+            where topic_id = ?
+            """,
+            (args.summary, restore_hint, timestamp, current["topic_id"]),
+        )
+        add_topic_event(db, current["topic_id"], "archive_satisfied", args.summary)
+        write_topic_projections(db)
+    print(f"satisfied topic {current['topic_id']}")
+    return 0
+
+
+def command_topic_current(_args: argparse.Namespace) -> int:
+    with database() as db:
+        current = active_topic(db)
+        if not current:
+            write_topic_projections(db)
+            raise UserError("no active topic")
+        print(render_topic_projection(db, current, active_projection=True))
+    return 0
+
+
+def command_topic_list(_args: argparse.Namespace) -> int:
+    with database() as db:
+        rows = db.execute("select * from topics order by updated_at desc, created_at desc").fetchall()
+    if not rows:
+        print("no topics")
+        return 0
+    for row in rows:
+        print(f"{row['topic_id']} {row['status']} title={row['title']} updated={row['updated_at']}")
+        if row["summary"]:
+            print(f"  summary: {row['summary']}")
+        if row["restore_hint"]:
+            print(f"  restore_hint: {row['restore_hint']}")
+    return 0
+
+
+def command_topic_show(args: argparse.Namespace) -> int:
+    with database() as db:
+        topic = get_topic(db, args.topic_id)
+        print(render_topic_projection(db, topic, active_projection=topic["status"] == "active"))
     return 0
 
 
@@ -1495,10 +1835,12 @@ def artifact_lines(db: sqlite3.Connection, run_id: str) -> list[str]:
 
 
 def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
+    write_topic_projections(db)
     success, failed = latest_runs(db)
     active = db.execute("select * from decisions where status = 'active' order by created_at desc").fetchall()
     rejected = db.execute("select * from decisions where status = 'rejected' order by created_at desc").fetchall()
     open_items = db.execute("select * from decisions where status = 'open' order by created_at desc").fetchall()
+    current_topic = active_topic(db)
     project = db.execute("select current_goal from projects limit 1").fetchone()
     current_goal = project["current_goal"] if project and project["current_goal"] else "未设置；请在下一轮实验前明确当前优化目标。"
     lines = [
@@ -1516,6 +1858,22 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- global_plan: {root() / 'plans' / 'global_plan.md'}",
         f"- version_task_tracking: {root() / 'plans' / 'version_iterations.md'}",
         f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
+        f"- active_topic: {active_topic_path()}",
+        f"- topic_index: {topic_index_path()}",
+        "",
+        "## 当前 Topic",
+    ]
+    if current_topic:
+        lines += [
+            f"- topic_id: {current_topic['topic_id']}",
+            f"- title: {current_topic['title']}",
+            f"- status: {current_topic['status']}",
+            f"- summary: {current_topic['summary'] or 'none'}",
+            f"- restore_hint: {current_topic['restore_hint'] or 'none'}",
+        ]
+    else:
+        lines.append("- none")
+    lines += [
         "",
         "## 最近成功实验",
     ]
@@ -1563,11 +1921,13 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"3. {root() / 'plans' / 'global_plan.md'}",
         f"4. {root() / 'plans' / 'version_iterations.md'}",
         f"5. {root() / 'plans' / 'active_plan.md'}",
-        f"6. {root() / 'state' / 'agent_state.db'}",
-        f"7. {root() / 'decisions'}",
-        "8. 用 `auto-iter context index` 查看可按需读取的标题索引。",
-        "9. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
-        "10. 只有初次开始项目或明确缺失信息时才读取 raw_input/。",
+        f"6. {active_topic_path()}",
+        f"7. {root() / 'state' / 'agent_state.db'}",
+        f"8. {root() / 'decisions'}",
+        "9. 用 `auto-iter context index` 查看可按需读取的标题索引。",
+        "10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
+        "11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        "12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。",
         "",
     ]
     return "\n".join(lines), success["run_id"] if success else None
@@ -1578,6 +1938,7 @@ def validate_handoff_text(text: str) -> list[str]:
     required_sections = [
         "## 当前目标",
         "## 当前快照",
+        "## 当前 Topic",
         "## 最近成功实验",
         "## 当前有效结论",
         "## 已废弃且不要重复的路线",
@@ -1592,6 +1953,8 @@ def validate_handoff_text(text: str) -> list[str]:
         "global_plan": root() / "plans" / "global_plan.md",
         "version_task_tracking": root() / "plans" / "version_iterations.md",
         "active_plan": root() / "plans" / "active_plan.md",
+        "active_topic": active_topic_path(),
+        "topic_index": topic_index_path(),
     }
     for key, path in required_paths.items():
         expected = f"- {key}: {path}"
@@ -1686,6 +2049,8 @@ def context_files(include_raw_input: bool) -> list[Path]:
     patterns = [
         "plans/*.md",
         "handoffs/latest_handoff.md",
+        "topics/*.md",
+        "topics/archive/*.md",
         "decisions/*/*.md",
         "runs/*/summary.md",
         "runs/*/logs/error_summary.md",
@@ -1879,6 +2244,35 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--bin-dir", default=str(default_bin_dir()))
     install.add_argument("--skills-dir", default=str(default_skills_dir()))
     install.set_defaults(func=command_install)
+    uninstall = subparsers.add_parser("uninstall")
+    uninstall.add_argument("--bin-dir", default=str(default_bin_dir()))
+    uninstall.add_argument("--skills-dir", default=str(default_skills_dir()))
+    project_state = uninstall.add_mutually_exclusive_group()
+    project_state.add_argument("--keep-project-state", action="store_true")
+    project_state.add_argument("--remove-project-state", action="store_true")
+    uninstall.set_defaults(func=command_uninstall)
+    topic = subparsers.add_parser("topic")
+    topic_sub = topic.add_subparsers(dest="topic_command", required=True)
+    topic_current = topic_sub.add_parser("current")
+    topic_current.set_defaults(func=command_topic_current)
+    topic_list = topic_sub.add_parser("list")
+    topic_list.set_defaults(func=command_topic_list)
+    topic_show = topic_sub.add_parser("show")
+    topic_show.add_argument("--topic-id", required=True)
+    topic_show.set_defaults(func=command_topic_show)
+    topic_start = topic_sub.add_parser("start")
+    topic_start.add_argument("--title", required=True)
+    topic_start.add_argument("--summary", default="")
+    topic_start.add_argument("--current-goal", default="")
+    topic_start.add_argument("--current-summary", default="")
+    topic_start.set_defaults(func=command_topic_start)
+    topic_switch = topic_sub.add_parser("switch")
+    topic_switch.add_argument("--topic-id", required=True)
+    topic_switch.add_argument("--current-summary", default="")
+    topic_switch.set_defaults(func=command_topic_switch)
+    topic_satisfy = topic_sub.add_parser("satisfy")
+    topic_satisfy.add_argument("--summary", required=True)
+    topic_satisfy.set_defaults(func=command_topic_satisfy)
     add_common_run_subcommands(subparsers)
     decision = subparsers.add_parser("decision")
     decision_sub = decision.add_subparsers(dest="decision_command", required=True)

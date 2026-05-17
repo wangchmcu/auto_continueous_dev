@@ -6,12 +6,17 @@
 ## 当前快照
 - root: /Users/ryan/Documents/auto_continueous_dev
 - branch: dev
-- commit: a1cb529248d3311a6dfc95075eb5012af91cfd23
+- commit: 9d8ab08580ed82bcb4db7f5d3b658b59644722cf
 - latest_successful_run_id: none
 - latest_failed_run_id: none
 - global_plan: /Users/ryan/Documents/auto_continueous_dev/plans/global_plan.md
 - version_task_tracking: /Users/ryan/Documents/auto_continueous_dev/plans/version_iterations.md
 - active_plan: /Users/ryan/Documents/auto_continueous_dev/plans/active_plan.md
+- active_topic: /Users/ryan/Documents/auto_continueous_dev/topics/active_topic.md
+- topic_index: /Users/ryan/Documents/auto_continueous_dev/topics/index.md
+
+## 当前 Topic
+- none
 
 ## 最近成功实验
 - none
@@ -37,8 +42,10 @@
 3. /Users/ryan/Documents/auto_continueous_dev/plans/global_plan.md
 4. /Users/ryan/Documents/auto_continueous_dev/plans/version_iterations.md
 5. /Users/ryan/Documents/auto_continueous_dev/plans/active_plan.md
-6. /Users/ryan/Documents/auto_continueous_dev/state/agent_state.db
-7. /Users/ryan/Documents/auto_continueous_dev/decisions
-8. 用 `auto-iter context index` 查看可按需读取的标题索引。
-9. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
-10. 只有初次开始项目或明确缺失信息时才读取 raw_input/。
+6. /Users/ryan/Documents/auto_continueous_dev/topics/active_topic.md
+7. /Users/ryan/Documents/auto_continueous_dev/state/agent_state.db
+8. /Users/ryan/Documents/auto_continueous_dev/decisions
+9. 用 `auto-iter context index` 查看可按需读取的标题索引。
+10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
+11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
+12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。

@@ -47,6 +47,8 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run `auto-iter doctor`, `auto-iter resume`, and `auto-iter context index`, then restore context from plans, decisions, and run summaries.
 - If the user asks to inspect a historical detail, choose the relevant file and heading from `auto-iter context index`, then run `auto-iter context show --path <file> --heading "<heading>"`; do not ask the user to provide the full command.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill. This trigger is explicit; do not run system-improvement work automatically. If the improvement exposes a limitation in the self improve workflow itself, handle that as a second-order improvement or record it as an explicit pending plan item.
+- If the user asks to uninstall or reinstall AIT, use `auto-iter uninstall` for installed command and skill removal. In interactive use, let the uninstall prompt ask whether to remove project state directories and explain what they contain. In non-interactive use, pass `--keep-project-state` unless the user explicitly asks to delete project state; only then use `--remove-project-state`.
+- If the user explicitly says “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”, use `auto-iter topic current/list/show/start/switch/satisfy` as appropriate. If the prompt only semantically appears to move to a new issue or direction, first ask “是不是已经切入新的 topic 了？” and switch only after the user confirms.
 
 ## Raw Input
 
@@ -76,5 +78,6 @@ auto-iter handoff validate
 
 - SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
 - Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex.
+- Markdown files under `topics/` are readable topic projections; `topics/active_topic.md` is default context, and `topics/archive/` is loaded only on user request or confirmed topic switch.
 - Markdown files under `plans/` track version-level implementation work and current engineering direction.
 - `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.

@@ -122,6 +122,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("context index --include-raw-input", skill_text)
         self.assertIn("--allow-raw-input", skill_text)
         self.assertIn("raw_input_source", skill_text)
+        self.assertIn("auto-iter uninstall", skill_text)
+        self.assertIn("does not remove project state", skill_text)
+        self.assertIn("--keep-project-state", skill_text)
+        self.assertIn("--remove-project-state", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
         self.assertIn("If skills changed, run the install command", improve_skill_text)
@@ -139,6 +143,189 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(doctor.returncode, 0)
         self.assertIn("state: ok", doctor.stdout)
+
+    def test_uninstall_removes_installed_command_and_skills_only(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        run_cli(
+            self.tmp,
+            "install",
+            "--bin-dir",
+            str(bin_dir),
+            "--skills-dir",
+            str(skills_dir),
+        )
+
+        command_path = bin_dir / "auto-iter"
+        entry_skill_path = skills_dir / "auto-iteration-entry"
+        improve_skill_path = skills_dir / "auto-it-self-improve"
+
+        result = run_cli(
+            self.tmp,
+            "uninstall",
+            "--bin-dir",
+            str(bin_dir),
+            "--skills-dir",
+            str(skills_dir),
+        )
+
+        self.assertIn("removed command", result.stdout)
+        self.assertIn("removed skill: auto-iteration-entry", result.stdout)
+        self.assertIn("removed skill: auto-it-self-improve", result.stdout)
+        self.assertIn("Project state directories", result.stdout)
+        self.assertIn("state/: SQLite", result.stdout)
+        self.assertIn("project state preserved", result.stdout)
+        self.assertFalse(command_path.exists())
+        self.assertFalse(entry_skill_path.exists())
+        self.assertFalse(improve_skill_path.exists())
+        self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
+        self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
+        self.assertTrue((self.tmp / "raw_input").is_dir())
+
+    def test_uninstall_can_remove_project_state_when_explicitly_requested(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        run_cli(
+            self.tmp,
+            "install",
+            "--bin-dir",
+            str(bin_dir),
+            "--skills-dir",
+            str(skills_dir),
+        )
+
+        result = run_cli(
+            self.tmp,
+            "uninstall",
+            "--bin-dir",
+            str(bin_dir),
+            "--skills-dir",
+            str(skills_dir),
+            "--remove-project-state",
+        )
+
+        self.assertIn("Project state directories", result.stdout)
+        self.assertIn("raw_input/: original input", result.stdout)
+        self.assertIn("removed project state: state", result.stdout)
+        self.assertIn("removed project state: plans", result.stdout)
+        self.assertIn("removed project state: raw_input", result.stdout)
+        self.assertIn("removed project state: decisions", result.stdout)
+        self.assertIn("removed project state: runs", result.stdout)
+        self.assertIn("removed project state: handoffs", result.stdout)
+        self.assertFalse((self.tmp / "state").exists())
+        self.assertFalse((self.tmp / "plans").exists())
+        self.assertFalse((self.tmp / "raw_input").exists())
+        self.assertFalse((self.tmp / "decisions").exists())
+        self.assertFalse((self.tmp / "runs").exists())
+        self.assertFalse((self.tmp / "handoffs").exists())
+
+    def test_topic_lifecycle_keeps_one_active_and_writes_projections(self):
+        run_cli(self.tmp, "init")
+
+        first = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic A",
+            "--summary",
+            "第一个 topic 的摘要",
+        )
+        first_topic_id = first.stdout.strip().split()[-1]
+        current = run_cli(self.tmp, "topic", "current")
+
+        self.assertIn("started topic", first.stdout)
+        self.assertIn("Topic A", current.stdout)
+        self.assertIn("active", current.stdout)
+        self.assertIn("第一个 topic 的摘要", (self.tmp / "topics" / "active_topic.md").read_text(encoding="utf-8"))
+
+        second = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic B",
+            "--summary",
+            "第二个 topic 的摘要",
+            "--current-summary",
+            "Topic A 当前现场",
+        )
+        second_topic_id = second.stdout.strip().split()[-1]
+        listed = run_cli(self.tmp, "topic", "list")
+        first_archive = self.tmp / "topics" / "archive" / f"{first_topic_id}.md"
+
+        self.assertIn("Topic A", listed.stdout)
+        self.assertIn("archived_open", listed.stdout)
+        self.assertIn("Topic B", listed.stdout)
+        self.assertIn("active", listed.stdout)
+        self.assertTrue(first_archive.exists())
+        self.assertIn("Topic A 当前现场", first_archive.read_text(encoding="utf-8"))
+        self.assertIn("Topic B", (self.tmp / "topics" / "active_topic.md").read_text(encoding="utf-8"))
+
+        switched = run_cli(
+            self.tmp,
+            "topic",
+            "switch",
+            "--topic-id",
+            first_topic_id,
+            "--current-summary",
+            "Topic B 当前现场",
+        )
+        self.assertIn(f"switched topic {first_topic_id}", switched.stdout)
+        self.assertIn("Topic A", run_cli(self.tmp, "topic", "current").stdout)
+        self.assertIn("Topic B 当前现场", (self.tmp / "topics" / "archive" / f"{second_topic_id}.md").read_text(encoding="utf-8"))
+
+        satisfied = run_cli(self.tmp, "topic", "satisfy", "--summary", "Topic A 阶段性达到预期")
+        no_current = run_cli(self.tmp, "topic", "current", check=False)
+
+        self.assertIn(f"satisfied topic {first_topic_id}", satisfied.stdout)
+        self.assertEqual(no_current.returncode, 1)
+        self.assertIn("no active topic", no_current.stderr)
+        self.assertIn("archived_satisfied", run_cli(self.tmp, "topic", "list").stdout)
+        self.assertIn("Topic A 阶段性达到预期", first_archive.read_text(encoding="utf-8"))
+
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            active_count = db.execute("select count(*) from topics where status = 'active'").fetchone()[0]
+            event_names = [row[0] for row in db.execute("select event_type from topic_events order by created_at, rowid")]
+        self.assertEqual(active_count, 0)
+        self.assertIn("create", event_names)
+        self.assertIn("archive_open", event_names)
+        self.assertIn("switch_in", event_names)
+        self.assertIn("archive_satisfied", event_names)
+
+    def test_topic_context_handoff_and_entry_skill_are_indexed(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        installed = run_cli(self.tmp, "install", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+        run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic Archive MVP",
+            "--summary",
+            "按 topic 归档并按需恢复上下文",
+        )
+
+        index = run_cli(self.tmp, "context", "index")
+        handoff = run_cli(self.tmp, "handoff", "generate")
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        skill_text = (skills_dir / "auto-iteration-entry" / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("topics/index.md", index.stdout)
+        self.assertIn("topics/active_topic.md", index.stdout)
+        self.assertIn("Topic Archive MVP", index.stdout)
+        self.assertIn("generated", handoff.stdout)
+        self.assertIn("active_topic", handoff_text)
+        self.assertIn(str((self.tmp / "topics" / "active_topic.md").resolve()), handoff_text)
+        self.assertIn("topic_index", handoff_text)
+        self.assertIn(str((self.tmp / "topics" / "index.md").resolve()), handoff_text)
+        self.assertIn("是不是已经切入新的 topic 了", skill_text)
+        self.assertIn("auto-iter topic", skill_text)
+        self.assertIn("install check: ok", installed.stdout)
 
     def test_run_finish_persists_config_metrics_and_artifacts(self):
         run_cli(self.tmp, "init")

@@ -56,6 +56,7 @@
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
 - 提供短命令入口 `auto-iter`，避免每次写 `python3 /home/ryan/auto_iteration/tools/auto_iter.py`。
+- 提供安装管理入口：可安装、卸载并重新安装命令和 Codex skills，且卸载不删除项目状态。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
 
@@ -65,13 +66,22 @@
 - handoff、decision、run summary、error summary 都应可被按需读取。
 - 避免一次性把所有历史塞进上下文。
 
-### 8. 自然语言接力入口
+### 8. Topic Archive（按 topic 归档和按需载入）
+
+- 任何时刻最多只有一个 `active` topic；它是默认进入上下文、默认承接新计划和交接的当前问题方向。
+- 非当前 topic 进入 archive，不默认载入；archive 内区分 `archived_open` 和 `archived_satisfied`。
+- `archived_open` 表示已归档但问题仍打开，切回时默认继续工作。
+- `archived_satisfied` 表示阶段性达到预期，不等于永久结束；切回时记录重开事件并恢复为 active。
+- topic 事实记录在 SQLite，Markdown 投影写入 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md`。
+- 显式 topic 切换短句可直接触发 topic 命令；语义疑似切换时必须先问用户“是不是已经切入新的 topic 了？”。
+
+### 9. 自然语言接力入口
 
 - 用户可以用自然语言短句触发固定流程，例如结束 session、恢复 session、查阅某个历史细节。
 - Codex entry skill 负责把这些短句映射到 `auto-iter` 命令序列。
 - 用户不需要记住 `doctor`、`resume`、`context index`、`context show` 等具体命令。
 
-### 9. Auto It Self Improve（系统改进沉淀能力）
+### 10. Auto It Self Improve（系统改进沉淀能力）
 
 - `auto it self improve` 是固定触发短句和能力名，指 auto_iteration 的系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
 - 这个能力不能自动触发，只能在用户明确点名 `auto it self improve` 或 `auto-it-self-improve` skill 名时触发。
@@ -80,7 +90,7 @@
 - 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
 - 每次执行都应说明“具体问题是什么”“抽象后的通用问题是什么”“为什么应该改这些文件”“哪些具体细节没有写入系统”。
 
-### 10. Intent Checkpoint（意图检查点）
+### 11. Intent Checkpoint（意图检查点）
 
 - Intent checkpoint（意图检查点）指：用户话语像是在进入计划、执行前、结果后或 session 结束阶段时，agent 先运行检查命令获取下一步清单。
 - 该能力的目标是减少漏记计划、漏做 route check、漏写 decision、漏生成 handoff，而不是自动替代 agent 判断。
@@ -88,7 +98,7 @@
 - Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
 - 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
 
-### 11. 中途记录黑盒入口
+### 12. 中途记录黑盒入口
 
 - 中途记录黑盒入口指：用户在对话中只说“中途记录一下”“先保存当前状态”“做个阶段记录”等自然语言短句，agent 自动保存当前接力点。
 - 这个入口和 session 结束使用相同的状态保存范围：检查当前计划、实验事实、结论和 handoff 是否需要更新，并生成可恢复的 handoff。
@@ -96,7 +106,7 @@
 - `auto-iter checkpoint save --text "<用户原话>"` 是 agent 内部使用的命令；用户不需要记住它。
 - 如果用户同时明确要求“提交”或“推送”，agent 才在 checkpoint 后执行对应 git 操作。
 
-### 12. 低假设初始化和 bootstrap checkpoint
+### 13. 低假设初始化和 bootstrap checkpoint
 
 - `auto-iter init` 只创建状态结构和低假设 tracking 模板，不替目标项目发明业务 roadmap。
 - 初始化模板必须区分 `user_confirmed`、`repo_observed`、`conversation_summary`、`agent_inferred` 和 `proposed_not_accepted`。
@@ -107,7 +117,7 @@
 - bootstrap checkpoint 记录已确认事实、用户目标、暴露问题、未决问题和候选检查项；候选项必须保持未确认状态。
 - `auto it self improve` 如果暴露出 self improve workflow itself 的不足，必须作为 second-order improvement 一并处理或写入后续计划。
 
-### 13. 后续可选语义检索
+### 14. 后续可选语义检索
 
 - 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
 - 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
@@ -249,6 +259,48 @@
 - entry skill 在新项目初始化流程中使用 `context index --include-raw-input`。
 - 有 raw input 时只读取相关章节，并用 `--allow-raw-input` 明示读取边界。
 - README、AGENTS 和 tests 覆盖该流程。
+
+### v0.11：安装管理卸载能力
+
+状态：done。
+
+目标：让用户能安全卸载并重新安装 AIT，用于验证安装和初始化流程，而不误删项目状态。
+
+任务：
+
+- 新增 `auto-iter uninstall`。
+- 卸载已安装命令和 Codex skills。
+- 保留项目 tracking 状态目录。
+- README、AGENTS、entry skill 和 tests 覆盖卸载边界。
+
+### v0.12：卸载时项目状态选择权
+
+状态：done。
+
+目标：卸载 AIT 时给用户选择是否删除项目过程产物，并说明每个项目状态目录的内容。
+
+任务：
+
+- `auto-iter uninstall` 打印项目状态目录说明。
+- 交互终端询问是否删除项目状态目录。
+- 非交互默认保留项目状态。
+- 支持 `--keep-project-state` 和 `--remove-project-state`。
+- 测试覆盖默认保留和显式删除。
+
+### v0.13：Topic Archive 按需载入
+
+状态：done。
+
+目标：以 topic 为单位保存和恢复长期上下文，避免新 session 默认载入已经沉入历史的问题方向。
+
+任务：
+
+- 新增 `topics` 和 `topic_events` SQLite 账本。
+- 新增 `active`、`archived_open`、`archived_satisfied` 三态，并保证最多一个 active topic。
+- 新增 `auto-iter topic current/list/show/start/switch/satisfy`。
+- 生成 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md` Markdown 投影。
+- `context index` 和 handoff 接入 topic 摘要，但不默认展开 archived topic。
+- README、AGENTS、entry skill 和 tests 覆盖 topic 切换确认规则。
 
 ### 后续可选：语义检索
 

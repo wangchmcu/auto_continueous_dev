@@ -23,6 +23,44 @@ The install command also runs a self-check. It verifies that `python3` is availa
 
 Make sure `/home/ryan/.local/bin` is on `PATH` before expecting `auto-iter` to be found by a shell or Codex-launched command. If it is not on `PATH`, the installer prints a `path hint`; agents should use the printed absolute command path instead of asking the user to type it.
 
+To remove the installed command and Codex skills without deleting any project
+tracking state:
+
+```bash
+auto-iter uninstall
+```
+
+`uninstall` removes the installed `auto-iter` wrapper and installed Codex skills
+only. It does not remove project directories such as `state/`, `plans/`,
+`topics/`, `raw_input/`, `decisions/`, `runs/`, or `handoffs/`.
+
+In an interactive terminal, uninstall asks whether to remove those project
+state directories too and prints a short description of what each directory
+stores. In non-interactive runs, project state is kept by default; use
+`--keep-project-state` or `--remove-project-state` when the choice should be
+explicit.
+
+## Topic archive
+
+Topic archive keeps only one current issue or direction in default context.
+The active topic is projected to `topics/active_topic.md`; archived topics are
+listed in `topics/index.md` and stored under `topics/archive/`.
+
+```bash
+auto-iter topic start --title "Topic Archive MVP" --summary "按 topic 归档并按需恢复上下文"
+auto-iter topic current
+auto-iter topic list
+auto-iter topic switch --topic-id <id> --current-summary "当前现场摘要"
+auto-iter topic satisfy --summary "阶段性达到预期"
+```
+
+Starting or switching topics archives the previous active topic as
+`archived_open`. `topic satisfy` archives the current topic as
+`archived_satisfied`; that means the current expectation is satisfied, not that
+the topic can never be reopened. If an agent only suspects that the user has
+changed topic semantically, it should ask “是不是已经切入新的 topic 了？” before
+running a topic switch command.
+
 Then start Codex from the target algorithm project:
 
 ```bash

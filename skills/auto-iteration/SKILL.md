@@ -54,6 +54,43 @@ If `auto-iter` is missing, install it:
 python3 /home/ryan/auto_iteration/tools/auto_iter.py install
 ```
 
+To remove the installed command and Codex skills without deleting project
+tracking state, run:
+
+```bash
+auto-iter uninstall
+```
+
+The uninstall command does not remove `state/`, `plans/`, `topics/`, `raw_input/`,
+`decisions/`, `runs/`, or `handoffs/`.
+
+In an interactive terminal, uninstall asks whether to remove those project state
+directories too and prints a short description of each directory. In
+non-interactive runs, use `--keep-project-state` or `--remove-project-state` to
+make the choice explicit.
+
+## Topic Archive
+
+Use topic archive when the user wants to keep only one current issue/direction
+in default context and load older work on demand.
+
+```bash
+auto-iter topic current
+auto-iter topic list
+auto-iter topic show --topic-id <id>
+auto-iter topic start --title "<标题>" --summary "<新 topic 摘要>" --current-summary "<当前现场摘要>"
+auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
+auto-iter topic satisfy --summary "<阶段性达到的预期>"
+```
+
+Rules:
+
+- There is at most one `active` topic.
+- Non-current topics are archived as `archived_open` or `archived_satisfied`.
+- `archived_satisfied` means stage expectations are met; it can still be reopened.
+- When a prompt only seems to change topic semantically, ask “是不是已经切入新的 topic 了？” before switching.
+- Read `topics/active_topic.md` by default; load `topics/archive/` only on user request or confirmed topic switch.
+
 ## Before A New Experiment
 
 If the user phrase is only “执行吧”, “实施吧”, “确定执行”, or a similar execution approval, first run:

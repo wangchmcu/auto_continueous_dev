@@ -17,6 +17,9 @@ When the user says one of these plain-language requests, treat it as a request t
 - “查阅某个结论、实验、参数或历史细节”：run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
 - “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
+- “卸载 AIT”, “卸载 auto-iter”, or “重新安装 AIT”：run the install management workflow. `auto-iter uninstall` removes installed command and Codex skills only; it does not remove project state.
+- “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”：run the topic archive workflow below.
+- If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 - “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
@@ -34,9 +37,10 @@ Then read:
 1. `plans/global_plan.md`
 2. `plans/version_iterations.md`
 3. `plans/active_plan.md`
-4. `decisions/active/`
-5. `decisions/rejected/`
-6. `decisions/superseded/`
+4. `topics/active_topic.md` if it exists
+5. `decisions/active/`
+6. `decisions/rejected/`
+7. `decisions/superseded/`
 
 If more detail is needed, use `auto-iter context index` first and then `auto-iter context show --path <file> --heading "<heading>"` for only the needed section.
 
@@ -83,6 +87,62 @@ prints `command not found`, do not stop or ask the user to type the path. Use
 the installed absolute command path printed by install, usually
 `~/.local/bin/auto-iter`, and continue the same workflow from the current
 project root.
+
+## Install Management
+
+To remove installed AIT command and Codex skills without deleting project
+tracking state, run:
+
+```bash
+auto-iter uninstall
+```
+
+This removes the installed `auto-iter` wrapper and installed skills only. It
+does not remove project state such as `state/`, `plans/`, `topics/`, `raw_input/`,
+`decisions/`, `runs/`, or `handoffs/`.
+
+When a terminal is interactive, uninstall asks whether to remove project state
+too and briefly explains what each directory stores. In non-interactive runs,
+project state is kept unless explicitly requested. Use:
+
+```bash
+auto-iter uninstall --keep-project-state
+auto-iter uninstall --remove-project-state
+```
+
+Only use `--remove-project-state` when the user confirms that local tracking
+documents, topic projections, raw inputs, decisions, runs, and handoffs can be deleted.
+
+To reinstall after uninstall, run from the AIT source checkout:
+
+```bash
+python3 -m auto_iteration.cli install
+```
+
+## Topic Archive
+
+Topic archive keeps only one `active` topic in default context. All other
+topics are archived and loaded only when the user asks or confirms a switch.
+
+Use these commands:
+
+```bash
+auto-iter topic current
+auto-iter topic list
+auto-iter topic show --topic-id <id>
+auto-iter topic start --title "<标题>" --summary "<新 topic 摘要>" --current-summary "<当前现场摘要>"
+auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
+auto-iter topic satisfy --summary "<阶段性达到的预期>"
+```
+
+Rules:
+
+- There can be at most one `active` topic.
+- Starting or switching topics archives the previous active topic as `archived_open`.
+- `archived_open` means archived but still open; switching back should continue work.
+- `archived_satisfied` means the current expectation is satisfied, not permanently finished; switching back reopens it.
+- If a new prompt only looks like a new topic semantically, ask “是不是已经切入新的 topic 了？” before running any topic switch command.
+- New sessions read `handoffs/latest_handoff.md` and `topics/active_topic.md`; archived topic files under `topics/archive/` are loaded only on demand.
 
 ## Before A New Experiment Route
 

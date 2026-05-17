@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.10
+- current_version: v0.13
 - status: done
-- goal: 完成初始化 bootstrap 的 raw_input 初期输入源索引和选择性沉淀规则。
+- goal: 完成 Topic Archive MVP，让长期上下文可按 topic 归档和按需载入。
 
 ## v0.1 任务清单
 
@@ -305,7 +305,100 @@ v0.10 已覆盖的全局能力：
 
 v0.10 之后仍未覆盖的全局能力：
 
+- 安装管理缺少安全卸载入口：用户要验证初始化流程时，需要能卸载已安装命令和 skills，但不能误删项目状态。
 - 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.11 任务清单
+
+- status: done
+- goal: 增加 `auto-iter uninstall`，支持卸载后重新安装 AIT。
+- [x] 新增 `uninstall` CLI 子命令。
+- [x] 卸载默认移除 `~/.local/bin/auto-iter` 和安装到 Codex 的 AIT skills。
+- [x] 卸载不删除项目状态目录：`state/`、`plans/`、`raw_input/`、`decisions/`、`runs/`、`handoffs/`。
+- [x] 卸载拒绝删除不是当前 AIT checkout 安装的 `auto-iter` wrapper。
+- [x] README、AGENTS 和 entry/workflow skills 说明卸载边界。
+- [x] 用测试覆盖卸载行为和安装后的 entry skill 文案。
+
+## v0.11 距离 global plan
+
+v0.11 覆盖了 AIT 安装产物的安全卸载和重装验证入口。
+
+v0.11 已覆盖的全局能力：
+
+- 用户可以让 agent 卸载并重新安装 AIT，不必手动清理命令或 skills。
+- 卸载和项目状态清理分离，降低误删长期 tracking 信息的风险。
+
+v0.11 之后仍未覆盖的全局能力：
+
+- 卸载时还需要给用户选择权：是否一并删除项目状态目录，并解释这些目录保存什么。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.12 任务清单
+
+- status: done
+- goal: 卸载 AIT 时默认保留项目状态，但让用户选择是否一并删除，并说明目录内容。
+- [x] `auto-iter uninstall` 输出 `state/`、`plans/`、`raw_input/`、`decisions/`、`runs/`、`handoffs/` 的简要说明。
+- [x] 交互终端中，无显式参数时询问是否删除项目状态目录。
+- [x] 非交互执行默认保留项目状态，避免 CI 或 agent 调用卡住。
+- [x] 新增 `--keep-project-state` 和 `--remove-project-state` 显式选择。
+- [x] 用测试覆盖默认保留和显式删除两条路径。
+- [x] 更新 README、AGENTS 和 entry/workflow skills。
+
+## v0.12 距离 global plan
+
+v0.12 覆盖了卸载流程中的项目状态选择权。
+
+v0.12 已覆盖的全局能力：
+
+- 用户卸载 AIT 时能看到项目状态目录说明。
+- 用户可以选择只卸载安装产物，或连同过程产物一起删除。
+- 自动化场景不会因为交互询问而挂住。
+
+v0.12 之后仍未覆盖的全局能力：
+
+- Topic Archive：按 topic 归档、默认只载入当前 active topic，并支持确认后切回历史 topic。
+- 后续可选：语义检索。当 decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.13 任务清单
+
+- status: done
+- goal: 实现 Topic Archive MVP，让任何时刻只有一个 active topic，其它 topic 进入 archive 并按需恢复。
+- [x] 新增 `topics` 和 `topic_events` SQLite 表，记录 topic 状态和生命周期事件。
+- [x] 新增 `active`、`archived_open`、`archived_satisfied` 三种状态，并保证最多一个 active topic。
+- [x] 新增 `auto-iter topic current/list/show/start/switch/satisfy`。
+- [x] 切换或开启新 topic 时，把旧 active topic 保存为 `archived_open`。
+- [x] `topic satisfy` 把当前 active topic 保存为 `archived_satisfied`，且不表示永久结束。
+- [x] 生成 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md`。
+- [x] `context index` 纳入 topic 投影，handoff 只放 active topic 短摘要和 topic index 路径。
+- [x] 更新 AGENTS、README、entry skill 和 workflow skill：语义疑似切 topic 时必须先问用户“是不是已经切入新的 topic 了？”。
+- [x] 用测试覆盖 topic 生命周期、投影、handoff、context index 和安装后的 entry skill 文案。
+
+## v0.13 距离 global plan
+
+v0.13 覆盖了 Topic Archive 的最小可用闭环。
+
+v0.13 已覆盖的全局能力：
+
+- topic 级状态账本：SQLite 记录 topic 当前状态和 lifecycle events。
+- 单 active topic 约束：默认上下文只载入当前 active topic。
+- archive 双语义：`archived_open` 表示未完成但已归档；`archived_satisfied` 表示阶段性满足但可重开。
+- Markdown 投影：人类和 Codex 可通过 `topics/active_topic.md`、`topics/index.md` 和 archive 文件按需读取。
+- handoff 和 context index 只暴露 topic 摘要入口，不默认展开历史 topic。
+
+v0.13 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配；当前只在 Codex entry skill 中要求用户确认后切 topic。
+- topic 与 run/decision/artifact 的强关联查询；当前 MVP 保存摘要和恢复入口，未实现专门 evidence link 表。
+- 更细粒度的 topic merge、rename、delete 或 prune 能力。
+- 后续可选：语义检索。当 topic、decision、handoff、retrospective 数量变多后再评估是否加入。
+
+## v0.13 验收标准
+
+1. `auto-iter topic start` 能创建 active topic，并生成 `topics/active_topic.md` 和 `topics/index.md`。
+2. 开启或切换 topic 时，旧 active topic 自动变成 `archived_open`，且 SQLite 中最多只有一个 active topic。
+3. `auto-iter topic satisfy` 能把 active topic 变成 `archived_satisfied`，并保留可重开提示。
+4. `auto-iter context index` 能索引 topic 投影，handoff 能输出 active topic 和 topic index 路径。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
 ## 后续版本方向
 
@@ -345,6 +438,18 @@ v0.10 之后仍未覆盖的全局能力：
 
 - done：初始化 bootstrap 的 raw_input 初期输入源索引和选择性沉淀规则。
 
+### v0.11
+
+- done：AIT 安装管理的安全卸载和重装验证入口。
+
+### v0.12
+
+- done：卸载时项目状态目录的可选删除和目录内容说明。
+
+### v0.13
+
+- done：Topic Archive MVP，支持单 active topic、archive 双状态、topic CLI、Markdown 投影和按需上下文入口。
+
 ### 后续可选
 
-- 在 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+- 在 topic、decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。

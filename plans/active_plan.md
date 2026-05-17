@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.10。
+- 当前版本：v0.13。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -19,7 +19,10 @@
 - v0.8 已完成：中途记录黑盒入口，用户只说“中途记录一下”时，agent 保存当前接力点但不默认提交推送。
 - v0.9 已完成：低假设初始化和 bootstrap checkpoint 规则，避免 AIT 在目标项目中自动发明业务路线；self improve 也能记录并处理二阶改进。
 - v0.10 已完成：初始化 bootstrap 把已有 `raw_input/` 作为初期输入源索引和选择性沉淀，但 `init` 不自动吞入原始材料。
-- 下一阶段：等 tracking 信息规模变大后，再评估是否加入语义检索。
+- v0.11 已完成：AIT 安装管理增加 `uninstall`，可删除安装命令和 Codex skills，但保留项目状态。
+- v0.12 已完成：卸载时给用户选择是否一并删除项目状态目录，并说明各目录存放内容。
+- v0.13 已完成：Topic Archive MVP，任何时刻只有一个 active topic，其它 topic 进入 archive 并按需恢复。
+- 下一阶段：等 topic、tracking 信息规模变大后，再评估是否加入语义检索。
 
 ## 下一步
 
@@ -30,4 +33,8 @@
 5. 新项目初始化后保持 `当前业务目标：待用户定义`，直到用户明确确认。
 6. 新项目初始化时，agent 运行 `auto-iter context index --include-raw-input` 检查已有 raw input；只按需读取相关章节并用 `raw_input_source` 标注后沉淀。
 7. 如果 AIT 在对话中途接入，agent 先整理 bootstrap checkpoint，只记录已确认事实、未决问题和带来源标签的候选项。
-8. 若 tracking 信息规模明显变大，再评估语义检索。
+8. 用户要求卸载或重新安装 AIT 时，使用 `auto-iter uninstall` 移除安装产物；交互终端让用户选择是否删除项目状态目录，非交互默认保留，除非用户明确要求删除。
+9. 用户显式开启、切换、回到或满足 topic 时，agent 使用 `auto-iter topic current/list/show/start/switch/satisfy` 保存和恢复现场。
+10. 如果用户 prompt 只是语义上像切换到新 topic，agent 必须先问“是不是已经切入新的 topic 了？”，确认后才切换。
+11. 新 session 默认读取 `topics/active_topic.md`，只在用户要求或确认切回 archived topic 时读取 `topics/archive/`。
+12. 若 topic 和 tracking 信息规模明显变大，再评估语义检索。
