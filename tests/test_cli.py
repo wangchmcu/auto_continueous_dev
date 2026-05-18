@@ -239,6 +239,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("WSL/Linux Codex CLI", readme)
         self.assertIn("macOS Codex app", readme)
 
+    def test_stop_hook_uses_default_cross_platform_handoff_command(self):
+        hooks = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        command = hooks["hooks"]["Stop"][0]["hooks"][0]["command"]
+
+        self.assertEqual(command, "auto-iter handoff generate")
+        self.assertNotIn("--quiet", command)
+        self.assertNotIn(">", command)
+        self.assertNotIn("2>", command)
+        self.assertNotIn("&&", command)
+        self.assertNotIn(";", command)
+
     def test_uninstall_removes_installed_command_and_skills_only(self):
         run_cli(self.tmp, "init")
         bin_dir = self.tmp / "bin"
@@ -413,7 +424,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("topics/index.md", index.stdout)
         self.assertIn("topics/active_topic.md", index.stdout)
         self.assertIn("Topic Archive MVP", index.stdout)
-        self.assertIn("generated", handoff.stdout)
+        self.assertEqual(handoff.stdout, "")
         self.assertIn("active_topic", handoff_text)
         self.assertIn(str((self.tmp / "topics" / "active_topic.md").resolve()), handoff_text)
         self.assertIn("topic_index", handoff_text)
@@ -509,7 +520,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Evidence Links", index.stdout)
         self.assertIn("## Topic Evidence Links", handoff_text)
         self.assertIn(run_id, handoff_text)
-        self.assertIn("generated", handoff.stdout)
+        self.assertEqual(handoff.stdout, "")
 
         missing = run_cli(
             self.tmp,
@@ -863,7 +874,7 @@ class CliTests(unittest.TestCase):
         run_cli(self.tmp, "init")
         valid = run_cli(self.tmp, "handoff", "generate")
 
-        self.assertIn("generated", valid.stdout)
+        self.assertEqual(valid.stdout, "")
         validated = run_cli(self.tmp, "handoff", "validate")
         self.assertIn("VALID", validated.stdout)
 
@@ -1022,6 +1033,29 @@ class CliTests(unittest.TestCase):
             count = db.execute("select count(*) from handoffs").fetchone()[0]
         self.assertEqual(count, 1)
 
+    def test_handoff_generate_writes_handoff_without_stdout_for_stop_hook(self):
+        run_cli(self.tmp, "init")
+
+        quiet = run_cli(self.tmp, "handoff", "generate")
+
+        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        self.assertEqual(quiet.stdout, "")
+        self.assertEqual(quiet.stderr, "")
+        self.assertTrue(handoff_path.exists())
+        self.assertIn("## 当前快照", handoff_path.read_text(encoding="utf-8"))
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            count = db.execute("select count(*) from handoffs").fetchone()[0]
+        self.assertEqual(count, 1)
+
+    def test_handoff_generate_print_path_is_explicit_debug_output(self):
+        run_cli(self.tmp, "init")
+
+        result = run_cli(self.tmp, "handoff", "generate", "--print-path")
+
+        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        self.assertIn(str(handoff_path.resolve()), result.stdout)
+        self.assertIn("generated", result.stdout)
+
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")
         config = self.tmp / "config.json"
@@ -1072,7 +1106,7 @@ class CliTests(unittest.TestCase):
 
         handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
         text = handoff_path.read_text(encoding="utf-8")
-        self.assertIn(str(handoff_path.resolve()), handoff.stdout)
+        self.assertEqual(handoff.stdout, "")
         self.assertIn("## 当前目标", text)
         self.assertIn("global_plan", text)
         self.assertIn(str((self.tmp / "plans" / "global_plan.md").resolve()), text)

@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.17。
+- 当前版本：v0.18。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -26,6 +26,7 @@
 - v0.15 已完成：projection consistency（投影一致性）和 demo/test 历史边界，避免孤儿 Markdown projection 污染恢复上下文。
 - v0.16 已完成：topic evidence link（topic 证据关联）MVP，让 topic 能直接关联并查询相关 run、decision 和 artifact。
 - v0.17 已完成：多操作系统安装路径体验增强，优先使用已在 `PATH` 且可写的系统推荐命令目录，避免默认落到当前 shell 找不到的位置。
+- v0.18 已完成：`auto-iter handoff generate` 默认静默，避免普通 stdout 被 Codex 当 hook JSON 解析；需要人工调试时显式使用 `--print-path`，同时不使用平台特定 shell 重定向以兼容 Windows、WSL/Linux、macOS。
 - 下一阶段：等 topic、tracking 信息规模变大再评估是否加入语义检索，或继续 topic 生命周期管理增强。
 
 ## 下一步

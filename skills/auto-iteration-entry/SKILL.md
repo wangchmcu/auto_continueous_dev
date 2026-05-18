@@ -243,6 +243,8 @@ auto-iter handoff generate
 auto-iter handoff validate
 ```
 
+`auto-iter handoff generate` is silent by default so hook stdout stays empty while the handoff is still written. Use `auto-iter handoff generate --print-path` only for manual debugging. Do not use shell redirection for this because the same hook should work on Windows, WSL/Linux, and macOS.
+
 If the user also asks to submit, save, or push the work, check git status, commit the relevant changes, and push using the repository's configured remote. Do not leave uncommitted auto-iteration changes unless the user explicitly asks to keep them local.
 
 Final response must report:

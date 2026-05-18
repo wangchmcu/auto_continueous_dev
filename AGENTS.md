@@ -77,6 +77,8 @@ auto-iter handoff generate
 auto-iter handoff validate
 ```
 
+- `auto-iter handoff generate` must be silent by default so Codex does not parse ordinary stdout as hook JSON. Use `auto-iter handoff generate --print-path` only for manual debugging. Do not use shell redirection or platform-specific null devices for this; the hook must work on Windows, WSL/Linux, and macOS.
+
 ## State Ownership
 
 - SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.

@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.17
+- current_version: v0.18
 - status: done
-- goal: 改善多操作系统安装路径选择，让 `auto-iter` 优先安装到当前 shell 已认可的标准命令目录，同时避免默认修改用户环境。
+- goal: 修复 Codex Stop hook 解析 stdout 时的非法 JSON 报错，并保持 Windows、WSL/Linux、macOS 三系统兼容。
 
 ## v0.1 任务清单
 
@@ -542,6 +542,41 @@ v0.17 之后仍未覆盖的全局能力：
 3. `install` 不默认修改 shell 启动文件。
 4. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.18 任务清单
+
+- status: done
+- goal: 修复 Codex Stop hook 因 `auto-iter handoff generate` 输出普通文本而被解析为非法 JSON 的问题，并保持 Windows、WSL/Linux、macOS 三系统兼容。
+- [x] `auto-iter handoff generate` 默认写入 handoff 和 SQLite 记录但不向 stdout 输出普通文本。
+- [x] `.codex/hooks.json` 的 Stop hook 使用默认 `auto-iter handoff generate`。
+- [x] 新增 `auto-iter handoff generate --print-path`，只在人工调试时输出 `generated <path>`。
+- [x] 避免使用 shell 重定向、`/dev/null`、`NUL`、`cmd.exe` 或 POSIX shell 包装命令，保证 Windows、WSL/Linux、macOS 三系统都走同一个 CLI 参数。
+- [x] 测试覆盖 Stop hook 命令、默认静默 handoff 生成行为和显式调试输出。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.18 距离 global plan
+
+v0.18 覆盖 Codex 入口能力中 Stop hook 自动生成 handoff 的三系统兼容修复。
+
+v0.18 已覆盖的全局能力：
+
+- Stop hook 不再向 stdout 输出普通文本，避免 Codex 把普通文本当 hook JSON 解析时报错。
+- handoff 自动生成仍由 `auto-iter` 负责，SQLite 记录和 `handoffs/latest_handoff.md` 仍保持更新。
+- handoff 生成命令默认静默，不依赖某个操作系统的 shell 语法；人工调试需要输出路径时显式加 `--print-path`。
+
+v0.18 之后仍未覆盖的全局能力：
+
+- 自动语义检索和相似度匹配。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.18 验收标准
+
+1. `auto-iter handoff generate` stdout 为空，且仍生成 `handoffs/latest_handoff.md`。
+2. `.codex/hooks.json` 的 Stop hook 使用默认 `auto-iter handoff generate`。
+3. Stop hook 命令不依赖 shell 重定向或平台特定空设备。
+4. `auto-iter handoff generate --print-path` 显式输出生成路径，供人工调试使用。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -607,6 +642,10 @@ v0.17 之后仍未覆盖的全局能力：
 ### v0.17
 
 - done：多操作系统安装路径体验增强。
+
+### v0.18
+
+- done：Stop hook 默认静默 handoff 生成修复，避免 stdout 被 Codex 当 hook JSON 解析，并保持三系统兼容。
 
 ### 后续可选
 

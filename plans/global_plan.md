@@ -58,6 +58,7 @@
 - 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
 - 安装和运行入口必须覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境；wrapper、Python 命令和文档不能写死某一个用户或系统路径。
 - 安装器应优先使用当前操作系统和 shell 已认可的命令目录；如果没有合适目录，回落到用户目录并提示路径，不默认修改用户 shell 配置。
+- `auto-iter handoff generate` 默认不输出 stdout，避免 Codex Stop hook 把普通文本当作 hook JSON 解析；需要人工调试时显式使用 `auto-iter handoff generate --print-path`，且不能依赖平台特定 shell 重定向。
 - 提供安装管理入口：可安装、卸载并重新安装命令和 Codex skills，且卸载不删除项目状态。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
@@ -390,6 +391,19 @@
 - Windows 回落到用户 AppData 下的 AIT 应用命令目录。
 - 保留 path hint，不默认写 shell startup 文件。
 - 更新文档和测试。
+
+### v0.18：Stop hook 静默 handoff 生成
+
+状态：done。
+
+目标：修复 Codex Stop hook 因 `auto-iter handoff generate` 输出普通文本而报非法 hook JSON 的问题，并保持 Windows、WSL/Linux、macOS 三系统兼容。
+
+任务：
+
+- `auto-iter handoff generate` 默认生成 handoff 但不输出普通 stdout。
+- `.codex/hooks.json` 使用默认 `auto-iter handoff generate`。
+- 新增 `auto-iter handoff generate --print-path` 作为人工调试输出。
+- 不使用 shell 重定向、平台空设备或平台特定包装命令。
 
 ### 后续可选：语义检索
 

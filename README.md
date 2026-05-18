@@ -322,6 +322,8 @@ The agent should:
 - push to the configured remote when requested
 - report the current version, completed work, current-version remaining work, and remaining global plan capabilities
 
+`auto-iter handoff generate` is silent by default so Codex does not parse ordinary handoff output as hook JSON. Use `auto-iter handoff generate --print-path` only for manual debugging; do not use shell redirection such as `/dev/null` or `NUL`, because the hook must work on Windows Codex app, WSL/Linux Codex CLI, and macOS Codex app.
+
 ### Starting a new session
 
 User starts Codex from the same algorithm project:
@@ -383,6 +385,8 @@ At session end, regenerate the handoff so the next Codex session sees the curren
 auto-iter handoff generate
 auto-iter handoff validate
 ```
+
+For `.codex/hooks.json`, use the default `auto-iter handoff generate`. It keeps Stop hook stdout empty while still writing `handoffs/latest_handoff.md` and the SQLite handoff record.
 
 ## Raw Input
 

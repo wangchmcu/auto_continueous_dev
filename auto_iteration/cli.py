@@ -2162,9 +2162,10 @@ def validate_handoff_text(text: str) -> list[str]:
     return errors
 
 
-def command_handoff_generate(_args: argparse.Namespace) -> int:
+def command_handoff_generate(args: argparse.Namespace) -> int:
     path, _based_on_run_id = save_handoff()
-    print(f"generated {path.resolve()}")
+    if args.print_path:
+        print(f"generated {path.resolve()}")
     return 0
 
 
@@ -2552,6 +2553,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff = subparsers.add_parser("handoff")
     handoff_sub = handoff.add_subparsers(dest="handoff_command", required=True)
     generate = handoff_sub.add_parser("generate")
+    generate.add_argument("--print-path", action="store_true", help="print generated handoff path for manual debugging")
     generate.set_defaults(func=command_handoff_generate)
     validate = handoff_sub.add_parser("validate")
     validate.set_defaults(func=command_handoff_validate)

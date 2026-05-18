@@ -211,6 +211,8 @@ auto-iter handoff generate
 auto-iter handoff validate
 ```
 
+`auto-iter handoff generate` is silent by default for Codex hook parsing. Use `auto-iter handoff generate --print-path` only for manual debugging. Do not use platform-specific shell redirection for this, so the hook remains compatible with Windows, WSL/Linux, and macOS.
+
 The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads after `AGENTS.md`.
 
 When implementation scope changes, update `plans/global_plan.md` if the global capability set changes, then update `plans/version_iterations.md` so the next session can see the current version tasks.

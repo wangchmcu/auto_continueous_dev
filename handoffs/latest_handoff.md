@@ -4,16 +4,16 @@
 - 未设置；请在下一轮实验前明确当前优化目标。
 
 ## 当前快照
-- root: /Users/ryan/Documents/auto_continueous_dev
-- branch: dev
-- commit: 6af4622f6be60456433ef1270454101b732a3302
-- latest_successful_run_id: none
+- root: /home/ryan/auto_iteration
+- branch: master
+- commit: 4137488e1acf562f52aa2f622d3b9f09b7f868cf
+- latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
-- global_plan: /Users/ryan/Documents/auto_continueous_dev/plans/global_plan.md
-- version_task_tracking: /Users/ryan/Documents/auto_continueous_dev/plans/version_iterations.md
-- active_plan: /Users/ryan/Documents/auto_continueous_dev/plans/active_plan.md
-- active_topic: /Users/ryan/Documents/auto_continueous_dev/topics/active_topic.md
-- topic_index: /Users/ryan/Documents/auto_continueous_dev/topics/index.md
+- global_plan: /home/ryan/auto_iteration/plans/global_plan.md
+- version_task_tracking: /home/ryan/auto_iteration/plans/version_iterations.md
+- active_plan: /home/ryan/auto_iteration/plans/active_plan.md
+- active_topic: /home/ryan/auto_iteration/topics/active_topic.md
+- topic_index: /home/ryan/auto_iteration/topics/index.md
 
 ## 当前 Topic
 - none
@@ -22,13 +22,16 @@
 - none
 
 ## 最近成功实验
-- none
+- R-9723365f8f: dataset=ten-round-demo status=success
+  - other: /home/ryan/auto_iteration/runs/R-9723365f8f/artifacts/report.md
 
 ## 当前有效结论
-- none
+- D-7188530483: 十轮示例收敛到 weight 2.0 offset 1.5 evidence=R-9723365f8f
+  - 第 10 轮使用 weight=2.0 和 offset=1.5，mean_absolute_error 达到 0.0。
 
 ## 已废弃且不要重复的路线
-- none
+- D-74cadc923e: 放弃 max_value_reward 错误目标函数 evidence=R-e037afb46d
+  - reopen_condition: 只有用户明确把任务目标改成奖励预测值变大时才允许重开。
 
 ## 未决假设
 - none
@@ -40,14 +43,14 @@
 4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 
 ## 读取顺序
-1. /Users/ryan/Documents/auto_continueous_dev/AGENTS.md
-2. /Users/ryan/Documents/auto_continueous_dev/handoffs/latest_handoff.md
-3. /Users/ryan/Documents/auto_continueous_dev/plans/global_plan.md
-4. /Users/ryan/Documents/auto_continueous_dev/plans/version_iterations.md
-5. /Users/ryan/Documents/auto_continueous_dev/plans/active_plan.md
-6. /Users/ryan/Documents/auto_continueous_dev/topics/active_topic.md
-7. /Users/ryan/Documents/auto_continueous_dev/state/agent_state.db
-8. /Users/ryan/Documents/auto_continueous_dev/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
+1. /home/ryan/auto_iteration/AGENTS.md
+2. /home/ryan/auto_iteration/handoffs/latest_handoff.md
+3. /home/ryan/auto_iteration/plans/global_plan.md
+4. /home/ryan/auto_iteration/plans/version_iterations.md
+5. /home/ryan/auto_iteration/plans/active_plan.md
+6. /home/ryan/auto_iteration/topics/active_topic.md
+7. /home/ryan/auto_iteration/state/agent_state.db
+8. /home/ryan/auto_iteration/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
 9. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。
 10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
 11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
