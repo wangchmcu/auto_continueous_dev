@@ -15,6 +15,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “继续这个 auto-iteration 项目” or “接着上个 session”：run the required start workflow below.
 - “结束当前 session” or “做 handoff”：run the end-of-task workflow below.
 - “查阅某个结论、实验、参数或历史细节”：run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
+- “之前是不是说过某个现象”, “我记得之前好像提过”, or another fuzzy historical-memory question：run `auto-iter search query --text "<用户原话>" --limit 10 --explain`, then use the returned path, heading, `run_id`, `decision_id`, or topic evidence to load the exact source. The search command is a recall helper, not a replacement for evidence.
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
 - “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
 - “卸载 AIT”, “卸载 auto-iter”, or “重新安装 AIT”：run the install management workflow. `auto-iter uninstall` removes installed command and Codex skills only; it does not remove project state.
@@ -193,6 +194,14 @@ auto-iter context show --path <file> --heading "<heading>"
 Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
 
 When the user asks for detail in plain language, choose the file and heading yourself from the index. For example, “查一下上次为什么否定高阈值区间” should lead to the relevant rejected decision or run summary, not a request for the user to provide a full `context show` command.
+
+For fuzzy historical-memory questions, use the local search layer first:
+
+```bash
+auto-iter search query --text "<用户原话>" --limit 10 --explain
+```
+
+`search query` refreshes the default tracking-information index before searching. The search layer combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. After search returns candidates, load the exact source with `context show`, `run show`, or `topic evidence`.
 
 ## Running An Experiment
 

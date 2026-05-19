@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import math
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import sqlite3
 import subprocess
 import sys
+from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -22,6 +25,7 @@ DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
 TOPIC_STATUSES = {"active", "archived_open", "archived_satisfied"}
 TOPIC_EVIDENCE_TYPES = {"run", "decision", "artifact"}
+SEARCH_FUSION_K = 60
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
 PROJECT_STATE_DIRS = [
     ("state", "SQLite state database for runs, decisions, route checks, and handoffs"),
@@ -922,6 +926,32 @@ def init_schema(db: sqlite3.Connection) -> None:
             summary text not null default '',
             created_at text not null,
             primary key (topic_id, evidence_type, evidence_id)
+        );
+
+        create table if not exists search_documents (
+            doc_id text primary key,
+            source_type text not null,
+            source_id text not null default '',
+            path text not null,
+            heading text not null default '',
+            title text not null default '',
+            body text not null,
+            related_ids_json text not null,
+            updated_at text not null
+        );
+
+        create table if not exists search_vectors (
+            doc_id text primary key,
+            token_counts_json text not null,
+            token_norm real not null
+        );
+
+        create table if not exists search_graph_edges (
+            source_doc_id text not null,
+            target_doc_id text not null,
+            relation_type text not null,
+            summary text not null default '',
+            primary key (source_doc_id, target_doc_id, relation_type)
         );
         """
     )
@@ -2243,6 +2273,18 @@ def is_under(path: Path, parent: Path) -> bool:
         return False
 
 
+@dataclass(frozen=True)
+class SearchDocument:
+    doc_id: str
+    source_type: str
+    source_id: str
+    path: Path
+    heading: str
+    title: str
+    body: str
+    related_ids: list[str]
+
+
 def decision_projection_files() -> list[Path]:
     return sorted(path.resolve() for path in root().glob("decisions/*/*.md") if path.is_file())
 
@@ -2366,6 +2408,447 @@ def command_context_show(args: argparse.Namespace) -> int:
     if not is_under(path, root()):
         raise UserError(f"context path must be under project root: {path}")
     print(extract_heading_section(path, args.heading), end="")
+    return 0
+
+
+def has_cjk(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
+
+
+def search_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    for raw in re.findall(r"[\w./\\-]+", text.lower(), flags=re.UNICODE):
+        ascii_parts = [part for part in re.split(r"[./\\\-_]+", raw) if len(part) >= 2 and not has_cjk(part)]
+        for part in ascii_parts:
+            tokens.append(part)
+        if not has_cjk(raw):
+            compact = re.sub(r"[^a-z0-9_]", "", raw)
+            if len(compact) >= 2:
+                tokens.append(compact)
+            continue
+        chars = [char for char in raw if "\u4e00" <= char <= "\u9fff"]
+        for size in (2, 3):
+            if len(chars) >= size:
+                tokens.extend("".join(chars[index : index + size]) for index in range(len(chars) - size + 1))
+        if len(chars) == 1:
+            tokens.append(chars[0])
+    return tokens
+
+
+def markdown_sections(path: Path) -> list[tuple[str, str]]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix.lower() not in {".md", ".markdown"}:
+        return [("", text)]
+    lines = text.splitlines()
+    heading_rows: list[tuple[int, int, str]] = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        marker, _, title = stripped.partition(" ")
+        if marker and set(marker) == {"#"} and title:
+            heading_rows.append((index, len(marker), title.strip()))
+    if not heading_rows:
+        return [("", text)]
+    sections: list[tuple[str, str]] = []
+    for item_index, (start, level, title) in enumerate(heading_rows):
+        end = len(lines)
+        for next_start, next_level, _next_title in heading_rows[item_index + 1 :]:
+            if next_level <= level:
+                end = next_start
+                break
+        section = "\n".join(lines[start:end]).strip()
+        if section:
+            sections.append((title, section))
+    return sections
+
+
+def infer_source_type_and_id(path: Path, body: str) -> tuple[str, str]:
+    rel = path.relative_to(root()).as_posix()
+    parts = rel.split("/")
+    if parts[:1] == ["plans"]:
+        return "plan", path.stem
+    if rel == "handoffs/latest_handoff.md":
+        return "handoff", "latest_handoff"
+    if parts[:1] == ["decisions"] and len(parts) >= 3:
+        return "decision", path.stem
+    if parts[:1] == ["runs"] and len(parts) >= 3:
+        if parts[-1] == "summary.md":
+            return "run", parts[1]
+        if parts[-1] == "error_summary.md":
+            return "error_summary", parts[1]
+        return "run_artifact", parts[1]
+    if parts[:1] == ["topics"]:
+        if len(parts) >= 3 and parts[1] == "archive":
+            return "topic", path.stem
+        match = re.search(r"topic_id:\s*(T-[A-Za-z0-9]+)", body)
+        return "topic", match.group(1) if match else path.stem
+    if parts[:1] == ["raw_input"]:
+        return "raw_input", path.stem
+    return "file", path.stem
+
+
+def extract_related_ids(text: str) -> list[str]:
+    ids = re.findall(r"\b(?:R|D|T|H)-[A-Za-z0-9]+\b", text)
+    ids.extend(re.findall(r"\bA-[0-9a-fA-F]{10,}\b", text))
+    return sorted(set(ids))
+
+
+def is_structured_search_id(value: str) -> bool:
+    return bool(re.fullmatch(r"(?:R|D|T|H)-[A-Za-z0-9]+|A-[0-9a-fA-F]{10,}", value))
+
+
+def document_id(path: Path, heading: str) -> str:
+    rel = path.relative_to(root()).as_posix()
+    digest = hashlib.sha256(f"{rel}\n{heading}".encode("utf-8")).hexdigest()[:16]
+    return f"S-{digest}"
+
+
+def collect_search_documents(include_raw_input: bool) -> list[SearchDocument]:
+    documents: list[SearchDocument] = []
+    for path in context_files(include_raw_input):
+        if not include_raw_input and is_under(path, root() / "raw_input"):
+            continue
+        for heading, body in markdown_sections(path):
+            source_type, source_id = infer_source_type_and_id(path, body)
+            title = heading or path.name
+            related = extract_related_ids(body)
+            if source_id and is_structured_search_id(source_id):
+                related = sorted(set([source_id, *related]))
+            documents.append(
+                SearchDocument(
+                    doc_id=document_id(path, heading),
+                    source_type=source_type,
+                    source_id=source_id,
+                    path=path,
+                    heading=heading,
+                    title=title,
+                    body=body,
+                    related_ids=related,
+                )
+            )
+    return documents
+
+
+def ensure_search_fts(db: sqlite3.Connection) -> bool:
+    try:
+        db.execute(
+            """
+            create virtual table if not exists search_fts
+            using fts5(doc_id unindexed, title, body, related_text)
+            """
+        )
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def clear_search_index(db: sqlite3.Connection, has_fts: bool) -> None:
+    if has_fts:
+        db.execute("delete from search_fts")
+    db.execute("delete from search_graph_edges")
+    db.execute("delete from search_vectors")
+    db.execute("delete from search_documents")
+
+
+def token_counts_json(tokens: list[str]) -> tuple[str, float]:
+    counts = Counter(tokens)
+    norm = math.sqrt(sum(value * value for value in counts.values()))
+    return json.dumps(counts, ensure_ascii=False, sort_keys=True), norm
+
+
+def load_token_counts(row: sqlite3.Row) -> Counter[str]:
+    return Counter(json.loads(row["token_counts_json"]))
+
+
+def insert_search_document(db: sqlite3.Connection, doc: SearchDocument, has_fts: bool, timestamp: str) -> None:
+    tokens = search_tokens(f"{doc.title}\n{doc.body}\n{' '.join(doc.related_ids)}")
+    counts_json, norm = token_counts_json(tokens)
+    db.execute(
+        """
+        insert into search_documents (
+            doc_id, source_type, source_id, path, heading, title, body, related_ids_json, updated_at
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            doc.doc_id,
+            doc.source_type,
+            doc.source_id,
+            str(doc.path.relative_to(root())),
+            doc.heading,
+            doc.title,
+            doc.body,
+            json.dumps(doc.related_ids, ensure_ascii=False),
+            timestamp,
+        ),
+    )
+    db.execute(
+        "insert into search_vectors (doc_id, token_counts_json, token_norm) values (?, ?, ?)",
+        (doc.doc_id, counts_json, norm),
+    )
+    if has_fts:
+        expanded_body = f"{doc.body}\n{' '.join(tokens)}"
+        db.execute(
+            "insert into search_fts (doc_id, title, body, related_text) values (?, ?, ?, ?)",
+            (doc.doc_id, doc.title, expanded_body, " ".join(doc.related_ids)),
+        )
+
+
+def add_graph_edge(
+    db: sqlite3.Connection,
+    source_doc_id: str,
+    target_doc_id: str,
+    relation_type: str,
+    summary: str,
+) -> None:
+    if source_doc_id == target_doc_id:
+        return
+    db.execute(
+        """
+        insert or ignore into search_graph_edges (source_doc_id, target_doc_id, relation_type, summary)
+        values (?, ?, ?, ?)
+        """,
+        (source_doc_id, target_doc_id, relation_type, summary),
+    )
+
+
+def build_search_graph(db: sqlite3.Connection, documents: list[SearchDocument]) -> None:
+    by_source_id: dict[str, list[SearchDocument]] = {}
+    for doc in documents:
+        if doc.source_id and is_structured_search_id(doc.source_id):
+            by_source_id.setdefault(doc.source_id, []).append(doc)
+    for doc in documents:
+        for related_id in doc.related_ids:
+            for target in by_source_id.get(related_id, []):
+                add_graph_edge(db, doc.doc_id, target.doc_id, "mentioned-id", f"{doc.source_id} mentions {related_id}")
+    for decision in db.execute("select decision_id, evidence_run_ids_json from decisions").fetchall():
+        for decision_doc in by_source_id.get(decision["decision_id"], []):
+            for run_id in json.loads(decision["evidence_run_ids_json"]):
+                for run_doc in by_source_id.get(run_id, []):
+                    add_graph_edge(db, decision_doc.doc_id, run_doc.doc_id, "decision-evidence", f"{decision['decision_id']} evidence {run_id}")
+    for link in db.execute("select topic_id, evidence_type, evidence_id from topic_evidence_links").fetchall():
+        for topic_doc in by_source_id.get(link["topic_id"], []):
+            for target_doc in by_source_id.get(link["evidence_id"], []):
+                add_graph_edge(
+                    db,
+                    topic_doc.doc_id,
+                    target_doc.doc_id,
+                    "topic-evidence",
+                    f"{link['topic_id']} linked {link['evidence_type']} {link['evidence_id']}",
+                )
+
+
+def rebuild_search_index(db: sqlite3.Connection, include_raw_input: bool = False) -> tuple[int, int, bool]:
+    has_fts = ensure_search_fts(db)
+    clear_search_index(db, has_fts)
+    documents = collect_search_documents(include_raw_input)
+    timestamp = now_iso()
+    for doc in documents:
+        insert_search_document(db, doc, has_fts, timestamp)
+    build_search_graph(db, documents)
+    edge_count = db.execute("select count(*) from search_graph_edges").fetchone()[0]
+    return len(documents), edge_count, has_fts
+
+
+def command_search_index(args: argparse.Namespace) -> int:
+    with database() as db:
+        doc_count, edge_count, has_fts = rebuild_search_index(db, args.include_raw_input)
+    print(f"indexed search documents: {doc_count}")
+    print(f"indexed graph edges: {edge_count}")
+    print(f"raw_input: {'included' if args.include_raw_input else 'excluded'}")
+    print(f"bm25_backend: {'sqlite_fts5' if has_fts else 'python_fallback'}")
+    print("light_vector: local token vector")
+    return 0
+
+
+def fts_match_query(tokens: list[str]) -> str:
+    unique = []
+    seen = set()
+    for token in tokens:
+        cleaned = re.sub(r"[^\w]", "", token, flags=re.UNICODE)
+        if len(cleaned) < 1 or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        unique.append(f'"{cleaned}"')
+        if len(unique) >= 32:
+            break
+    return " OR ".join(unique)
+
+
+def bm25_search(db: sqlite3.Connection, query: str, limit: int) -> list[tuple[str, float]]:
+    tokens = search_tokens(query)
+    match_query = fts_match_query(tokens)
+    if match_query and ensure_search_fts(db):
+        try:
+            rows = db.execute(
+                """
+                select doc_id, bm25(search_fts) as rank
+                from search_fts
+                where search_fts match ?
+                order by rank
+                limit ?
+                """,
+                (match_query, limit),
+            ).fetchall()
+            if rows:
+                return [(row["doc_id"], -float(row["rank"])) for row in rows]
+        except sqlite3.OperationalError:
+            pass
+    return python_bm25_search(db, tokens, limit)
+
+
+def python_bm25_search(db: sqlite3.Connection, query_tokens: list[str], limit: int) -> list[tuple[str, float]]:
+    if not query_tokens:
+        return []
+    vector_rows = db.execute("select * from search_vectors").fetchall()
+    if not vector_rows:
+        return []
+    docs = [(row["doc_id"], load_token_counts(row), sum(load_token_counts(row).values())) for row in vector_rows]
+    avg_len = sum(length for _doc_id, _counts, length in docs) / len(docs)
+    query_terms = sorted(set(query_tokens))
+    doc_freq: dict[str, int] = {}
+    for term in query_terms:
+        doc_freq[term] = sum(1 for _doc_id, counts, _length in docs if counts.get(term, 0) > 0)
+    scores: list[tuple[str, float]] = []
+    k1 = 1.2
+    b = 0.75
+    total_docs = len(docs)
+    for doc_id, counts, doc_len in docs:
+        score = 0.0
+        for term in query_terms:
+            freq = counts.get(term, 0)
+            if freq <= 0:
+                continue
+            df = doc_freq.get(term, 0)
+            idf = math.log((total_docs - df + 0.5) / (df + 0.5) + 1)
+            denom = freq + k1 * (1 - b + b * (doc_len / avg_len if avg_len else 0))
+            score += idf * ((freq * (k1 + 1)) / denom)
+        if score > 0:
+            scores.append((doc_id, score))
+    return sorted(scores, key=lambda item: item[1], reverse=True)[:limit]
+
+
+def light_vector_search(db: sqlite3.Connection, query: str, limit: int) -> list[tuple[str, float]]:
+    query_counts = Counter(search_tokens(query))
+    query_norm = math.sqrt(sum(value * value for value in query_counts.values()))
+    if query_norm == 0:
+        return []
+    results: list[tuple[str, float]] = []
+    for row in db.execute("select * from search_vectors").fetchall():
+        doc_counts = load_token_counts(row)
+        doc_norm = float(row["token_norm"])
+        if doc_norm == 0:
+            continue
+        dot = sum(query_counts[token] * doc_counts.get(token, 0) for token in query_counts)
+        score = dot / (query_norm * doc_norm)
+        if score > 0:
+            results.append((row["doc_id"], score))
+    return sorted(results, key=lambda item: item[1], reverse=True)[:limit]
+
+
+def graph_search(db: sqlite3.Connection, seed_doc_ids: list[str], query: str, limit: int) -> list[tuple[str, float]]:
+    explicit_ids = set(extract_related_ids(query))
+    if explicit_ids:
+        rows = db.execute(
+            "select doc_id from search_documents where source_id in ({})".format(
+                ",".join("?" for _ in explicit_ids)
+            ),
+            tuple(explicit_ids),
+        ).fetchall()
+        seed_doc_ids.extend(row["doc_id"] for row in rows)
+    seen = set(seed_doc_ids)
+    results: list[tuple[str, float]] = []
+    for seed in seed_doc_ids[:10]:
+        edges = db.execute(
+            """
+            select source_doc_id, target_doc_id
+            from search_graph_edges
+            where source_doc_id = ? or target_doc_id = ?
+            """,
+            (seed, seed),
+        ).fetchall()
+        for edge in edges:
+            target = edge["target_doc_id"] if edge["source_doc_id"] == seed else edge["source_doc_id"]
+            if target in seen:
+                continue
+            seen.add(target)
+            results.append((target, 1.0))
+            if len(results) >= limit:
+                return results
+    return results
+
+
+def fuse_search_results(
+    bm25: list[tuple[str, float]],
+    vector: list[tuple[str, float]],
+    graph: list[tuple[str, float]],
+    limit: int,
+) -> list[tuple[str, float, dict[str, int]]]:
+    streams = [("bm25", 0.55, bm25), ("light_vector", 0.30, vector), ("graph", 0.15, graph)]
+    scores: dict[str, float] = {}
+    ranks: dict[str, dict[str, int]] = {}
+    for name, weight, results in streams:
+        for index, (doc_id, _score) in enumerate(results, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + weight * (1 / (SEARCH_FUSION_K + index))
+            ranks.setdefault(doc_id, {})[name] = index
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
+    return [(doc_id, score, ranks[doc_id]) for doc_id, score in ordered]
+
+
+def snippet(text: str, max_len: int = 180) -> str:
+    flattened = " ".join(text.split())
+    if len(flattened) <= max_len:
+        return flattened
+    return flattened[: max_len - 3] + "..."
+
+
+def command_search_query(args: argparse.Namespace) -> int:
+    with database() as db:
+        rebuild_search_index(db, include_raw_input=False)
+        bm25_results = bm25_search(db, args.text, max(args.limit * 3, 20))
+        vector_results = light_vector_search(db, args.text, max(args.limit * 3, 20))
+        seeds = [doc_id for doc_id, _score in bm25_results[:5]]
+        seeds.extend(doc_id for doc_id, _score in vector_results[:5] if doc_id not in seeds)
+        graph_results = graph_search(db, seeds, args.text, max(args.limit * 2, 10))
+        fused = fuse_search_results(bm25_results, vector_results, graph_results, args.limit)
+        docs = {
+            row["doc_id"]: row
+            for row in db.execute(
+                "select * from search_documents where doc_id in ({})".format(
+                    ",".join("?" for _ in fused) if fused else "''"
+                ),
+                tuple(doc_id for doc_id, _score, _ranks in fused),
+            ).fetchall()
+        }
+        total = db.execute("select count(*) from search_documents").fetchone()[0]
+    print("# Search Results")
+    print(f"query: {args.text}")
+    print(f"indexed_documents: {total}")
+    if not fused:
+        print("no results")
+        return 0
+    for index, (doc_id, score, ranks) in enumerate(fused, start=1):
+        doc = docs[doc_id]
+        related_ids = ", ".join(json.loads(doc["related_ids_json"]))
+        print(f"{index}. score={score:.6f} source={doc['source_type']} id={doc['source_id'] or 'none'}")
+        print(f"   path: {doc['path']}")
+        if doc["heading"]:
+            print(f"   heading: {doc['heading']}")
+        print(f"   title: {doc['title']}")
+        if args.explain:
+            signal_text = "; ".join(f"{name} rank={rank}" for name, rank in sorted(ranks.items()))
+            print(f"   signals: {signal_text}")
+        if related_ids:
+            print(f"   related_ids: {related_ids}")
+        if doc["heading"]:
+            print(
+                "   next: "
+                f"auto-iter context show --path {shlex.quote(doc['path'])} --heading {shlex.quote(doc['heading'])}"
+            )
+        else:
+            print(f"   next: inspect {doc['path']}")
+        print(f"   snippet: {snippet(doc['body'])}")
     return 0
 
 
@@ -2572,6 +3055,16 @@ def build_parser() -> argparse.ArgumentParser:
     show_context.add_argument("--heading", required=True)
     show_context.add_argument("--allow-raw-input", action="store_true")
     show_context.set_defaults(func=command_context_show)
+    search = subparsers.add_parser("search")
+    search_sub = search.add_subparsers(dest="search_command", required=True)
+    search_index = search_sub.add_parser("index")
+    search_index.add_argument("--include-raw-input", action="store_true")
+    search_index.set_defaults(func=command_search_index)
+    search_query = search_sub.add_parser("query")
+    search_query.add_argument("--text", required=True)
+    search_query.add_argument("--limit", type=int, default=10)
+    search_query.add_argument("--explain", action="store_true")
+    search_query.set_defaults(func=command_search_query)
     intent = subparsers.add_parser("intent")
     intent_sub = intent.add_subparsers(dest="intent_command", required=True)
     intent_check = intent_sub.add_parser("check")

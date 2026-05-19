@@ -129,10 +129,11 @@
 - `handoff validate` 应把 orphan/stale projection 作为无效状态提示，推动 agent 在交接前清理或迁移记录。
 - demo/test 历史可以保存在 `examples/` 或文档中，但必须说明测试目的和数据边界，不能默认成为当前项目 decision。
 
-### 15. 后续可选语义检索
+### 15. 模糊检索增强
 
-- 当 topic、decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
-- 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
+- 当用户只记得“之前好像说过某个现象”时，提供本地候选检索入口。
+- 检索层组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+- 检索结果只能作为候选入口，不能替代 SQLite、plans、handoff、`run_id`、`decision_id` 和 topic evidence 的明确证据链。
 
 ## 后续 Backlog
 
@@ -140,9 +141,9 @@
 
 ### semantic retrieval
 
-- 语义检索：当 topic、decision、handoff、retrospective 数量变多后，用语义相似度帮助找到相关历史。
-- 它只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
-- 触发前提：历史规模已经明显影响人工索引和标题检索效率。
+- v0.19 已覆盖轻量模糊检索：BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+- 后续只在轻量方案主观收益不足且用户接受复杂度时，再评估更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+- 检索始终只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
 
 ### topic evidence link
 
@@ -405,11 +406,25 @@
 - 新增 `auto-iter handoff generate --print-path` 作为人工调试输出。
 - 不使用 shell 重定向、平台空设备或平台特定包装命令。
 
-### 后续可选：语义检索
+### v0.19：本地模糊检索增强
+
+状态：done。
+
+目标：让用户只记得“之前好像说过某个现象”时，能通过本地检索找到候选历史，并回到明确证据链。
+
+任务：
+
+- 新增 `auto-iter search index` 建立本地检索索引。
+- 新增 `auto-iter search query --text "<用户原话>" --limit 10 --explain` 查询候选历史。
+- 组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+- 默认排除 `raw_input/`，保持 tracking 信息优先。
+- 搜索结果回指 path、heading、`run_id`、`decision_id` 或 topic evidence，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
+
+### 后续可选：更重的语义检索
 
 状态：deferred。
 
 任务：
 
-- 当 decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
-- 语义检索只能作为补充入口，不能替代 SQLite、plans 和 handoff 的明确证据链。
+- 若轻量模糊检索主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+- 更重检索只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。

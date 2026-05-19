@@ -367,6 +367,29 @@ The agent should:
 
 The user should not need to write the full `context show` command. The command is the agent's implementation detail.
 
+### Fuzzy historical recall
+
+User says:
+
+```text
+我记得之前好像说过某个现象，帮我找一下。
+```
+
+The agent should:
+
+- run `auto-iter search query --text "<用户原话>" --limit 10 --explain`
+- use the returned path, heading, `run_id`, `decision_id`, or topic evidence as candidate pointers
+- load the exact source with `auto-iter context show`, `auto-iter run show`, or `auto-iter topic evidence`
+- answer from the exact source, not from the fuzzy search score alone
+
+`search query` refreshes the default tracking-information index before searching. For manual debugging, the local search index can also be built with:
+
+```bash
+auto-iter search index
+```
+
+`search index` excludes `raw_input/` by default. It combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. These are recall signals only; SQLite records, plans, handoffs, `run_id`, and `decision_id` remain the evidence chain.
+
 ## Version Task Tracking
 
 Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.

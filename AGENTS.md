@@ -34,6 +34,8 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 
 - Use `auto-iter context index` before reading broad history.
 - Use `auto-iter context show --path <file> --heading "<heading>"` to load only the needed section.
+- If the user asks a fuzzy memory question such as “之前是不是说过某个现象”, first run `auto-iter search query --text "<用户原话>" --limit 10 --explain`. This command refreshes the default tracking-information index before searching. Search is only a recall helper; after it finds a candidate, load the exact source with `context show` or the matching `run_id`、`decision_id`、topic evidence command.
+- `auto-iter search index` builds the local recall index from tracking information. It uses BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）.
 - Do not use `--include-raw-input` or `--allow-raw-input` unless the task is initial project setup or an explicit missing-information lookup.
 
 ## Natural Language Entry
@@ -46,6 +48,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - If the user says “结束当前 session” or “做 handoff”, run `auto-iter handoff generate` and `auto-iter handoff validate`; if the user asks to submit or push, also commit and push the relevant changes.
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run `auto-iter doctor`, `auto-iter resume`, and `auto-iter context index`, then restore context from plans, decisions, and run summaries.
 - If the user asks to inspect a historical detail, choose the relevant file and heading from `auto-iter context index`, then run `auto-iter context show --path <file> --heading "<heading>"`; do not ask the user to provide the full command.
+- If the user asks a fuzzy historical-memory question, run `auto-iter search query --text "<用户原话>" --limit 10 --explain` before broad manual reading. Use the search result to choose the exact `context show` path, `run show`, `decision` projection, or `topic evidence` query.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill. This trigger is explicit; do not run system-improvement work automatically. If the improvement exposes a limitation in the self improve workflow itself, handle that as a second-order improvement or record it as an explicit pending plan item.
 - If the user asks to uninstall or reinstall AIT, use `auto-iter uninstall` for installed command and skill removal. In interactive use, let the uninstall prompt ask whether to remove project state directories and explain what they contain. In non-interactive use, pass `--keep-project-state` unless the user explicitly asks to delete project state; only then use `--remove-project-state`.
 - Install should prefer an operating-system-appropriate command directory already on `PATH` and writable. If none exists, install into a user-owned fallback and print a path hint; do not edit shell startup files or mutate the user's environment without an explicit user opt-in.

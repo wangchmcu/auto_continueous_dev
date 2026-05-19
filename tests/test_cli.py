@@ -135,6 +135,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("do not start a separate plan branch", skill_text)
         self.assertIn("auto-iter topic link", skill_text)
         self.assertIn("auto-iter topic evidence", skill_text)
+        self.assertIn("auto-iter search query", skill_text)
+        self.assertIn("BM25", skill_text)
         self.assertIn("auto it self improve", improve_skill_text)
         self.assertIn("Do not write concrete project details", improve_skill_text)
         self.assertIn("If skills changed, run the install command", improve_skill_text)
@@ -160,6 +162,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("semantic retrieval", global_plan)
         self.assertIn("topic evidence link", global_plan)
         self.assertIn("topic lifecycle management", global_plan)
+        self.assertIn("v0.19", global_plan)
+        self.assertIn("auto-iter search query", global_plan)
 
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
@@ -998,6 +1002,110 @@ class CliTests(unittest.TestCase):
         self.assertEqual(blocked_raw.returncode, 1)
         self.assertIn("raw_input requires --allow-raw-input", blocked_raw.stderr)
         self.assertIn("legacy-only detail", allowed_raw.stdout)
+
+    def test_search_index_and_query_find_decision_without_raw_input(self):
+        run_cli(self.tmp, "init")
+        raw_note = self.tmp / "raw_input" / "legacy.md"
+        raw_note.write_text("# Legacy Raw Input\n\nraw-only-secret-phenomenon\n", encoding="utf-8")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        write_json(config, {"case": "front-radar-static-jump"})
+        write_json(metrics, {"yaw_p95_p05": {"value": 0.42, "unit": "deg", "direction": "minimize"}})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "front-radar",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "run", "finish", run_id, "--status", "success", "--metrics", str(metrics))
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "前雷达静态点跳变现象",
+            "--claim",
+            "之前确认过 front radar 的静态点跳变现象，应该从证据 run 继续查。",
+        ).stdout.strip().split()[-1]
+
+        indexed = run_cli(self.tmp, "search", "index")
+        queried = run_cli(
+            self.tmp,
+            "search",
+            "query",
+            "--text",
+            "我记得之前说过 front radar 静态点跳变",
+            "--limit",
+            "5",
+            "--explain",
+        )
+
+        self.assertIn("indexed search documents", indexed.stdout)
+        self.assertIn("前雷达静态点跳变现象", queried.stdout)
+        self.assertIn(decision_id, queried.stdout)
+        self.assertIn(run_id, queried.stdout)
+        self.assertIn("bm25", queried.stdout)
+        self.assertIn("light_vector", queried.stdout)
+        self.assertIn("context show", queried.stdout)
+        self.assertNotIn("raw-only-secret-phenomenon", queried.stdout)
+
+    def test_search_query_expands_structured_evidence_links(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        write_json(config, {"case": "evidence-link"})
+        write_json(metrics, {"score": {"value": 1.0, "unit": "ratio", "direction": "maximize"}})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "linked-run-dataset",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "run", "finish", run_id, "--status", "success", "--metrics", str(metrics))
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "linked evidence conclusion",
+            "--claim",
+            "unique linked phenomenon lives in the decision, not in the run summary.",
+        ).stdout.strip().split()[-1]
+
+        run_cli(self.tmp, "search", "index")
+        queried = run_cli(
+            self.tmp,
+            "search",
+            "query",
+            "--text",
+            "unique linked phenomenon",
+            "--limit",
+            "8",
+            "--explain",
+        )
+
+        self.assertIn(decision_id, queried.stdout)
+        self.assertIn(run_id, queried.stdout)
+        self.assertIn("graph", queried.stdout)
+        self.assertIn("source=run", queried.stdout)
 
     def test_intent_check_suggests_safe_checkpoints_without_writing_state(self):
         run_cli(self.tmp, "init")

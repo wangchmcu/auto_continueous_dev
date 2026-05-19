@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.18
+- current_version: v0.19
 - status: done
-- goal: 修复 Codex Stop hook 解析 stdout 时的非法 JSON 报错，并保持 Windows、WSL/Linux、macOS 三系统兼容。
+- goal: 加入本地模糊检索增强，让用户只记得“之前好像说过某个现象”时能找到候选历史，再回到明确证据链。
 
 ## v0.1 任务清单
 
@@ -577,6 +577,43 @@ v0.18 之后仍未覆盖的全局能力：
 4. `auto-iter handoff generate --print-path` 显式输出生成路径，供人工调试使用。
 5. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.19 任务清单
+
+- status: done
+- goal: 加入本地模糊检索增强，保持现有 SQLite、标题、`run_id`、`decision_id` 和 topic evidence 证据链不变。
+- [x] 新增 `auto-iter search index`，从 plans、handoff、topics、有效 decision projection、run summary、error summary 建立本地检索索引。
+- [x] 新增 `auto-iter search query --text "<用户原话>" --limit 10 --explain`，用于“之前是不是说过某个现象”这类模糊历史查找。
+- [x] 默认排除 `raw_input/`；只有显式 `search index --include-raw-input` 才纳入原始输入材料。
+- [x] 检索组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+- [x] search query 输出候选来源、路径、heading、相关 id、信号解释和下一步 `context show` 命令。
+- [x] 测试覆盖 search index、search query、默认排除 raw input、decision 到 evidence run 的结构关系扩展。
+- [x] README、AGENTS、entry skill 和 workflow skill 说明 fuzzy historical recall（模糊历史回忆）入口。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.19 距离 global plan
+
+v0.19 覆盖 `global plan` 中的模糊检索增强能力，但只采用轻量本地方案。
+
+v0.19 已覆盖的全局能力：
+
+- 用户可以用自然语言模糊描述历史现象，agent 通过 `auto-iter search query` 得到候选上下文。
+- 检索层不调用额外 LLM（大语言模型）服务，不引入复杂本地模型依赖。
+- 检索结果会回指到 path、heading、`run_id`、`decision_id` 或 topic evidence，仍以明确证据链为准。
+
+v0.19 之后仍未覆盖的全局能力：
+
+- 更重的本地 embedding（把文本变成稠密数值向量的模型）或外部向量服务；仅在轻量方案收益不够且用户接受复杂度时评估。
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.19 验收标准
+
+1. `auto-iter search index` 能建立检索文档和结构关系边。
+2. `auto-iter search query --text "<模糊问题>" --explain` 能返回候选 path、heading、相关 id 和下一步读取命令。
+3. 默认搜索不返回 `raw_input/` 内容。
+4. 命中 decision 时能通过 graph 结构关系带出 evidence run。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -647,6 +684,10 @@ v0.18 之后仍未覆盖的全局能力：
 
 - done：Stop hook 默认静默 handoff 生成修复，避免 stdout 被 Codex 当 hook JSON 解析，并保持三系统兼容。
 
+### v0.19
+
+- done：本地模糊检索增强，覆盖 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+
 ### 后续可选
 
-- 在 topic、decision、handoff、retrospective 数量变多后，再评估是否加入语义检索。
+- 若轻量检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。

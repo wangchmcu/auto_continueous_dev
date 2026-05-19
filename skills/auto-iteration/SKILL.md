@@ -12,6 +12,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run the required start workflow.
 - If the user says “结束当前 session” or “做 handoff”, run the end-of-session workflow.
 - If the user asks to “查阅某个结论、实验、参数或历史细节”, run `auto-iter context index`, choose the relevant file and heading, then run `auto-iter context show --path <file> --heading "<heading>"`.
+- If the user asks a fuzzy historical-memory question such as “之前是不是说过某个现象”, run `auto-iter search query --text "<用户原话>" --limit 10 --explain`, then load the exact source from the returned path, heading, `run_id`, `decision_id`, or topic evidence.
 - If the user asks to search `raw_input/`, do it only for initial setup or explicit missing-information lookup, then write useful information back into tracking information.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
@@ -142,6 +143,14 @@ auto-iter context show --path <file> --heading "<heading>"
 ```
 
 Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
+
+For fuzzy historical-memory questions, search before broad manual reading:
+
+```bash
+auto-iter search query --text "<用户原话>" --limit 10 --explain
+```
+
+`search query` refreshes the default tracking-information index before searching. This local search combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. Treat the result as a candidate list only; confirm the answer from `context show`, `run show`, `decision` projection, or `topic evidence`.
 
 ## Recording A Run
 
