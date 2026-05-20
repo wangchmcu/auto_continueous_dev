@@ -63,6 +63,20 @@ stores. In non-interactive runs, project state is kept by default; use
 `--keep-project-state` or `--remove-project-state` when the choice should be
 explicit.
 
+To refresh an existing installation without touching project state, run:
+
+```bash
+auto-iter update
+```
+
+`update` removes the command wrapper and installed Codex skills owned by the
+current AIT checkout, then installs fresh copies. It does not run `init`, does
+not create project state directories, and never asks whether to delete project
+state. Use `--bin-dir` and `--skills-dir` to target the same custom locations
+accepted by `install` and `uninstall`. Use `--check-project` when you want an
+existing AIT project in the current directory checked after the refresh; if no
+project state exists, the check is skipped and `init` is not run.
+
 ## Topic archive
 
 Topic archive keeps only one current issue or direction in default context.

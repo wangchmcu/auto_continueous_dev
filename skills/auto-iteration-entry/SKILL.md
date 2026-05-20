@@ -18,6 +18,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - “之前是不是说过某个现象”, “我记得之前好像提过”, or another fuzzy historical-memory question：run `auto-iter search query --text "<用户原话>" --limit 10 --explain`, then use the returned path, heading, `run_id`, `decision_id`, or topic evidence to load the exact source. The search command is a recall helper, not a replacement for evidence.
 - “从 raw_input 查缺失信息”：use raw input only for initial setup or explicit missing-information lookup, then write any useful recovered information back into plans, decisions, handoff, or run summaries.
 - “auto it self improve”：use the `auto-it-self-improve` skill. This is the fixed trigger for generalizing a solved concrete problem into a reusable auto_iteration system improvement.
+- “更新 AIT”, “刷新 AIT”, or “update AIT”：run `auto-iter update` to refresh the installed command wrapper and Codex skills without running `init` or touching project state.
 - “卸载 AIT”, “卸载 auto-iter”, or “重新安装 AIT”：run the install management workflow. `auto-iter uninstall` removes installed command and Codex skills only; it does not remove project state.
 - “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”：run the topic archive workflow below.
 - If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
@@ -125,6 +126,22 @@ auto-iter uninstall --remove-project-state
 
 Only use `--remove-project-state` when the user confirms that local tracking
 documents, topic projections, raw inputs, decisions, runs, and handoffs can be deleted.
+
+To refresh the installed wrapper and Codex skills while always preserving
+project state, run:
+
+```bash
+auto-iter update
+```
+
+`auto-iter update` removes the command wrapper and installed skills owned by the
+current AIT checkout, then installs fresh copies. It does not run `init`, does
+not create `state/`, `plans/`, `topics/`, `raw_input/`, `decisions/`, `runs/`,
+or `handoffs/`, and it never prompts about deleting project state. It accepts
+the same `--bin-dir` and `--skills-dir` options as install and uninstall. Use
+`auto-iter update --check-project` only when the current directory should be
+checked after refresh; if no AIT project state exists, the project check is
+skipped and `init` is not run.
 
 To reinstall after uninstall, use the same platform-appropriate install command
 from the AIT source checkout:

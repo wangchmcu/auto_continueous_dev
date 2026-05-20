@@ -1098,9 +1098,7 @@ def command_paths(bin_dir: Path) -> list[Path]:
     return [bin_dir / "auto-iter", bin_dir / "auto-iter.cmd"]
 
 
-def command_install(args: argparse.Namespace) -> int:
-    bin_dir = Path(args.bin_dir).expanduser().resolve()
-    skills_dir = Path(args.skills_dir).expanduser().resolve()
+def install_artifacts(bin_dir: Path, skills_dir: Path) -> tuple[Path, list[tuple[str, Path]]]:
     bin_dir.mkdir(parents=True, exist_ok=True)
     skills_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1121,13 +1119,10 @@ def command_install(args: argparse.Namespace) -> int:
         shutil.copytree(source_skill, target_skill, dirs_exist_ok=True)
         installed_skills.append((skill_name, target_skill))
         print(f"installed skill: {target_skill}")
-    verify_installation(command_path, installed_skills)
-    return 0
+    return command_path, installed_skills
 
 
-def command_uninstall(args: argparse.Namespace) -> int:
-    bin_dir = Path(args.bin_dir).expanduser().resolve()
-    skills_dir = Path(args.skills_dir).expanduser().resolve()
+def remove_installed_artifacts(bin_dir: Path, skills_dir: Path) -> None:
     removed_command = False
     for command_path in command_paths(bin_dir):
         if not command_path.exists():
@@ -1151,6 +1146,20 @@ def command_uninstall(args: argparse.Namespace) -> int:
         else:
             print(f"skill not installed: {skill_name} ({skill_dir})")
 
+
+def command_install(args: argparse.Namespace) -> int:
+    bin_dir = Path(args.bin_dir).expanduser().resolve()
+    skills_dir = Path(args.skills_dir).expanduser().resolve()
+    command_path, installed_skills = install_artifacts(bin_dir, skills_dir)
+    verify_installation(command_path, installed_skills)
+    return 0
+
+
+def command_uninstall(args: argparse.Namespace) -> int:
+    bin_dir = Path(args.bin_dir).expanduser().resolve()
+    skills_dir = Path(args.skills_dir).expanduser().resolve()
+    remove_installed_artifacts(bin_dir, skills_dir)
+
     remove_project_state = should_remove_project_state(args)
     if remove_project_state:
         remove_project_state_dirs()
@@ -1158,6 +1167,23 @@ def command_uninstall(args: argparse.Namespace) -> int:
         print("project state preserved")
 
     print("uninstall check: ok")
+    return 0
+
+
+def command_update(args: argparse.Namespace) -> int:
+    bin_dir = Path(args.bin_dir).expanduser().resolve()
+    skills_dir = Path(args.skills_dir).expanduser().resolve()
+    remove_installed_artifacts(bin_dir, skills_dir)
+    command_path, installed_skills = install_artifacts(bin_dir, skills_dir)
+    verify_installation(command_path, installed_skills)
+    print("project state preserved")
+    if args.check_project:
+        if DB_PATH.exists():
+            print("project check:")
+            command_doctor(argparse.Namespace())
+        else:
+            print("project check skipped: no AIT project state found; init not run")
+    print("update check: ok")
     return 0
 
 
@@ -3051,6 +3077,11 @@ def build_parser() -> argparse.ArgumentParser:
     project_state.add_argument("--keep-project-state", action="store_true")
     project_state.add_argument("--remove-project-state", action="store_true")
     uninstall.set_defaults(func=command_uninstall)
+    update = subparsers.add_parser("update")
+    update.add_argument("--bin-dir", default=str(default_bin_dir()))
+    update.add_argument("--skills-dir", default=str(default_skills_dir()))
+    update.add_argument("--check-project", action="store_true")
+    update.set_defaults(func=command_update)
     topic = subparsers.add_parser("topic")
     topic_sub = topic.add_subparsers(dest="topic_command", required=True)
     topic_current = topic_sub.add_parser("current")

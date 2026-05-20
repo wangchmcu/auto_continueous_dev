@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.21
+- current_version: v0.22
 - status: done
-- goal: 让项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，避免 AIT 把可选项目规则文件误写成必读状态源。
+- goal: 新增 `auto-iter update` 安装产物更新入口，默认保留项目状态、不运行 `init`。
 
 ## v0.1 任务清单
 
@@ -677,6 +677,41 @@ v0.21 之后仍未覆盖的全局能力：
 2. 存在项目根目录 `AGENTS.md` 时，`auto-iter handoff generate` 的读取顺序把该路径列在 handoff 前。
 3. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.22 任务清单
+
+- status: done
+- goal: 新增 `auto-iter update`，用于刷新已安装 wrapper 和 Codex skills，同时默认保留项目状态、不运行 `init`。
+- [x] 新增 `update` CLI 子命令，复用安装路径选择、卸载安全检查和安装自检。
+- [x] `auto-iter update` 默认只更新安装产物，不删除或创建项目状态目录。
+- [x] 新增 `--check-project`：当前目录已有 AIT 状态时运行 `doctor`；没有状态时输出 skipped，不执行 `init`。
+- [x] README、AGENTS、entry skill 和 workflow skill 说明“更新 AIT”使用 `auto-iter update`。
+- [x] 测试覆盖 update 保留项目状态、刷新安装产物、不默认初始化项目、可选 project check。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.22 距离 global plan
+
+v0.22 覆盖 Codex 入口能力中的安装产物更新入口，减少用户把“更新 AIT”和“初始化项目状态”混在一起的风险。
+
+v0.22 已覆盖的全局能力：
+
+- 用户可用一个命令刷新 `auto-iter` wrapper 和 installed skills。
+- update 默认保留项目状态，避免误删长期 tracking 信息。
+- update 默认不运行 `init`，避免在错误目录创建 AIT 状态。
+- 需要项目健康检查时通过 `--check-project` 显式触发。
+
+v0.22 之后仍未覆盖的全局能力：
+
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.22 验收标准
+
+1. `auto-iter update` 能刷新安装命令和 installed skills。
+2. `auto-iter update` 不删除已有 `state/`、`plans/` 等项目状态目录。
+3. 在空目录运行 `auto-iter update` 不创建项目状态目录。
+4. `auto-iter update --check-project` 在已有项目状态时执行 doctor；无项目状态时报告 skipped。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -758,6 +793,10 @@ v0.21 之后仍未覆盖的全局能力：
 ### v0.21
 
 - done：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，缺失时不创建、不报缺失。
+
+### v0.22
+
+- done：安装产物 update 入口。
 
 ### 后续可选
 

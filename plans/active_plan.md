@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.21。
+- 当前版本：v0.22。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -30,7 +30,8 @@
 - v0.19 已完成：本地模糊检索增强，使用 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）帮助找回“之前好像说过某个现象”的候选历史。
 - v0.20 已完成：handoff 增加 `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）Markdown projection（从已有记录摘出的可读视图，不是新的事实源），只保留主线入口和证据入口。
 - v0.21 已完成：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序；`auto-iter init` 不创建它，AIT 也不把它当状态源。
-- 下一阶段：根据实际使用感受评估 `Current Baseline` 和可选 `AGENTS.md` 读取顺序是否足以支撑旧项目接管，或继续 topic 生命周期管理增强。
+- v0.22 已完成：新增 `auto-iter update` 安装产物更新入口，默认保留项目状态、不运行 `init`，并支持显式 `--check-project`。
+- 下一阶段：根据实际使用感受评估 `Current Baseline`、可选 `AGENTS.md` 读取顺序和 `update` 入口是否足以支撑旧项目接管，或继续 topic 生命周期管理增强。
 
 ## 下一步
 
@@ -52,4 +53,5 @@
 16. 用户问“之前是不是说过某个现象”这类模糊历史问题时，agent 先运行 `auto-iter search query --text "<用户原话>" --limit 10 --explain`，再用结果中的 path、heading、`run_id`、`decision_id` 或 topic evidence 回到明确证据链。
 17. 新 session 恢复时先看 handoff 的 `Current Baseline` 段；该段只作为当前主线入口，细节仍回到 decision、run、artifact、topic evidence 和 plans。
 18. 项目根目录 `AGENTS.md` 是可选项目规则文件；handoff 只在该文件已经存在时列入读取顺序，缺失时不创建、不报缺失。
-19. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+19. 用户要求“更新 AIT”或“update AIT”时，使用 `auto-iter update` 刷新安装产物；默认不运行 `init`，需要检查当前项目状态时显式使用 `--check-project`。
+20. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
