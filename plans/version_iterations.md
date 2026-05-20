@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.19
+- current_version: v0.21
 - status: done
-- goal: 加入本地模糊检索增强，让用户只记得“之前好像说过某个现象”时能找到候选历史，再回到明确证据链。
+- goal: 让项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，避免 AIT 把可选项目规则文件误写成必读状态源。
 
 ## v0.1 任务清单
 
@@ -614,6 +614,69 @@ v0.19 之后仍未覆盖的全局能力：
 4. 命中 decision 时能通过 graph 结构关系带出 evidence run。
 5. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.20 任务清单
+
+- status: done
+- goal: 让 handoff 默认给出一个最小 `Current Baseline` 投影，恢复时先看到当前主线入口，而不是在 active decision、latest run、topic evidence 和 artifact 之间重新拼装。
+- [x] `handoff generate` 增加 `Current Baseline` 段。
+- [x] `Current Baseline` 从现有 active decision、latest successful run、run config、topic artifact evidence 生成，不新增数据库表。
+- [x] `handoff validate` 把 `Current Baseline` 作为必需章节。
+- [x] README、global plan、active plan 和 entry skill 说明新 session 先读 `Current Baseline`。
+- [x] 测试覆盖 `Current Baseline` 对 accepted start、accepted result、evaluation entry、provenance entry、diagnostic entry 的投影。
+
+## v0.20 距离 global plan
+
+v0.20 没有扩张新的事实源；它把当前主线入口落实到 handoff projection，仍以 SQLite、decision、run、artifact 和 topic evidence 为证据链。
+
+v0.20 已覆盖的全局能力：
+
+- fresh session 能在 handoff 里直接看到当前开发起点和证据入口。
+- `Current Baseline` 只放入口，不复制完整评估规则、产物来源或诊断详情。
+- 缺失 `Current Baseline` 的 handoff 会被 `handoff validate` 判为无效。
+
+v0.20 之后仍未覆盖的全局能力：
+
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.20 验收标准
+
+1. `auto-iter handoff generate` 默认静默，并生成 `Current Baseline`。
+2. `Current Baseline` 能从已有 run、decision、artifact 和 topic evidence 生成入口。
+3. `auto-iter handoff validate` 对缺失 `Current Baseline` 的 handoff 返回 invalid。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.21 任务清单
+
+- status: done
+- goal: 项目根目录 `AGENTS.md` 是可选 Codex 规则文件，不是 AIT 状态源；handoff 只在它已经存在时列入读取顺序。
+- [x] `handoff generate` 根据项目根目录 `AGENTS.md` 是否存在动态生成读取顺序。
+- [x] 缺失 `AGENTS.md` 时，读取顺序从 `handoffs/latest_handoff.md` 开始。
+- [x] 已存在 `AGENTS.md` 时，读取顺序把它列在 handoff 前。
+- [x] README、AGENTS、entry skill、workflow skill 和 global plan 说明该文件是可选项目规则入口。
+- [x] 测试覆盖存在和不存在 `AGENTS.md` 两种读取顺序。
+
+## v0.21 距离 global plan
+
+v0.21 没有新增事实源，也不让 AIT 初始化凭空创建项目规则文件。它把 handoff 读取顺序和初始化行为对齐，减少新项目接管时的误导。
+
+v0.21 已覆盖的全局能力：
+
+- 新项目缺少项目级 `AGENTS.md` 时不会出现缺失必读项。
+- 已有项目规则文件仍能在新 session 中优先被看到。
+- `AGENTS.md` 的定位保持为稳定流程规则，不承载实验历史或 AIT 状态。
+
+v0.21 之后仍未覆盖的全局能力：
+
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.21 验收标准
+
+1. 没有项目根目录 `AGENTS.md` 时，`auto-iter handoff generate` 的读取顺序不包含该路径。
+2. 存在项目根目录 `AGENTS.md` 时，`auto-iter handoff generate` 的读取顺序把该路径列在 handoff 前。
+3. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -687,6 +750,14 @@ v0.19 之后仍未覆盖的全局能力：
 ### v0.19
 
 - done：本地模糊检索增强，覆盖 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
+
+### v0.20
+
+- done：handoff `Current Baseline` 投影，恢复时先看到当前主线入口和证据入口。
+
+### v0.21
+
+- done：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，缺失时不创建、不报缺失。
 
 ### 后续可选
 

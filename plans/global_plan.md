@@ -39,7 +39,8 @@
 
 - 自动生成 `handoffs/latest_handoff.md`。
 - handoff 指向 run summaries、decisions、plans，而不是粘贴完整原始日志。
-- 新 Codex session 先读 `AGENTS.md`、handoff、global plan、version tracking、active plan。
+- handoff 生成 `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）Markdown projection（从已有记录摘出的可读视图，不是新的事实源），只放主线入口和证据入口，不复制完整评估规则、产物来源或诊断详情。
+- 新 Codex session 先读 handoff、global plan、version tracking、active plan；项目根目录存在 `AGENTS.md` 时才把它作为项目级 Codex 规则入口读取。
 - 后续增加 handoff 完整性校验，检查关键字段缺失。
 
 ### 5. 原始输入目录
@@ -419,6 +420,31 @@
 - 组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
 - 默认排除 `raw_input/`，保持 tracking 信息优先。
 - 搜索结果回指 path、heading、`run_id`、`decision_id` 或 topic evidence，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
+
+### v0.20：handoff Current Baseline 投影
+
+状态：done。
+
+目标：在 handoff 中直接给出当前开发主线入口，避免新 session 需要从 active decision、latest run、topic evidence 和 artifact 中重新拼装“当前干到哪里”。
+
+任务：
+
+- `handoff generate` 增加 `Current Baseline` 段。
+- `Current Baseline` 从现有 SQLite run、decision、artifact 和 topic evidence 生成，不新增数据库表。
+- README、entry skill、handoff validate 和测试覆盖该投影。
+
+### v0.21：可选项目规则文件读取顺序
+
+状态：done。
+
+目标：项目根目录的 `AGENTS.md` 是可选的 Codex 规则文件，不是 AIT 状态源；handoff 只在它已经存在时列入读取顺序。
+
+任务：
+
+- `handoff generate` 检查项目根目录 `AGENTS.md` 是否存在。
+- 文件存在时，读取顺序把它列在 handoff 前。
+- 文件不存在时，读取顺序从 `handoffs/latest_handoff.md` 开始，不制造缺失文件提示。
+- README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
 
 ### 后续可选：更重的语义检索
 

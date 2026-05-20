@@ -32,11 +32,15 @@ auto-iter doctor
 auto-iter resume
 ```
 
-3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
+3. Read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）, then read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 
 4. Run `auto-iter context index` before reading decisions. Read only decision projections listed by the index; if it reports orphan or stale projections, do not treat those Markdown files as current context.
 
 5. Do not read `raw_input/` by default. Read it only when starting a project for the first time or when later work explicitly needs missing information from original input. Anything useful found there must be written back into tracking information.
+
+If the generated handoff read order includes project-root `AGENTS.md`, read it
+as project-specific Codex process rules. If it is not listed, do not invent or
+require it; `auto-iter init` does not create project-root `AGENTS.md`.
 
 For first project setup, inspect possible raw input with:
 
@@ -222,7 +226,7 @@ auto-iter handoff validate
 
 `auto-iter handoff generate` is silent by default for Codex hook parsing. Use `auto-iter handoff generate --print-path` only for manual debugging. Do not use platform-specific shell redirection for this, so the hook remains compatible with Windows, WSL/Linux, and macOS.
 
-The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads after `AGENTS.md`.
+The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads unless the handoff read order lists an existing project-root `AGENTS.md` before it.
 
 When implementation scope changes, update `plans/global_plan.md` if the global capability set changes, then update `plans/version_iterations.md` so the next session can see the current version tasks.
 

@@ -36,11 +36,16 @@ auto-iter resume
 
 Then read:
 
-1. `plans/global_plan.md`
-2. `plans/version_iterations.md`
-3. `plans/active_plan.md`
-4. `topics/active_topic.md` if it exists
-5. decision entries listed by `auto-iter context index`
+1. `handoffs/latest_handoff.md`, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
+2. `plans/global_plan.md`
+3. `plans/version_iterations.md`
+4. `plans/active_plan.md`
+5. `topics/active_topic.md` if it exists
+6. decision entries listed by `auto-iter context index`
+
+If the generated handoff read order includes a project-root `AGENTS.md`, read it
+as project-specific Codex process rules. If it is not listed, do not invent or
+require it; `auto-iter init` does not create project-root `AGENTS.md`.
 
 If more detail is needed, use `auto-iter context index` first and then `auto-iter context show --path <file> --heading "<heading>"` for only the needed section. If `context index` reports an orphan or stale decision projection, do not treat that Markdown file as current context; SQLite is the factual source.
 

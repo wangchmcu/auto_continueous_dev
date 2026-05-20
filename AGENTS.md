@@ -91,3 +91,4 @@ auto-iter handoff validate
 - Markdown files under `plans/` track version-level implementation work and current engineering direction.
 - Demo or test histories may live under `examples/` when they document the test purpose and data boundary. Their sample IDs or parameters are not current project conclusions unless the current SQLite state contains matching records.
 - `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.
+- In a target project, project-root `AGENTS.md` is optional. AIT includes it in generated handoff read order only when the file already exists; do not create it merely to satisfy AIT initialization.

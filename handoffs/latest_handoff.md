@@ -5,8 +5,8 @@
 
 ## 当前快照
 - root: /home/ryan/auto_iteration
-- branch: master
-- commit: 588856e78f98c5aa54bdb290ba58bbe23120b27d
+- branch: search_enhance
+- commit: fdcbf80cf46b3b0cbaeeb264ff6c8670e7906ce1
 - latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
 - global_plan: /home/ryan/auto_iteration/plans/global_plan.md
@@ -17,6 +17,15 @@
 
 ## 当前 Topic
 - none
+
+## Current Baseline
+- accepted_start: decision D-7188530483: 十轮示例收敛到 weight 2.0 offset 1.5
+- accepted_result: run R-9723365f8f: dataset=ten-round-demo status=success
+- why_current: 第 10 轮使用 weight=2.0 和 offset=1.5，mean_absolute_error 达到 0.0。
+- evaluation_entry: /home/ryan/auto_iteration/decisions/active/D-7188530483.md
+- provenance_entry: /home/ryan/auto_iteration/runs/R-9723365f8f/config_resolved.json
+- diagnostic_entry: /home/ryan/auto_iteration/runs/R-9723365f8f/artifacts/report.md
+- last_confirmed_at: 2026-05-15T04:21:17+00:00
 
 ## Topic Evidence Links
 - none

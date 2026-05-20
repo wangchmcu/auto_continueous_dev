@@ -124,6 +124,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("context index --include-raw-input", skill_text)
         self.assertIn("--allow-raw-input", skill_text)
         self.assertIn("raw_input_source", skill_text)
+        self.assertIn("Current Baseline", skill_text)
+        self.assertIn("project-root `AGENTS.md`", skill_text)
+        self.assertIn("does not create project-root `AGENTS.md`", skill_text)
         self.assertIn("auto-iter uninstall", skill_text)
         self.assertIn("does not remove project state", skill_text)
         self.assertIn("--keep-project-state", skill_text)
@@ -1164,6 +1167,26 @@ class CliTests(unittest.TestCase):
         self.assertIn(str(handoff_path.resolve()), result.stdout)
         self.assertIn("generated", result.stdout)
 
+    def test_handoff_read_order_omits_missing_project_agents_file(self):
+        run_cli(self.tmp, "init")
+
+        run_cli(self.tmp, "handoff", "generate")
+
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn("## 读取顺序", handoff_text)
+        self.assertNotIn(str(self.tmp / "AGENTS.md"), handoff_text)
+        self.assertIn(f"1. {self.tmp / 'handoffs' / 'latest_handoff.md'}", handoff_text)
+
+    def test_handoff_read_order_includes_existing_project_agents_file(self):
+        run_cli(self.tmp, "init")
+        (self.tmp / "AGENTS.md").write_text("# Project Rules\n", encoding="utf-8")
+
+        run_cli(self.tmp, "handoff", "generate")
+
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn(f"1. {self.tmp / 'AGENTS.md'}", handoff_text)
+        self.assertIn(f"2. {self.tmp / 'handoffs' / 'latest_handoff.md'}", handoff_text)
+
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")
         config = self.tmp / "config.json"
@@ -1224,6 +1247,88 @@ class CliTests(unittest.TestCase):
         self.assertIn("雨天阈值使用 0.58", text)
         self.assertIn(str(artifact.resolve()), text)
         self.assertIn(str(handoff_path.resolve()), resume.stdout)
+
+    def test_handoff_includes_current_baseline_projection(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "ALN bad-frame follow-up",
+            "--summary",
+            "继续验证 final LSQ 选点边界",
+        ).stdout.strip().split()[-1]
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "diagnostic.md"
+        write_json(config, {"postprocess_version": 8, "gate": "valid_yaw_measurement"})
+        write_json(metrics, {"yaw_p95_p05_deg": {"value": 0.605269, "unit": "deg", "direction": "lower"}})
+        artifact.write_text("# diagnostic evidence\n", encoding="utf-8")
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "fr-split-demo",
+            "--command",
+            "python aln_postprocess.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            run_id,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "V8 remains the current SIL alignment reference",
+            "--claim",
+            "Use V8 as the accepted comparison start; keep FR split evaluation and do not treat Python-only output as C/SIL landing.",
+        ).stdout.strip().split()[-1]
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            artifact_id = db.execute("select artifact_id from artifacts where run_id = ?", (run_id,)).fetchone()[0]
+        run_cli(
+            self.tmp,
+            "topic",
+            "link",
+            "--topic-id",
+            topic_id,
+            "--run-id",
+            run_id,
+            "--decision-id",
+            decision_id,
+            "--artifact-id",
+            artifact_id,
+            "--summary",
+            "baseline, evaluation, provenance, and diagnostic entries",
+        )
+
+        run_cli(self.tmp, "handoff", "generate")
+
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn("## Current Baseline", handoff_text)
+        self.assertIn(f"accepted_start: decision {decision_id}: V8 remains the current SIL alignment reference", handoff_text)
+        self.assertIn(f"accepted_result: run {run_id}: dataset=fr-split-demo status=success", handoff_text)
+        self.assertIn("why_current: Use V8 as the accepted comparison start", handoff_text)
+        self.assertIn(f"evaluation_entry: {self.tmp / 'decisions' / 'active' / (decision_id + '.md')}", handoff_text)
+        self.assertIn(f"provenance_entry: {self.tmp / 'runs' / run_id / 'config_resolved.json'}", handoff_text)
+        self.assertIn(f"diagnostic_entry: {artifact.resolve()}", handoff_text)
 
     def test_handoff_uses_newest_success_when_runs_share_timestamp(self):
         run_cli(self.tmp, "init")

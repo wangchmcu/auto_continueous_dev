@@ -346,7 +346,9 @@ The agent should:
 - run `auto-iter doctor`
 - run `auto-iter resume`
 - run `auto-iter context index`
+- read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
 - read `plans/global_plan.md`, `plans/version_iterations.md`, `plans/active_plan.md`, and the relevant decisions
+- read project-root `AGENTS.md` only when it exists; `auto-iter init` does not create it and AIT does not require it as a state source
 - avoid `raw_input/` unless this is initial setup or explicit missing-information lookup
 - summarize current goal, active decisions, rejected routes, and next minimum experiment
 
@@ -430,11 +432,12 @@ auto-iter context show --path plans/global_plan.md --heading "Global Plan"
 
 - `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `decisions/`: readable decision projections. A projection is current context only when the same `decision_id` and status still exist in SQLite; orphan or stale projections are skipped by `context index` and reported by `handoff validate`.
-- `handoffs/latest_handoff.md`: fresh-session entry point.
+- `handoffs/latest_handoff.md`: fresh-session entry point. Its `Current Baseline` section is a Markdown projection（从已有记录摘出的可读视图，不是新的事实源）that points to the accepted start, accepted result, evaluation entry, provenance entry, and diagnostic entry.
 - `raw_input/`: original input materials and old project imports.
 - `plans/global_plan.md`: global plan for the full context-management system.
 - `plans/version_iterations.md`: version-level task tracker.
 - `plans/active_plan.md`: current engineering direction.
+- project-root `AGENTS.md`: optional Codex process rules for the target project. It is included in handoff read order only when the file already exists.
 - `skills/auto-iteration-entry/SKILL.md`: Codex entry skill installed by `auto-iter install`.
 - `skills/auto-it-self-improve/SKILL.md`: explicit-trigger skill for generalizing solved workflow problems into reusable system improvements.
 - `runs/<run_id>/config_resolved.json`: resolved config snapshot.

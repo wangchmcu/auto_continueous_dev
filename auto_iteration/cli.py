@@ -392,7 +392,7 @@ GLOBAL_PLAN_TEMPLATE = """# Global Plan
 
 - 自动生成 `handoffs/latest_handoff.md`。
 - handoff 指向 run summaries、decisions、plans，而不是粘贴完整原始日志。
-- 新 Codex session 先读 `AGENTS.md`、handoff、global plan、version tracking、active plan。
+- 新 Codex session 先读 handoff、global plan、version tracking、active plan；项目根目录存在 `AGENTS.md` 时才把它作为项目级 Codex 规则入口读取。
 - 已增加 handoff 完整性校验，检查关键字段缺失。
 
 ### 5. 原始输入目录
@@ -2050,6 +2050,92 @@ def artifact_lines(db: sqlite3.Connection, run_id: str) -> list[str]:
     return [f"  - {row['kind']}: {row['path']}" for row in rows]
 
 
+def current_baseline_lines(
+    db: sqlite3.Connection,
+    success: sqlite3.Row | None,
+    active: list[sqlite3.Row],
+    current_topic: sqlite3.Row | None,
+) -> list[str]:
+    primary_decision = active[0] if active else None
+    if primary_decision:
+        accepted_start = f"decision {primary_decision['decision_id']}: {primary_decision['title']}"
+        why_current = primary_decision["claim"]
+        evaluation_entry = str(decision_path(primary_decision["status"], primary_decision["decision_id"]).resolve())
+        last_confirmed_at = primary_decision["created_at"]
+    elif success:
+        accepted_start = f"run {success['run_id']}: dataset={success['dataset_id']} status={success['status']}"
+        why_current = current_topic["summary"] if current_topic and current_topic["summary"] else "not recorded"
+        evaluation_entry = "not recorded"
+        last_confirmed_at = success["ended_at"] or success["started_at"]
+    else:
+        accepted_start = "not recorded"
+        why_current = current_topic["summary"] if current_topic and current_topic["summary"] else "not recorded"
+        evaluation_entry = "not recorded"
+        last_confirmed_at = "not recorded"
+
+    if success:
+        accepted_result = f"run {success['run_id']}: dataset={success['dataset_id']} status={success['status']}"
+        provenance_entry = str((run_dir(success["run_id"]) / "config_resolved.json").resolve())
+    else:
+        accepted_result = "not recorded"
+        provenance_entry = "not recorded"
+
+    diagnostic_entry = "not recorded"
+    if current_topic:
+        topic_artifact = db.execute(
+            """
+            select artifacts.path
+            from topic_evidence_links
+            join artifacts on artifacts.artifact_id = topic_evidence_links.evidence_id
+            where topic_evidence_links.topic_id = ?
+              and topic_evidence_links.evidence_type = 'artifact'
+            order by topic_evidence_links.created_at desc, topic_evidence_links.rowid desc
+            limit 1
+            """,
+            (current_topic["topic_id"],),
+        ).fetchone()
+        if topic_artifact:
+            diagnostic_entry = topic_artifact["path"]
+    if diagnostic_entry == "not recorded" and success:
+        run_artifact = db.execute(
+            "select path from artifacts where run_id = ? order by path limit 1",
+            (success["run_id"],),
+        ).fetchone()
+        if run_artifact:
+            diagnostic_entry = run_artifact["path"]
+
+    return [
+        f"- accepted_start: {accepted_start}",
+        f"- accepted_result: {accepted_result}",
+        f"- why_current: {why_current}",
+        f"- evaluation_entry: {evaluation_entry}",
+        f"- provenance_entry: {provenance_entry}",
+        f"- diagnostic_entry: {diagnostic_entry}",
+        f"- last_confirmed_at: {last_confirmed_at}",
+    ]
+
+
+def handoff_read_order_lines() -> list[str]:
+    entries = []
+    agents_path = root() / "AGENTS.md"
+    if agents_path.exists():
+        entries.append(str(agents_path))
+    entries += [
+        str(root() / "handoffs" / "latest_handoff.md"),
+        str(root() / "plans" / "global_plan.md"),
+        str(root() / "plans" / "version_iterations.md"),
+        str(root() / "plans" / "active_plan.md"),
+        str(active_topic_path()),
+        str(root() / "state" / "agent_state.db"),
+        f"{root() / 'decisions'}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
+        "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
+        "只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
+        "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
+        "只有初次开始项目或明确缺失信息时才读取 raw_input/。",
+    ]
+    return [f"{index}. {entry}" for index, entry in enumerate(entries, start=1)]
+
+
 def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     write_topic_projections(db)
     success, failed = latest_runs(db)
@@ -2090,6 +2176,9 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     else:
         lines.append("- none")
     lines += [
+        "",
+        "## Current Baseline",
+        *current_baseline_lines(db, success, active, current_topic),
         "",
         "## Topic Evidence Links",
     ]
@@ -2140,18 +2229,7 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         "4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。",
         "",
         "## 读取顺序",
-        f"1. {root() / 'AGENTS.md'}",
-        f"2. {root() / 'handoffs' / 'latest_handoff.md'}",
-        f"3. {root() / 'plans' / 'global_plan.md'}",
-        f"4. {root() / 'plans' / 'version_iterations.md'}",
-        f"5. {root() / 'plans' / 'active_plan.md'}",
-        f"6. {active_topic_path()}",
-        f"7. {root() / 'state' / 'agent_state.db'}",
-        f"8. {root() / 'decisions'}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
-        "9. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
-        "10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
-        "11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
-        "12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。",
+        *handoff_read_order_lines(),
         "",
     ]
     return "\n".join(lines), success["run_id"] if success else None
@@ -2163,6 +2241,7 @@ def validate_handoff_text(text: str) -> list[str]:
         "## 当前目标",
         "## 当前快照",
         "## 当前 Topic",
+        "## Current Baseline",
         "## Topic Evidence Links",
         "## 最近成功实验",
         "## 当前有效结论",
