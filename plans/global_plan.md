@@ -73,13 +73,17 @@
 
 ### 8. Topic Archive（按 topic 归档和按需载入）
 
-- 任何时刻最多只有一个 `active` topic；它是默认进入上下文、默认承接新计划和交接的当前问题方向。
-- 非当前 topic 进入 archive，不默认载入；archive 内区分 `archived_open` 和 `archived_satisfied`。
+- `default topic`（默认 topic：项目级默认恢复入口，兼容旧的 `active topic` 语义）用于新 session 的默认读取和单 topic 工作流。
+- `topic_id` 是 topic 的事实绑定入口；多 Codex thread 并行工作时，写入命令应通过 `--topic-id` 或 `AUTO_ITER_TOPIC_ID` 绑定到指定 topic。
+- 非默认 topic 可以保持打开状态并被显式读取、计划和交接，不应因为另一个 thread 工作而被强制切走。
+- archive 内区分 `archived_open` 和 `archived_satisfied`。
 - `archived_open` 表示已归档但问题仍打开，切回时默认继续工作。
 - `archived_satisfied` 表示阶段性达到预期，不等于永久结束；切回时记录重开事件并恢复为 active。
-- topic 事实记录在 SQLite，Markdown 投影写入 `topics/active_topic.md`、`topics/index.md` 和 `topics/archive/<topic_id>.md`。
+- topic 事实记录在 SQLite，Markdown 投影写入 `topics/active_topic.md`、`topics/index.md`、`topics/<topic_id>/` 和兼容 archive 文件。
 - 显式 topic 切换短句可直接触发 topic 命令；语义疑似切换时必须先问用户“是不是已经切入新的 topic 了？”。
 - topic evidence link（topic 证据关联）把 topic 与相关 run、decision、artifact 建立可查询关联，避免恢复 topic 时逐个翻找历史。
+- topic plan（topic 内计划：单个 topic 的目标、非目标、任务状态、验收、停止条件和升级条件）承担类似 Jira 的局部看板；global plan 只保留长期方向、模板、跨 topic 总览规则和升级规则。
+- project board（项目 topic 总览：跨 topic 的 open、doing、blocked、done 摘要）承担类似 Jira 的全局看板，不把单个 topic 的细节塞进 global plan。
 
 ### 9. 自然语言接力入口
 
@@ -158,6 +162,13 @@
 - topic 生命周期管理：支持 topic rename、merge、delete、prune，以及更明确的 reopen history。
 - 目标是长期维护 topic archive，避免 archive 自身变成新的上下文噪音。
 - 所有删除或 prune 行为必须保守，不能破坏已有证据链。
+
+### topic plan and multi-thread topic binding
+
+- topic plan：为每个 topic 提供局部计划和任务状态，包含 goal、non_goals、todo、doing、done、blocked、acceptance、stop_conditions、escalation_conditions、evidence。
+- topic scoped handoff（topic 级交接）：为单个 topic 生成独立 handoff，避免多 Codex thread 并行时互相覆盖 `handoffs/latest_handoff.md`。
+- topic_id 绑定：写入命令按 `--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 的顺序解析 topic；多个 open topic 场景下不能静默错绑。
+- global plan 瘦身：global plan 保留长期方向、topic 模板、跨 topic 总览规则、升级规则和 backlog；topic 细节放入 topic plan、topic handoff 和 project board。
 
 ## 版本路线
 
@@ -459,6 +470,124 @@
 - 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
 - `run exec` 从解析后的项目根目录记录和执行命令；需要实际进入子目录时，由 `--command` 显式 `cd`。
 - README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
+
+### v0.23：topic_id 解析和 default topic 兼容层
+
+状态：done。
+
+目标：保留旧 `active topic` 兼容入口，同时建立 `topic_id` 写入路径和 resolved topic 可见性，为多 Codex thread 并行工作打基础。
+
+任务：
+
+- 新增统一 topic 解析：`--topic-id` 参数优先，其次 `AUTO_ITER_TOPIC_ID` 环境变量，最后回退 default topic。
+- `auto-iter doctor` 输出 resolved topic 和来源。
+- 文档把 `active topic` 解释为 default topic 兼容入口，不再解释成唯一正在工作的 topic。
+
+### v0.24：topic plan 基础结构
+
+状态：done。
+
+目标：为每个 topic 增加 topic plan 事实源和 Markdown projection。
+
+任务：
+
+- 新增 `topic_plans` 表。
+- 新增 `topic plan set/show/current` 命令。
+- 生成 `topics/<topic_id>/plan.md` 和 default topic plan 兼容投影。
+- `context index` 纳入 topic plan。
+
+### v0.25：topic 内任务状态
+
+状态：done。
+
+目标：让 topic plan 具备类似 Jira 的 todo、doing、done、blocked、dropped 任务状态。
+
+任务：
+
+- 新增 `topic_plan_items` 表。
+- 新增 `topic task add/set/list` 命令。
+- done/blocked 任务可关联 run、decision、artifact。
+
+### v0.26：topic 级 handoff 和 checkpoint
+
+状态：done。
+
+目标：为单个 topic 生成独立 handoff 和 checkpoint，避免多 thread 互相覆盖项目级 handoff。
+
+任务：
+
+- 新增 `topics/<topic_id>/latest_handoff.md`。
+- `handoff generate` 和 `checkpoint save` 支持 `--topic-id`。
+- 项目级 handoff 显示 default topic、最近更新 topic、open topic 和 blocked topic 摘要。
+
+### v0.27：project board 跨 topic 总览
+
+状态：done。
+
+目标：提供类似 Jira 的项目级 topic 看板，不让 global plan 承担细任务。
+
+任务：
+
+- 生成 `topics/board.md`。
+- 新增 `topic board` 命令。
+- 总览 open、doing、blocked、recent done、ready to satisfy 的 topic 和 task。
+
+### v0.28：context index 和 search 完整接入
+
+状态：done。
+
+目标：topic plan、topic handoff、project board 全部进入按需读取和本地搜索。
+
+任务：
+
+- `context index` 纳入 `topics/<topic_id>/plan.md`、`topics/<topic_id>/latest_handoff.md`、`topics/board.md`。
+- search graph 增加 topic 到 plan、handoff、task、evidence 的关系边。
+
+### v0.29：写入安全和多 thread 防错
+
+状态：done。
+
+目标：多个 open topic 场景下，写入命令不能静默落到错误 topic。
+
+任务：
+
+- 多 open topic 时，关键写入命令要求显式 `--topic-id`、`AUTO_ITER_TOPIC_ID` 或 `--allow-default-topic`。
+- 写入输出必须显示 resolved topic 和来源。
+
+### v0.30：global plan 瘦身和模板化
+
+状态：done。
+
+目标：把 global plan 调整为长期方向、topic 模板、升级规则和跨 topic 摘要规则，不承载 topic 细节。
+
+任务：
+
+- 从 global plan 移出单 topic 任务细节。
+- 保留 topic 模板、project board 读取规则、升级到 active_plan/version_iterations 的规则。
+
+### v0.31：docs、skills、安装同步
+
+状态：done。
+
+目标：让 Codex agent 能用自然语言稳定操作 topic plan、topic board 和 topic-scoped handoff。
+
+任务：
+
+- 更新 README、AGENTS、entry skill、workflow skill。
+- 安装后同步 Codex skills。
+- 增加自然语言触发规则和测试。
+
+### v0.32：迁移和兼容清理
+
+状态：done。
+
+目标：旧项目平滑升级到 topic_id/default topic/topic plan 结构。
+
+任务：
+
+- 旧 `active topic` 自动映射为 default topic。
+- 没有 topic plan 的旧 topic 自动生成空 plan。
+- handoff validate 先 warning，再按后续版本收紧。
 
 ### 后续可选：更重的语义检索
 

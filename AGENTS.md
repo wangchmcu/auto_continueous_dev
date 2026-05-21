@@ -54,6 +54,13 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - If the user asks to uninstall or reinstall AIT, use `auto-iter uninstall` for installed command and skill removal. In interactive use, let the uninstall prompt ask whether to remove project state directories and explain what they contain. In non-interactive use, pass `--keep-project-state` unless the user explicitly asks to delete project state; only then use `--remove-project-state`.
 - Install should prefer an operating-system-appropriate command directory already on `PATH` and writable. If none exists, install into a user-owned fallback and print a path hint; do not edit shell startup files or mutate the user's environment without an explicit user opt-in.
 - If the user explicitly says “开启 topic”, “切换 topic”, “回到某个 topic”, or “当前 topic 达到预期”, use `auto-iter topic current/list/show/start/switch/satisfy` as appropriate. If the prompt only semantically appears to move to a new issue or direction, first ask “是不是已经切入新的 topic 了？” and switch only after the user confirms.
+- Treat the old `active topic` as the default topic for ordinary recovery, not as the only topic that can be worked on. Topic resolution order is explicit `--topic-id`, then `AUTO_ITER_TOPIC_ID`, then default topic. Use `auto-iter doctor` to confirm the resolved topic before writing records.
+- Use `auto-iter topic plan set/show/current` for topic-local goals, non-goals, acceptance checks, stop conditions, and escalation conditions. Topic plan is planning state only; claims still require `decision add` with run evidence.
+- Use `auto-iter topic task add/set/list` for topic-local todo, doing, done, blocked, and dropped items. Task state does not replace decisions or topic evidence links.
+- Use `auto-iter topic board` for the cross-topic project view. It writes `topics/board.md`; do not move per-topic task detail into `plans/global_plan.md`.
+- In multi-thread work, use `auto-iter handoff generate --topic-id <id>` and `auto-iter checkpoint save --topic-id <id> --text "<text>"` for topic-scoped state so one thread does not overwrite another thread's topic handoff.
+- If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`; do not silently rely on the default topic.
+- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed topic projections.
 - If a topic has clear supporting evidence, link it explicitly with `auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"`; inspect linked evidence with `auto-iter topic evidence --topic-id <id>`.
 - If the user proposes new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 
@@ -88,7 +95,7 @@ auto-iter handoff validate
 
 - SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
 - Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex. A decision projection is valid current context only if the matching record still exists in SQLite with the same status.
-- Markdown files under `topics/` are readable topic projections; `topics/active_topic.md` is default context, and `topics/archive/` is loaded only on user request or confirmed topic switch.
+- Markdown files under `topics/` are readable topic projections; `topics/active_topic.md` is the default-topic compatibility projection, and `topics/archive/` is loaded only on user request or confirmed topic switch.
 - Topic evidence links live in SQLite and connect a topic to related run、decision、artifact records; Markdown topic projections and handoff only summarize those links.
 - Markdown files under `plans/` track version-level implementation work and current engineering direction.
 - Demo or test histories may live under `examples/` when they document the test purpose and data boundary. Their sample IDs or parameters are not current project conclusions unless the current SQLite state contains matching records.

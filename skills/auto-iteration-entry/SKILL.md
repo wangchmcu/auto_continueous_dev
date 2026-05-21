@@ -139,8 +139,11 @@ WSL/Linux Codex CLI or macOS Codex app: python3 -m auto_iteration.cli install
 
 ## Topic Archive
 
-Topic archive keeps only one `active` topic in default context. All other
-topics are archived and loaded only when the user asks or confirms a switch.
+Topic archive keeps one default topic for ordinary recovery. The default topic
+is the old `active` topic compatibility path; it is not the only topic a Codex
+thread may work on. Commands that support topic resolution use this order:
+explicit `--topic-id`, then `AUTO_ITER_TOPIC_ID`, then the default topic.
+Run `auto-iter doctor` to inspect the resolved topic before writing records.
 
 Use these commands:
 
@@ -153,17 +156,35 @@ auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
 auto-iter topic satisfy --summary "<阶段性达到的预期>"
 auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"
 auto-iter topic evidence --topic-id <id>
+auto-iter topic plan set --topic-id <id> --goal "<目标>" --non-goal "<不做什么>" --acceptance "<验收标准>"
+auto-iter topic plan show --topic-id <id>
+auto-iter topic plan current
+auto-iter topic task add --topic-id <id> --title "<任务>" --description "<说明>" --acceptance "<验收>"
+auto-iter topic task set --item-id <item-id> --status <todo|doing|done|blocked|dropped>
+auto-iter topic task list --topic-id <id>
+auto-iter topic board
+auto-iter handoff generate --topic-id <id>
+auto-iter handoff validate --topic-id <id>
+auto-iter checkpoint save --topic-id <id> --text "<用户原话>"
+auto-iter migrate
 ```
 
 Rules:
 
-- There can be at most one `active` topic.
-- Starting or switching topics archives the previous active topic as `archived_open`.
+- There can be at most one default topic in the old `active` slot.
+- Starting or switching the default topic archives the previous default topic as `archived_open`.
 - `archived_open` means archived but still open; switching back should continue work.
 - `archived_satisfied` means the current expectation is satisfied, not permanently finished; switching back reopens it.
+- Multi-thread work should prefer explicit `--topic-id` or `AUTO_ITER_TOPIC_ID` instead of switching the default topic just to record one topic.
+- If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`.
 - If a new prompt only looks like a new topic semantically, ask “是不是已经切入新的 topic 了？” before running any topic switch command.
 - New sessions read `handoffs/latest_handoff.md` and `topics/active_topic.md`; archived topic files under `topics/archive/` are loaded only on demand.
 - When a topic has clear supporting evidence, link the relevant run, decision, or artifact with `auto-iter topic link` so future sessions can use `auto-iter topic evidence` instead of manually searching all history.
+- When a topic starts to carry local planning work, use `auto-iter topic plan set/show/current`; keep topic tasks and acceptance checks in topic plan, while final claims still go through `decision add` with evidence.
+- Use `auto-iter topic task add/set/list` for topic-local task status. Marking a task done does not replace `decision add` or `topic link`.
+- Use `auto-iter topic board` for the cross-topic project view; keep per-topic detail in topic plan, topic handoff, and topic board instead of global plan.
+- Use topic-scoped handoff or checkpoint commands when separate Codex threads work on separate topics. They write `topics/<topic_id>/latest_handoff.md`.
+- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed projections.
 
 ## Before A New Experiment Route
 

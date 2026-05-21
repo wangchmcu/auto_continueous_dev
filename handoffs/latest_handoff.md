@@ -6,7 +6,7 @@
 ## 当前快照
 - root: /home/ryan/auto_iteration
 - branch: search_enhance
-- commit: fbf50e588dbc639486cc8e13d25414d6766854e4
+- commit: b43eb528c353bb3f5f6609edf04193047970fc21
 - latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
 - global_plan: /home/ryan/auto_iteration/plans/global_plan.md
@@ -14,8 +14,22 @@
 - active_plan: /home/ryan/auto_iteration/plans/active_plan.md
 - active_topic: /home/ryan/auto_iteration/topics/active_topic.md
 - topic_index: /home/ryan/auto_iteration/topics/index.md
+- topic_board: /home/ryan/auto_iteration/topics/board.md
 
 ## 当前 Topic
+- none
+
+## Topic Summary
+### Default Topic
+- none
+
+### Recently Updated Topics
+- none
+
+### Open Topics
+- none
+
+### Blocked Topic Tasks
 - none
 
 ## Current Baseline
@@ -58,9 +72,10 @@
 4. /home/ryan/auto_iteration/plans/version_iterations.md
 5. /home/ryan/auto_iteration/plans/active_plan.md
 6. /home/ryan/auto_iteration/topics/active_topic.md
-7. /home/ryan/auto_iteration/state/agent_state.db
-8. /home/ryan/auto_iteration/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
-9. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。
-10. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
-11. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
-12. 只有初次开始项目或明确缺失信息时才读取 raw_input/。
+7. /home/ryan/auto_iteration/topics/board.md
+8. /home/ryan/auto_iteration/state/agent_state.db
+9. /home/ryan/auto_iteration/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
+10. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。
+11. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
+12. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。
+13. 只有初次开始项目或明确缺失信息时才读取 raw_input/。

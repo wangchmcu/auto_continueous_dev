@@ -90,8 +90,11 @@ explicitly opts in.
 
 ## Topic Archive
 
-Use topic archive when the user wants to keep only one current issue/direction
-in default context and load older work on demand.
+Use topic archive when the user wants a default issue/direction for ordinary
+recovery and a way to load older work on demand. The default topic is the old
+`active` topic compatibility path. Commands resolve a topic in this order:
+explicit `--topic-id`, then `AUTO_ITER_TOPIC_ID`, then the default topic. Run
+`auto-iter doctor` to inspect the resolved topic before recording work.
 
 ```bash
 auto-iter topic current
@@ -102,16 +105,34 @@ auto-iter topic switch --topic-id <id> --current-summary "<当前现场摘要>"
 auto-iter topic satisfy --summary "<阶段性达到的预期>"
 auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"
 auto-iter topic evidence --topic-id <id>
+auto-iter topic plan set --topic-id <id> --goal "<目标>" --non-goal "<不做什么>" --acceptance "<验收标准>"
+auto-iter topic plan show --topic-id <id>
+auto-iter topic plan current
+auto-iter topic task add --topic-id <id> --title "<任务>" --description "<说明>" --acceptance "<验收>"
+auto-iter topic task set --item-id <item-id> --status <todo|doing|done|blocked|dropped>
+auto-iter topic task list --topic-id <id>
+auto-iter topic board
+auto-iter handoff generate --topic-id <id>
+auto-iter handoff validate --topic-id <id>
+auto-iter checkpoint save --topic-id <id> --text "<用户原话>"
+auto-iter migrate
 ```
 
 Rules:
 
-- There is at most one `active` topic.
-- Non-current topics are archived as `archived_open` or `archived_satisfied`.
+- There is at most one default topic in the old `active` slot.
+- Non-default topics can be addressed explicitly and may be archived as `archived_open` or `archived_satisfied`.
 - `archived_satisfied` means stage expectations are met; it can still be reopened.
+- Multi-thread work should prefer explicit `--topic-id` or `AUTO_ITER_TOPIC_ID` instead of switching the default topic just to record one topic.
+- If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`.
 - When a prompt only seems to change topic semantically, ask “是不是已经切入新的 topic 了？” before switching.
 - Read `topics/active_topic.md` by default; load `topics/archive/` only on user request or confirmed topic switch.
 - Link clear supporting runs, decisions, and artifacts with `auto-iter topic link`; inspect the evidence chain later with `auto-iter topic evidence`.
+- Use `topic plan` for local topic goals, non-goals, acceptance checks, stop conditions, and escalation conditions. Do not use it as a substitute for decisions or run evidence.
+- Use `topic task` for topic-local todo, doing, done, blocked, and dropped items. Task status is planning state; completed claims still need decisions and evidence links.
+- Use `topic board` for cross-topic status; keep detailed topic tasks in topic plan, topic handoff, and board rather than global plan.
+- Use topic-scoped handoff or checkpoint commands for parallel Codex threads. They write `topics/<topic_id>/latest_handoff.md`.
+- Use `auto-iter migrate` after upgrading old project state so legacy topics get empty topic plans and refreshed projections.
 
 ## Before A New Experiment
 

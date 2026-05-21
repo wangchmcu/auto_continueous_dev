@@ -14,9 +14,11 @@ from auto_iteration import cli
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_cli(workdir, *args, check=True):
+def run_cli(workdir, *args, check=True, env_extra=None):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPO_ROOT)
+    if env_extra:
+        env.update(env_extra)
     result = subprocess.run(
         [sys.executable, "-m", "auto_iteration.cli", *args],
         cwd=workdir,
@@ -127,6 +129,97 @@ class CliTests(unittest.TestCase):
         self.assertEqual(1, len(list((self.tmp / "runs").glob("R-*"))))
         self.assertFalse((subdir / "runs").exists())
 
+    def test_doctor_reports_no_resolved_topic_without_default(self):
+        run_cli(self.tmp, "init")
+
+        doctor = run_cli(self.tmp, "doctor")
+
+        self.assertIn("resolved_topic_id: none", doctor.stdout)
+        self.assertIn("resolved_topic_source: none", doctor.stdout)
+
+    def test_doctor_resolves_default_topic_when_no_override_exists(self):
+        run_cli(self.tmp, "init")
+        started = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Default Topic",
+            "--summary",
+            "Default topic summary",
+        )
+        topic_id = started.stdout.strip().split()[-1]
+
+        doctor = run_cli(self.tmp, "doctor")
+
+        self.assertIn(f"resolved_topic_id: {topic_id}", doctor.stdout)
+        self.assertIn("resolved_topic_source: default_topic", doctor.stdout)
+
+    def test_doctor_resolves_topic_from_environment_before_default(self):
+        run_cli(self.tmp, "init")
+        first = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic A",
+            "--summary",
+            "Topic A summary",
+        )
+        topic_a = first.stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic B",
+            "--summary",
+            "Topic B summary",
+            "--current-summary",
+            "Switch from Topic A",
+        )
+
+        doctor = run_cli(self.tmp, "doctor", env_extra={"AUTO_ITER_TOPIC_ID": topic_a})
+
+        self.assertIn(f"resolved_topic_id: {topic_a}", doctor.stdout)
+        self.assertIn("resolved_topic_source: environment", doctor.stdout)
+
+    def test_doctor_resolves_explicit_topic_before_environment(self):
+        run_cli(self.tmp, "init")
+        first = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic A",
+            "--summary",
+            "Topic A summary",
+        )
+        topic_a = first.stdout.strip().split()[-1]
+        second = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic B",
+            "--summary",
+            "Topic B summary",
+            "--current-summary",
+            "Switch from Topic A",
+        )
+        topic_b = second.stdout.strip().split()[-1]
+
+        doctor = run_cli(
+            self.tmp,
+            "doctor",
+            "--topic-id",
+            topic_b,
+            env_extra={"AUTO_ITER_TOPIC_ID": topic_a},
+        )
+
+        self.assertIn(f"resolved_topic_id: {topic_b}", doctor.stdout)
+        self.assertIn("resolved_topic_source: argument", doctor.stdout)
+
     def test_install_creates_short_command_and_entry_skill(self):
         run_cli(self.tmp, "init")
         bin_dir = self.tmp / "bin"
@@ -165,6 +258,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("fixed tool and skill names", skill_text)
         self.assertIn("installed absolute command path", skill_text)
         self.assertIn("context index --include-raw-input", skill_text)
+        self.assertIn("auto-iter topic board", skill_text)
+        self.assertIn("auto-iter handoff generate --topic-id", skill_text)
+        self.assertIn("auto-iter migrate", skill_text)
         self.assertIn("--allow-raw-input", skill_text)
         self.assertIn("raw_input_source", skill_text)
         self.assertIn("Current Baseline", skill_text)
@@ -479,9 +575,366 @@ class CliTests(unittest.TestCase):
         self.assertIn(str((self.tmp / "topics" / "active_topic.md").resolve()), handoff_text)
         self.assertIn("topic_index", handoff_text)
         self.assertIn(str((self.tmp / "topics" / "index.md").resolve()), handoff_text)
+        self.assertIn("topic_board", handoff_text)
+        self.assertIn(str((self.tmp / "topics" / "board.md").resolve()), handoff_text)
         self.assertIn("是不是已经切入新的 topic 了", skill_text)
         self.assertIn("auto-iter topic", skill_text)
         self.assertIn("install check: ok", installed.stdout)
+
+    def test_topic_plan_set_show_current_and_context_index(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic Plan MVP",
+            "--summary",
+            "需要 topic 内计划",
+        ).stdout.strip().split()[-1]
+
+        saved = run_cli(
+            self.tmp,
+            "topic",
+            "plan",
+            "set",
+            "--topic-id",
+            topic_id,
+            "--goal",
+            "让当前 topic 有清晰验收",
+            "--non-goal",
+            "不替代 decision 结论",
+            "--acceptance",
+            "topic plan 能被 context index 找到",
+            "--stop-condition",
+            "验收项全部满足",
+            "--escalation-condition",
+            "影响多个 topic 时升级到 active_plan",
+        )
+        plan_path = self.tmp / "topics" / topic_id / "plan.md"
+        default_plan_path = self.tmp / "topics" / "default_topic_plan.md"
+
+        self.assertIn(f"saved topic plan {topic_id}", saved.stdout)
+        self.assertTrue(plan_path.exists())
+        self.assertTrue(default_plan_path.exists())
+
+        shown = run_cli(self.tmp, "topic", "plan", "show", "--topic-id", topic_id)
+        current = run_cli(self.tmp, "topic", "plan", "current")
+        index = run_cli(self.tmp, "context", "index")
+
+        self.assertIn("让当前 topic 有清晰验收", shown.stdout)
+        self.assertIn("不替代 decision 结论", shown.stdout)
+        self.assertIn("影响多个 topic 时升级到 active_plan", current.stdout)
+        self.assertIn(f"topics/{topic_id}/plan.md", index.stdout)
+        self.assertIn("topics/default_topic_plan.md", index.stdout)
+
+    def test_topic_write_uses_environment_topic_id_and_reports_resolution(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Environment Topic",
+            "--summary",
+            "用环境变量指定 topic",
+        ).stdout.strip().split()[-1]
+
+        saved = run_cli(
+            self.tmp,
+            "topic",
+            "plan",
+            "set",
+            "--goal",
+            "环境变量指定 topic plan",
+            env_extra={"AUTO_ITER_TOPIC_ID": topic_id},
+        )
+        added = run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--title",
+            "环境变量指定 task",
+            env_extra={"AUTO_ITER_TOPIC_ID": topic_id},
+        )
+
+        self.assertIn(f"resolved_topic_id: {topic_id}", saved.stdout)
+        self.assertIn("resolved_topic_source: environment", saved.stdout)
+        self.assertIn(f"resolved_topic_id: {topic_id}", added.stdout)
+        self.assertIn("resolved_topic_source: environment", added.stdout)
+        self.assertIn("环境变量指定 task", (self.tmp / "topics" / topic_id / "plan.md").read_text(encoding="utf-8"))
+
+    def test_topic_write_rejects_implicit_default_when_multiple_topics_are_open(self):
+        run_cli(self.tmp, "init")
+        topic_a = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Open Topic A",
+            "--summary",
+            "第一个 open topic",
+        ).stdout.strip().split()[-1]
+        topic_b = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Open Topic B",
+            "--summary",
+            "第二个 open topic",
+            "--current-summary",
+            "Topic A 暂停",
+        ).stdout.strip().split()[-1]
+
+        blocked = run_cli(
+            self.tmp,
+            "topic",
+            "plan",
+            "set",
+            "--goal",
+            "不能隐式写入 default topic",
+            check=False,
+        )
+        allowed = run_cli(
+            self.tmp,
+            "topic",
+            "plan",
+            "set",
+            "--allow-default-topic",
+            "--goal",
+            "确认写入 default topic",
+        )
+
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn("multiple open topics", blocked.stderr)
+        self.assertIn("--topic-id", blocked.stderr)
+        self.assertIn(f"resolved_topic_id: {topic_b}", allowed.stdout)
+        self.assertIn("resolved_topic_source: default_topic", allowed.stdout)
+        self.assertFalse((self.tmp / "topics" / topic_a / "plan.md").exists())
+        self.assertTrue((self.tmp / "topics" / topic_b / "plan.md").exists())
+
+    def test_migrate_creates_empty_topic_plans_and_board_for_existing_topics(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Legacy Topic",
+            "--summary",
+            "旧 topic 没有 plan",
+        ).stdout.strip().split()[-1]
+        self.assertFalse((self.tmp / "topics" / topic_id / "plan.md").exists())
+
+        migrated = run_cli(self.tmp, "migrate")
+
+        plan_path = self.tmp / "topics" / topic_id / "plan.md"
+        board_path = self.tmp / "topics" / "board.md"
+        self.assertIn("migration complete", migrated.stdout)
+        self.assertIn("created_topic_plans: 1", migrated.stdout)
+        self.assertIn(f"default_topic_id: {topic_id}", migrated.stdout)
+        self.assertTrue(plan_path.exists())
+        self.assertTrue(board_path.exists())
+        self.assertIn("## Goal", plan_path.read_text(encoding="utf-8"))
+
+    def test_handoff_validate_warns_about_topic_without_plan_without_failing(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Legacy Topic Warning",
+            "--summary",
+            "旧 topic 没有 plan",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "handoff", "generate")
+
+        validated = run_cli(self.tmp, "handoff", "validate")
+
+        self.assertEqual(validated.returncode, 0)
+        self.assertIn("VALID", validated.stdout)
+        self.assertIn("WARNING", validated.stdout)
+        self.assertIn(topic_id, validated.stdout)
+
+    def test_topic_task_add_set_list_and_projection(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic Tasks",
+            "--summary",
+            "需要 topic 内任务状态",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_id, "--goal", "推进 topic tasks")
+
+        added = run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_id,
+            "--title",
+            "写任务状态表",
+            "--description",
+            "保存 topic 内任务状态",
+            "--acceptance",
+            "plan projection 显示 doing",
+        )
+        item_id = added.stdout.strip().split()[-1]
+
+        moved = run_cli(self.tmp, "topic", "task", "set", "--item-id", item_id, "--status", "doing")
+        listed = run_cli(self.tmp, "topic", "task", "list", "--topic-id", topic_id)
+        plan_text = (self.tmp / "topics" / topic_id / "plan.md").read_text(encoding="utf-8")
+
+        self.assertIn(f"added topic task {item_id}", added.stdout)
+        self.assertIn(f"updated topic task {item_id}", moved.stdout)
+        self.assertIn("doing", listed.stdout)
+        self.assertIn("写任务状态表", listed.stdout)
+        self.assertIn("## Doing", plan_text)
+        self.assertIn("写任务状态表", plan_text)
+
+    def test_topic_board_projects_cross_topic_task_state(self):
+        run_cli(self.tmp, "init")
+        topic_a = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Blocked Topic",
+            "--summary",
+            "需要 project board 显示 blocked",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_a, "--goal", "跟踪 blocked 任务")
+        run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_a,
+            "--status",
+            "blocked",
+            "--title",
+            "等待外部结论",
+        )
+        topic_b = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Ready Topic",
+            "--summary",
+            "没有未完成任务",
+            "--current-summary",
+            "Blocked topic 暂停",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_b, "--goal", "可满足 topic")
+        done_item = run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_b,
+            "--status",
+            "done",
+            "--title",
+            "已完成验收",
+        ).stdout.strip().split()[-1]
+
+        board = run_cli(self.tmp, "topic", "board")
+
+        board_path = self.tmp / "topics" / "board.md"
+        self.assertTrue(board_path.exists())
+        self.assertIn("# Project Topic Board", board.stdout)
+        self.assertIn("## Open Topics", board.stdout)
+        self.assertIn("## Blocked Tasks", board.stdout)
+        self.assertIn("等待外部结论", board.stdout)
+        self.assertIn("## Recent Done Tasks", board.stdout)
+        self.assertIn(done_item, board.stdout)
+        self.assertIn("## Ready To Satisfy", board.stdout)
+        self.assertIn(topic_b, board.stdout)
+        self.assertEqual(board.stdout, board_path.read_text(encoding="utf-8"))
+
+    def test_topic_handoff_board_and_plan_are_indexed_for_search(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Search Topic",
+            "--summary",
+            "v028_search_anchor topic summary",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "topic",
+            "plan",
+            "set",
+            "--topic-id",
+            topic_id,
+            "--goal",
+            "v028_search_anchor plan goal",
+        )
+        run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_id,
+            "--status",
+            "doing",
+            "--title",
+            "v028_search_anchor task",
+        )
+        run_cli(self.tmp, "handoff", "generate", "--topic-id", topic_id)
+        run_cli(self.tmp, "topic", "board")
+
+        index = run_cli(self.tmp, "context", "index")
+        search_index = run_cli(self.tmp, "search", "index")
+        query = run_cli(self.tmp, "search", "query", "--text", "v028_search_anchor", "--limit", "5", "--explain")
+
+        topic_plan = f"topics/{topic_id}/plan.md"
+        topic_handoff = f"topics/{topic_id}/latest_handoff.md"
+        topic_board = "topics/board.md"
+        self.assertIn(topic_plan, index.stdout)
+        self.assertIn(topic_handoff, index.stdout)
+        self.assertIn(topic_board, index.stdout)
+        self.assertIn("indexed graph edges:", search_index.stdout)
+        self.assertIn("v028_search_anchor", query.stdout)
+        self.assertIn(topic_id, query.stdout)
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            rows = db.execute(
+                """
+                select source_type, source_id, path
+                from search_documents
+                where path in (?, ?, ?)
+                """,
+                (topic_plan, topic_handoff, topic_board),
+            ).fetchall()
+            source_types = {row[2]: (row[0], row[1]) for row in rows}
+            edge_count = db.execute(
+                """
+                select count(*)
+                from search_graph_edges
+                join search_documents source on source.doc_id = search_graph_edges.source_doc_id
+                join search_documents target on target.doc_id = search_graph_edges.target_doc_id
+                where source.path = ? and target.path = ?
+                """,
+                (topic_plan, topic_handoff),
+            ).fetchone()[0]
+        self.assertEqual(source_types[topic_plan], ("topic_plan", topic_id))
+        self.assertEqual(source_types[topic_handoff], ("topic_handoff", topic_id))
+        self.assertEqual(source_types[topic_board], ("topic_board", "board"))
+        self.assertGreater(edge_count, 0)
 
     def test_topic_evidence_links_runs_decisions_and_artifacts(self):
         run_cli(self.tmp, "init")
@@ -1186,6 +1639,120 @@ class CliTests(unittest.TestCase):
         with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
             count = db.execute("select count(*) from handoffs").fetchone()[0]
         self.assertEqual(count, 1)
+
+    def test_handoff_generate_topic_id_writes_topic_handoff_without_global_overwrite(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic Handoff",
+            "--summary",
+            "需要 topic 级交接",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_id, "--goal", "生成 topic 独立 handoff")
+        run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_id,
+            "--status",
+            "doing",
+            "--title",
+            "写 topic handoff",
+        )
+
+        quiet = run_cli(self.tmp, "handoff", "generate", "--topic-id", topic_id)
+
+        topic_handoff_path = self.tmp / "topics" / topic_id / "latest_handoff.md"
+        global_handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        self.assertEqual(quiet.stdout, "")
+        self.assertEqual(quiet.stderr, "")
+        self.assertTrue(topic_handoff_path.exists())
+        self.assertFalse(global_handoff_path.exists())
+        topic_handoff = topic_handoff_path.read_text(encoding="utf-8")
+        self.assertIn("# Topic Handoff", topic_handoff)
+        self.assertIn(f"- topic_id: {topic_id}", topic_handoff)
+        self.assertIn("## Topic Plan", topic_handoff)
+        self.assertIn("生成 topic 独立 handoff", topic_handoff)
+        self.assertIn("## Topic Tasks", topic_handoff)
+        self.assertIn("写 topic handoff", topic_handoff)
+
+        validated = run_cli(self.tmp, "handoff", "validate", "--topic-id", topic_id)
+        self.assertIn("VALID", validated.stdout)
+        self.assertIn(str(topic_handoff_path.resolve()), validated.stdout)
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            rows = db.execute("select path from handoffs").fetchall()
+        self.assertEqual([row[0] for row in rows], [str(topic_handoff_path.resolve())])
+
+    def test_checkpoint_save_topic_id_generates_valid_topic_handoff(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Topic Checkpoint",
+            "--summary",
+            "需要 topic 级中途记录",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_id, "--goal", "保存 topic checkpoint")
+
+        checkpoint = run_cli(
+            self.tmp,
+            "checkpoint",
+            "save",
+            "--topic-id",
+            topic_id,
+            "--text",
+            "中途记录一下 topic 状态",
+        )
+
+        topic_handoff_path = self.tmp / "topics" / topic_id / "latest_handoff.md"
+        self.assertIn("CHECKPOINT SAVED", checkpoint.stdout)
+        self.assertIn("handoff_valid: yes", checkpoint.stdout)
+        self.assertIn(str(topic_handoff_path.resolve()), checkpoint.stdout)
+        self.assertTrue(topic_handoff_path.exists())
+        self.assertFalse((self.tmp / "handoffs" / "latest_handoff.md").exists())
+        self.assertIn("保存 topic checkpoint", topic_handoff_path.read_text(encoding="utf-8"))
+
+    def test_project_handoff_includes_topic_summary(self):
+        run_cli(self.tmp, "init")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Project Topic Summary",
+            "--summary",
+            "项目级 handoff 需要 topic 摘要",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_id, "--goal", "展示 topic 总览")
+        run_cli(
+            self.tmp,
+            "topic",
+            "task",
+            "add",
+            "--topic-id",
+            topic_id,
+            "--status",
+            "blocked",
+            "--title",
+            "等待 topic 证据",
+        )
+
+        run_cli(self.tmp, "handoff", "generate")
+
+        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        self.assertIn("## Topic Summary", handoff_text)
+        self.assertIn("### Default Topic", handoff_text)
+        self.assertIn("### Open Topics", handoff_text)
+        self.assertIn("### Blocked Topic Tasks", handoff_text)
+        self.assertIn(topic_id, handoff_text)
+        self.assertIn("等待 topic 证据", handoff_text)
 
     def test_handoff_generate_writes_handoff_without_stdout_for_stop_hook(self):
         run_cli(self.tmp, "init")

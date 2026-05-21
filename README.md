@@ -65,9 +65,11 @@ explicit.
 
 ## Topic archive
 
-Topic archive keeps only one current issue or direction in default context.
-The active topic is projected to `topics/active_topic.md`; archived topics are
-listed in `topics/index.md` and stored under `topics/archive/`.
+Topic archive keeps one default topic for ordinary single-thread recovery while
+allowing commands to target a specific topic by id. The default topic is the
+old `active topic` compatibility path; it is projected to
+`topics/active_topic.md`. Archived and explicitly addressed topics are listed
+in `topics/index.md` and stored under `topics/archive/`.
 
 ```bash
 auto-iter topic start --title "Topic Archive MVP" --summary "按 topic 归档并按需恢复上下文"
@@ -77,16 +79,50 @@ auto-iter topic switch --topic-id <id> --current-summary "当前现场摘要"
 auto-iter topic satisfy --summary "阶段性达到预期"
 auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "证据摘要"
 auto-iter topic evidence --topic-id <id>
+auto-iter topic plan set --topic-id <id> --goal "目标" --non-goal "不做什么" --acceptance "验收标准"
+auto-iter topic plan show --topic-id <id>
+auto-iter topic plan current
+auto-iter topic task add --topic-id <id> --title "任务" --description "说明" --acceptance "验收"
+auto-iter topic task set --item-id <item-id> --status doing
+auto-iter topic task list --topic-id <id>
+auto-iter topic board
+auto-iter handoff generate --topic-id <id>
+auto-iter handoff validate --topic-id <id>
+auto-iter checkpoint save --topic-id <id> --text "中途记录一下"
+auto-iter migrate
 ```
 
-Starting or switching topics archives the previous active topic as
-`archived_open`. `topic satisfy` archives the current topic as
+For commands that resolve a working topic, the order is `--topic-id`, then the
+`AUTO_ITER_TOPIC_ID` environment variable, then the default topic. `auto-iter
+doctor` prints the resolved topic and its source so an agent can see where a
+command would write before recording work. If more than one topic is open,
+topic-scoped write commands reject an implicit default-topic write; pass
+`--topic-id`, set `AUTO_ITER_TOPIC_ID`, or add `--allow-default-topic` when the
+default target is intentional.
+
+Starting or switching the default topic archives the previous default topic as
+`archived_open`. `topic satisfy` archives the current default topic as
 `archived_satisfied`; that means the current expectation is satisfied, not that
 the topic can never be reopened. If an agent only suspects that the user has
 changed topic semantically, it should ask “是不是已经切入新的 topic 了？” before
 running a topic switch command. Use `topic link` when a topic has clear
 evidence in recorded runs, decisions, or artifacts; use `topic evidence` to
 recover that evidence chain without searching every run summary by hand.
+Use `topic plan` when a topic needs its own local plan. A topic plan records
+the topic goal, non-goals, acceptance checks, stop conditions, and escalation
+conditions; conclusions still belong in decisions, and experiment facts still
+belong in runs.
+Use `topic task` for topic-local todo, doing, done, blocked, and dropped items.
+Task status is planning state; completed claims still need decisions and
+evidence links.
+Use `topic board` for the cross-topic project view. It writes
+`topics/board.md` and summarizes open topics, doing tasks, blocked tasks,
+recent done tasks, and topics that look ready to satisfy.
+Use topic-scoped handoff commands when two Codex threads work on different
+topics under the same project. They write `topics/<topic_id>/latest_handoff.md`
+and do not overwrite the project-level `handoffs/latest_handoff.md`.
+Use `migrate` after upgrading an older project; it creates empty topic plans
+for legacy topics and refreshes topic projections.
 
 Then start Codex from the target algorithm project:
 

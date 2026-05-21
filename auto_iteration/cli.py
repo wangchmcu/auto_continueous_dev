@@ -25,8 +25,10 @@ DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
 TOPIC_STATUSES = {"active", "archived_open", "archived_satisfied"}
 TOPIC_EVIDENCE_TYPES = {"run", "decision", "artifact"}
+TOPIC_TASK_STATUSES = {"todo", "doing", "done", "blocked", "dropped"}
 SEARCH_FUSION_K = 60
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
+TOPIC_ID_ENV_VAR = "AUTO_ITER_TOPIC_ID"
 PROJECT_STATE_DIRS = [
     ("state", "SQLite state database for runs, decisions, route checks, and handoffs"),
     ("plans", "planning documents such as global, active, and version plans"),
@@ -932,6 +934,29 @@ def init_schema(db: sqlite3.Connection) -> None:
             primary key (topic_id, evidence_type, evidence_id)
         );
 
+        create table if not exists topic_plans (
+            topic_id text primary key,
+            status text not null default 'open',
+            goal text not null default '',
+            non_goals_json text not null default '[]',
+            acceptance_json text not null default '[]',
+            stop_conditions_json text not null default '[]',
+            escalation_conditions_json text not null default '[]',
+            updated_at text not null
+        );
+
+        create table if not exists topic_plan_items (
+            item_id text primary key,
+            topic_id text not null,
+            status text not null,
+            title text not null,
+            description text not null default '',
+            acceptance text not null default '',
+            evidence_json text not null default '[]',
+            created_at text not null,
+            updated_at text not null
+        );
+
         create table if not exists search_documents (
             doc_id text primary key,
             source_type text not null,
@@ -980,7 +1005,7 @@ def command_init(_args: argparse.Namespace) -> int:
     return 0
 
 
-def command_doctor(_args: argparse.Namespace) -> int:
+def command_doctor(args: argparse.Namespace) -> int:
     missing = [
         name
         for name in ["state", "runs", "handoffs", "raw_input", "decisions", "plans"]
@@ -998,10 +1023,25 @@ def command_doctor(_args: argparse.Namespace) -> int:
     print("state: ok")
     with database() as db:
         row = db.execute("select count(*) from sqlite_master where type = 'table'").fetchone()
+        resolution = resolve_topic_id(db, getattr(args, "topic_id", None))
     if row[0] < 7:
         raise UserError("database schema is incomplete")
     print("database: ok")
     print(f"root: {root()}")
+    print(f"resolved_topic_id: {resolution.topic_id or 'none'}")
+    print(f"resolved_topic_source: {resolution.source}")
+    return 0
+
+
+def command_migrate(_args: argparse.Namespace) -> int:
+    with database() as db:
+        created_topic_plans = create_missing_topic_plans(db)
+        write_topic_projections(db)
+        current = active_topic(db)
+    print("migration complete")
+    print(f"created_topic_plans: {created_topic_plans}")
+    print(f"default_topic_id: {current['topic_id'] if current else 'none'}")
+    print(f"topic_board: {topic_board_path().resolve()}")
     return 0
 
 
@@ -1209,6 +1249,30 @@ def topic_archive_path(topic_id: str) -> Path:
     return topic_archive_dir() / f"{topic_id}.md"
 
 
+def topic_dir(topic_id: str) -> Path:
+    return topics_dir() / topic_id
+
+
+def topic_plan_path(topic_id: str) -> Path:
+    return topic_dir(topic_id) / "plan.md"
+
+
+def topic_handoff_path(topic_id: str) -> Path:
+    return topic_dir(topic_id) / "latest_handoff.md"
+
+
+def topic_handoff_archive_dir(topic_id: str) -> Path:
+    return topic_dir(topic_id) / "handoffs" / "archive"
+
+
+def default_topic_plan_path() -> Path:
+    return topics_dir() / "default_topic_plan.md"
+
+
+def topic_board_path() -> Path:
+    return topics_dir() / "board.md"
+
+
 def active_topic_path() -> Path:
     return topics_dir() / "active_topic.md"
 
@@ -1226,6 +1290,50 @@ def get_topic(db: sqlite3.Connection, topic_id: str) -> sqlite3.Row:
     if not row:
         raise UserError(f"unknown topic_id: {topic_id}")
     return row
+
+
+@dataclass(frozen=True)
+class TopicResolution:
+    topic_id: str | None
+    source: str
+
+
+def resolve_topic_id(db: sqlite3.Connection, topic_id: str | None = None) -> TopicResolution:
+    if topic_id:
+        get_topic(db, topic_id)
+        return TopicResolution(topic_id=topic_id, source="argument")
+
+    env_topic_id = os.environ.get(TOPIC_ID_ENV_VAR, "").strip()
+    if env_topic_id:
+        get_topic(db, env_topic_id)
+        return TopicResolution(topic_id=env_topic_id, source="environment")
+
+    default_topic = active_topic(db)
+    if default_topic:
+        return TopicResolution(topic_id=default_topic["topic_id"], source="default_topic")
+
+    return TopicResolution(topic_id=None, source="none")
+
+
+def open_topic_count(db: sqlite3.Connection) -> int:
+    return db.execute(
+        "select count(*) from topics where status in ('active', 'archived_open')"
+    ).fetchone()[0]
+
+
+def resolve_write_topic_id(
+    db: sqlite3.Connection,
+    topic_id: str | None = None,
+    allow_default_topic: bool = False,
+) -> TopicResolution:
+    resolution = resolve_topic_id(db, topic_id)
+    if not resolution.topic_id:
+        raise UserError("topic_id required: pass --topic-id, set AUTO_ITER_TOPIC_ID, or create a default topic")
+    if resolution.source == "default_topic" and not allow_default_topic and open_topic_count(db) > 1:
+        raise UserError(
+            "multiple open topics; pass --topic-id, set AUTO_ITER_TOPIC_ID, or use --allow-default-topic"
+        )
+    return resolution
 
 
 def add_topic_event(db: sqlite3.Connection, topic_id: str, event_type: str, summary: str = "") -> None:
@@ -1280,6 +1388,222 @@ def topic_evidence_detail(db: sqlite3.Connection, evidence_type: str, evidence_i
         row = db.execute("select kind, path from artifacts where artifact_id = ?", (evidence_id,)).fetchone()
         return f"{row['kind']} path={row['path']}" if row else "missing"
     return "unknown evidence type"
+
+
+def get_topic_plan(db: sqlite3.Connection, topic_id: str) -> sqlite3.Row:
+    row = db.execute("select * from topic_plans where topic_id = ?", (topic_id,)).fetchone()
+    if not row:
+        raise UserError(f"no topic plan for topic_id: {topic_id}")
+    return row
+
+
+def markdown_list(items_json: str) -> list[str]:
+    items = json.loads(items_json)
+    if not items:
+        return ["- none"]
+    return [f"- {item}" for item in items]
+
+
+def topic_task_lines(db: sqlite3.Connection, topic_id: str, status: str) -> list[str]:
+    rows = db.execute(
+        """
+        select item_id, title, description, acceptance
+        from topic_plan_items
+        where topic_id = ? and status = ?
+        order by updated_at desc, created_at desc
+        """,
+        (topic_id, status),
+    ).fetchall()
+    if not rows:
+        return ["- none"]
+    lines: list[str] = []
+    for row in rows:
+        detail = f" - {row['description']}" if row["description"] else ""
+        acceptance = f" acceptance={row['acceptance']}" if row["acceptance"] else ""
+        lines.append(f"- {row['item_id']}: {row['title']}{detail}{acceptance}")
+    return lines
+
+
+def topic_tasks_section_lines(db: sqlite3.Connection, topic_id: str) -> list[str]:
+    sections = [
+        ("Doing", "doing"),
+        ("Todo", "todo"),
+        ("Blocked", "blocked"),
+        ("Done", "done"),
+        ("Dropped", "dropped"),
+    ]
+    lines: list[str] = []
+    for title, status in sections:
+        lines += [f"### {title}", *topic_task_lines(db, topic_id, status), ""]
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def render_topic_plan(db: sqlite3.Connection, topic_id: str) -> str:
+    topic = get_topic(db, topic_id)
+    plan = get_topic_plan(db, topic_id)
+    lines = [
+        "# Topic Plan",
+        "",
+        f"## {topic['title']}",
+        "",
+        f"- topic_id: {topic_id}",
+        f"- status: {plan['status']}",
+        f"- updated_at: {plan['updated_at']}",
+        "",
+        "## Goal",
+        "",
+        plan["goal"] or "none",
+        "",
+        "## Non Goals",
+        *markdown_list(plan["non_goals_json"]),
+        "",
+        "## Acceptance",
+        *markdown_list(plan["acceptance_json"]),
+        "",
+        "## Stop Conditions",
+        *markdown_list(plan["stop_conditions_json"]),
+        "",
+        "## Escalation Conditions",
+        *markdown_list(plan["escalation_conditions_json"]),
+        "",
+        "## Todo",
+        *topic_task_lines(db, topic_id, "todo"),
+        "",
+        "## Doing",
+        *topic_task_lines(db, topic_id, "doing"),
+        "",
+        "## Done",
+        *topic_task_lines(db, topic_id, "done"),
+        "",
+        "## Blocked",
+        *topic_task_lines(db, topic_id, "blocked"),
+        "",
+        "## Dropped",
+        *topic_task_lines(db, topic_id, "dropped"),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def topic_board_task_lines(db: sqlite3.Connection, status: str, limit: int = 12) -> list[str]:
+    rows = db.execute(
+        """
+        select topics.topic_id, topics.title as topic_title, topics.status as topic_status,
+               topic_plan_items.item_id, topic_plan_items.title as item_title,
+               topic_plan_items.description, topic_plan_items.acceptance
+        from topic_plan_items
+        join topics on topics.topic_id = topic_plan_items.topic_id
+        where topic_plan_items.status = ?
+        order by topic_plan_items.updated_at desc, topic_plan_items.created_at desc
+        limit ?
+        """,
+        (status, limit),
+    ).fetchall()
+    if not rows:
+        return ["- none"]
+    lines: list[str] = []
+    for row in rows:
+        description = f" - {row['description']}" if row["description"] else ""
+        acceptance = f" acceptance={row['acceptance']}" if row["acceptance"] else ""
+        lines.append(
+            f"- {row['topic_id']} {row['item_id']} {status}: {row['item_title']}{description}{acceptance} "
+            f"topic_title={row['topic_title']} topic_status={row['topic_status']}"
+        )
+    return lines
+
+
+def ready_to_satisfy_topic_lines(db: sqlite3.Connection) -> list[str]:
+    rows = db.execute(
+        """
+        select topics.*
+        from topics
+        join topic_plans on topic_plans.topic_id = topics.topic_id
+        where topics.status in ('active', 'archived_open')
+          and not exists (
+              select 1
+              from topic_plan_items
+              where topic_plan_items.topic_id = topics.topic_id
+                and topic_plan_items.status in ('todo', 'doing', 'blocked')
+          )
+        order by topics.updated_at desc, topics.created_at desc
+        limit 8
+        """
+    ).fetchall()
+    if not rows:
+        return ["- none"]
+    return [topic_brief_line(row) for row in rows]
+
+
+def render_topic_board(db: sqlite3.Connection) -> str:
+    current = active_topic(db)
+    open_topics = db.execute(
+        """
+        select * from topics
+        where status in ('active', 'archived_open')
+        order by updated_at desc, created_at desc
+        limit 12
+        """
+    ).fetchall()
+    lines = [
+        "# Project Topic Board",
+        "",
+        "## Default Topic",
+    ]
+    if current:
+        lines.append(topic_brief_line(current))
+    else:
+        lines.append("- none")
+    lines += [
+        "",
+        "## Open Topics",
+    ]
+    if open_topics:
+        lines += [topic_brief_line(row) for row in open_topics]
+    else:
+        lines.append("- none")
+    lines += [
+        "",
+        "## Doing Tasks",
+        *topic_board_task_lines(db, "doing"),
+        "",
+        "## Blocked Tasks",
+        *topic_board_task_lines(db, "blocked"),
+        "",
+        "## Recent Done Tasks",
+        *topic_board_task_lines(db, "done"),
+        "",
+        "## Ready To Satisfy",
+        *ready_to_satisfy_topic_lines(db),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_topic_board_projection(db: sqlite3.Connection) -> None:
+    topics_dir().mkdir(parents=True, exist_ok=True)
+    topic_board_path().write_text(render_topic_board(db), encoding="utf-8")
+
+
+def write_topic_plan_projections(db: sqlite3.Connection) -> None:
+    topics_dir().mkdir(parents=True, exist_ok=True)
+    rows = db.execute("select topic_id from topic_plans order by updated_at desc").fetchall()
+    for row in rows:
+        path = topic_plan_path(row["topic_id"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(render_topic_plan(db, row["topic_id"]), encoding="utf-8")
+    default_topic = active_topic(db)
+    default_path = default_topic_plan_path()
+    if default_topic:
+        plan = db.execute("select 1 from topic_plans where topic_id = ?", (default_topic["topic_id"],)).fetchone()
+        if plan:
+            default_path.write_text(render_topic_plan(db, default_topic["topic_id"]), encoding="utf-8")
+        elif default_path.exists():
+            default_path.unlink()
+    elif default_path.exists():
+        default_path.unlink()
+    write_topic_board_projection(db)
 
 
 def render_topic_projection(db: sqlite3.Connection, topic: sqlite3.Row, active_projection: bool = False) -> str:
@@ -1349,6 +1673,47 @@ def write_topic_projections(db: sqlite3.Connection) -> None:
         else:
             archive_path.write_text(render_topic_projection(db, row), encoding="utf-8")
     topic_index_path().write_text("\n".join(index_lines), encoding="utf-8")
+    write_topic_plan_projections(db)
+
+
+def topics_missing_plans(db: sqlite3.Connection) -> list[sqlite3.Row]:
+    return db.execute(
+        """
+        select topics.*
+        from topics
+        left join topic_plans on topic_plans.topic_id = topics.topic_id
+        where topic_plans.topic_id is null
+        order by topics.updated_at desc, topics.created_at desc
+        """
+    ).fetchall()
+
+
+def create_missing_topic_plans(db: sqlite3.Connection) -> int:
+    missing = topics_missing_plans(db)
+    timestamp = now_iso()
+    for topic in missing:
+        db.execute(
+            """
+            insert into topic_plans (
+                topic_id, status, goal, non_goals_json, acceptance_json,
+                stop_conditions_json, escalation_conditions_json, updated_at
+            )
+            values (?, 'open', '', '[]', '[]', '[]', '[]', ?)
+            """,
+            (topic["topic_id"], timestamp),
+        )
+    if missing:
+        write_topic_projections(db)
+    return len(missing)
+
+
+def topic_plan_migration_warnings(db: sqlite3.Connection) -> list[str]:
+    warnings = []
+    for topic in topics_missing_plans(db):
+        warnings.append(
+            f"WARNING: topic {topic['topic_id']} has no topic plan; run `auto-iter migrate` to create an empty plan"
+        )
+    return warnings
 
 
 def archive_current_topic(db: sqlite3.Connection, summary: str) -> sqlite3.Row | None:
@@ -1497,7 +1862,7 @@ def command_topic_link(args: argparse.Namespace) -> int:
     if not evidence_items:
         raise UserError("at least one --run-id, --decision-id, or --artifact-id is required")
     with database() as db:
-        get_topic(db, args.topic_id)
+        resolution = resolve_write_topic_id(db, args.topic_id, args.allow_default_topic)
         timestamp = now_iso()
         for evidence_type, evidence_id in evidence_items:
             validate_topic_evidence_id(db, evidence_type, evidence_id)
@@ -1508,11 +1873,13 @@ def command_topic_link(args: argparse.Namespace) -> int:
                 on conflict(topic_id, evidence_type, evidence_id)
                 do update set summary = excluded.summary, created_at = excluded.created_at
                 """,
-                (args.topic_id, evidence_type, evidence_id, args.summary or "", timestamp),
+                (resolution.topic_id, evidence_type, evidence_id, args.summary or "", timestamp),
             )
-        add_topic_event(db, args.topic_id, "evidence_link", args.summary or "")
+        add_topic_event(db, resolution.topic_id, "evidence_link", args.summary or "")
         write_topic_projections(db)
-    print(f"linked topic evidence {args.topic_id} count={len(evidence_items)}")
+    print(f"resolved_topic_id: {resolution.topic_id}")
+    print(f"resolved_topic_source: {resolution.source}")
+    print(f"linked topic evidence {resolution.topic_id} count={len(evidence_items)}")
     return 0
 
 
@@ -1526,6 +1893,144 @@ def command_topic_evidence(args: argparse.Namespace) -> int:
         print()
         for line in topic_evidence_lines(db, args.topic_id, limit=args.latest):
             print(line)
+    return 0
+
+
+def command_topic_plan_set(args: argparse.Namespace) -> int:
+    with database() as db:
+        resolution = resolve_write_topic_id(db, args.topic_id, args.allow_default_topic)
+        timestamp = now_iso()
+        db.execute(
+            """
+            insert into topic_plans (
+                topic_id, status, goal, non_goals_json, acceptance_json,
+                stop_conditions_json, escalation_conditions_json, updated_at
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(topic_id) do update set
+                status = excluded.status,
+                goal = excluded.goal,
+                non_goals_json = excluded.non_goals_json,
+                acceptance_json = excluded.acceptance_json,
+                stop_conditions_json = excluded.stop_conditions_json,
+                escalation_conditions_json = excluded.escalation_conditions_json,
+                updated_at = excluded.updated_at
+            """,
+            (
+                resolution.topic_id,
+                args.status,
+                args.goal or "",
+                json.dumps(args.non_goal, ensure_ascii=False),
+                json.dumps(args.acceptance, ensure_ascii=False),
+                json.dumps(args.stop_condition, ensure_ascii=False),
+                json.dumps(args.escalation_condition, ensure_ascii=False),
+                timestamp,
+            ),
+        )
+        write_topic_projections(db)
+    print(f"resolved_topic_id: {resolution.topic_id}")
+    print(f"resolved_topic_source: {resolution.source}")
+    print(f"saved topic plan {resolution.topic_id}")
+    return 0
+
+
+def command_topic_plan_show(args: argparse.Namespace) -> int:
+    with database() as db:
+        print(render_topic_plan(db, args.topic_id))
+    return 0
+
+
+def command_topic_plan_current(_args: argparse.Namespace) -> int:
+    with database() as db:
+        current = active_topic(db)
+        if not current:
+            raise UserError("no default topic")
+        print(render_topic_plan(db, current["topic_id"]))
+    return 0
+
+
+def command_topic_task_add(args: argparse.Namespace) -> int:
+    with database() as db:
+        resolution = resolve_write_topic_id(db, args.topic_id, args.allow_default_topic)
+        timestamp = now_iso()
+        item_id = new_id("I")
+        db.execute(
+            """
+            insert into topic_plan_items (
+                item_id, topic_id, status, title, description, acceptance,
+                evidence_json, created_at, updated_at
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item_id,
+                resolution.topic_id,
+                args.status,
+                args.title,
+                args.description or "",
+                args.acceptance or "",
+                json.dumps(args.evidence, ensure_ascii=False),
+                timestamp,
+                timestamp,
+            ),
+        )
+        write_topic_projections(db)
+    print(f"resolved_topic_id: {resolution.topic_id}")
+    print(f"resolved_topic_source: {resolution.source}")
+    print(f"added topic task {item_id}")
+    return 0
+
+
+def command_topic_task_set(args: argparse.Namespace) -> int:
+    with database() as db:
+        row = db.execute("select * from topic_plan_items where item_id = ?", (args.item_id,)).fetchone()
+        if not row:
+            raise UserError(f"unknown topic task item_id: {args.item_id}")
+        evidence = json.loads(row["evidence_json"])
+        evidence.extend(args.evidence)
+        db.execute(
+            """
+            update topic_plan_items
+            set status = ?, evidence_json = ?, updated_at = ?
+            where item_id = ?
+            """,
+            (args.status, json.dumps(evidence, ensure_ascii=False), now_iso(), args.item_id),
+        )
+        write_topic_projections(db)
+    print(f"updated topic task {args.item_id}")
+    return 0
+
+
+def command_topic_task_list(args: argparse.Namespace) -> int:
+    with database() as db:
+        get_topic(db, args.topic_id)
+        rows = db.execute(
+            """
+            select item_id, status, title, description, acceptance
+            from topic_plan_items
+            where topic_id = ?
+            order by updated_at desc, created_at desc
+            """,
+            (args.topic_id,),
+        ).fetchall()
+    if not rows:
+        print("no topic tasks")
+        return 0
+    for row in rows:
+        print(f"{row['item_id']} {row['status']} title={row['title']}")
+        if row["description"]:
+            print(f"  description: {row['description']}")
+        if row["acceptance"]:
+            print(f"  acceptance: {row['acceptance']}")
+    return 0
+
+
+def command_topic_board(_args: argparse.Namespace) -> int:
+    with database() as db:
+        write_topic_projections(db)
+        board_md = render_topic_board(db)
+        topic_board_path().write_text(board_md, encoding="utf-8")
+    print(board_md, end="")
     return 0
 
 
@@ -2119,6 +2624,61 @@ def current_baseline_lines(
     ]
 
 
+def topic_brief_line(row: sqlite3.Row) -> str:
+    summary = f" summary={row['summary']}" if row["summary"] else ""
+    return f"- {row['topic_id']} {row['status']} title={row['title']}{summary}"
+
+
+def topic_summary_lines(db: sqlite3.Connection) -> list[str]:
+    current = active_topic(db)
+    recent = db.execute(
+        "select * from topics order by updated_at desc, created_at desc limit 5"
+    ).fetchall()
+    open_topics = db.execute(
+        """
+        select * from topics
+        where status in ('active', 'archived_open')
+        order by updated_at desc, created_at desc
+        limit 8
+        """
+    ).fetchall()
+    blocked_tasks = db.execute(
+        """
+        select topics.topic_id, topics.title as topic_title,
+               topic_plan_items.item_id, topic_plan_items.title as item_title
+        from topic_plan_items
+        join topics on topics.topic_id = topic_plan_items.topic_id
+        where topic_plan_items.status = 'blocked'
+        order by topic_plan_items.updated_at desc, topic_plan_items.created_at desc
+        limit 8
+        """
+    ).fetchall()
+    lines = ["### Default Topic"]
+    if current:
+        lines.append(topic_brief_line(current))
+    else:
+        lines.append("- none")
+    lines += ["", "### Recently Updated Topics"]
+    if recent:
+        lines += [topic_brief_line(row) for row in recent]
+    else:
+        lines.append("- none")
+    lines += ["", "### Open Topics"]
+    if open_topics:
+        lines += [topic_brief_line(row) for row in open_topics]
+    else:
+        lines.append("- none")
+    lines += ["", "### Blocked Topic Tasks"]
+    if blocked_tasks:
+        for row in blocked_tasks:
+            lines.append(
+                f"- {row['topic_id']} {row['item_id']}: {row['item_title']} topic_title={row['topic_title']}"
+            )
+    else:
+        lines.append("- none")
+    return lines
+
+
 def handoff_read_order_lines() -> list[str]:
     entries = []
     agents_path = root() / "AGENTS.md"
@@ -2130,12 +2690,36 @@ def handoff_read_order_lines() -> list[str]:
         str(root() / "plans" / "version_iterations.md"),
         str(root() / "plans" / "active_plan.md"),
         str(active_topic_path()),
+        str(topic_board_path()),
         str(root() / "state" / "agent_state.db"),
         f"{root() / 'decisions'}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
         "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
         "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
         "只有初次开始项目或明确缺失信息时才读取 raw_input/。",
+    ]
+    return [f"{index}. {entry}" for index, entry in enumerate(entries, start=1)]
+
+
+def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
+    entries = []
+    agents_path = root() / "AGENTS.md"
+    if agents_path.exists():
+        entries.append(str(agents_path))
+    entries.append(str(topic_handoff_path(topic_id)))
+    plan_path = topic_plan_path(topic_id)
+    if plan_path.exists():
+        entries.append(str(plan_path))
+    entries += [
+        str(topic_index_path()),
+        str(active_topic_path()),
+        str(root() / "plans" / "active_plan.md"),
+        str(root() / "plans" / "version_iterations.md"),
+        str(root() / "plans" / "global_plan.md"),
+        str(root() / "state" / "agent_state.db"),
+        f"用 `auto-iter topic evidence --topic-id {topic_id}` 查看该 topic 的 run、decision、artifact 证据链。",
+        "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
+        "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
     ]
     return [f"{index}. {entry}" for index, entry in enumerate(entries, start=1)]
 
@@ -2166,6 +2750,7 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
         f"- active_topic: {active_topic_path()}",
         f"- topic_index: {topic_index_path()}",
+        f"- topic_board: {topic_board_path()}",
         "",
         "## 当前 Topic",
     ]
@@ -2180,6 +2765,9 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     else:
         lines.append("- none")
     lines += [
+        "",
+        "## Topic Summary",
+        *topic_summary_lines(db),
         "",
         "## Current Baseline",
         *current_baseline_lines(db, success, active, current_topic),
@@ -2239,12 +2827,83 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     return "\n".join(lines), success["run_id"] if success else None
 
 
+def build_topic_handoff(db: sqlite3.Connection, topic_id: str) -> tuple[str, str | None]:
+    write_topic_projections(db)
+    topic = get_topic(db, topic_id)
+    success, failed = latest_runs(db)
+    active = db.execute("select * from decisions where status = 'active' order by created_at desc").fetchall()
+    plan = db.execute("select * from topic_plans where topic_id = ?", (topic_id,)).fetchone()
+    plan_path = topic_plan_path(topic_id)
+    handoff_path = topic_handoff_path(topic_id)
+    lines = [
+        "# Topic Handoff",
+        "",
+        "## Topic Snapshot",
+        f"- root: {root()}",
+        f"- branch: {git_branch()}",
+        f"- commit: {git_commit()}",
+        f"- topic_handoff: {handoff_path}",
+        f"- topic_id: {topic['topic_id']}",
+        f"- title: {topic['title']}",
+        f"- status: {topic['status']}",
+        f"- summary: {topic['summary'] or 'none'}",
+        f"- restore_hint: {topic['restore_hint'] or 'none'}",
+        f"- topic_plan: {plan_path if plan_path.exists() else 'none'}",
+        f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
+        f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
+        "",
+        "## Topic Plan",
+    ]
+    if plan:
+        lines += [
+            f"- status: {plan['status']}",
+            f"- updated_at: {plan['updated_at']}",
+            "",
+            "### Goal",
+            plan["goal"] or "none",
+            "",
+            "### Acceptance",
+            *markdown_list(plan["acceptance_json"]),
+            "",
+            "### Stop Conditions",
+            *markdown_list(plan["stop_conditions_json"]),
+            "",
+            "### Escalation Conditions",
+            *markdown_list(plan["escalation_conditions_json"]),
+        ]
+    else:
+        lines.append("- none")
+    lines += [
+        "",
+        "## Topic Tasks",
+        *topic_tasks_section_lines(db, topic_id),
+        "",
+        "## Current Baseline",
+        *current_baseline_lines(db, success, active, topic),
+        "",
+        "## Topic Evidence Links",
+        *topic_evidence_lines(db, topic_id, limit=12),
+        "",
+        "## 下一步最小实验集合",
+        f"1. 继续该 topic 前确认 `auto-iter doctor --topic-id {topic_id}` 输出的 resolved topic 正确。",
+        "2. 实验前运行 `auto-iter route check --config <file> --summary <中文路线说明>`。",
+        "3. 实验后用 `auto-iter topic link` 把 run、decision 或 artifact 关联到该 topic。",
+        f"4. 会话结束前运行 `auto-iter handoff generate --topic-id {topic_id}` 和 `auto-iter handoff validate --topic-id {topic_id}`。",
+        "",
+        "## 读取顺序",
+        *topic_handoff_read_order_lines(topic_id),
+        "",
+    ]
+    return "\n".join(lines), success["run_id"] if success else None
+
+
 def validate_handoff_text(text: str) -> list[str]:
     errors: list[str] = []
     required_sections = [
         "## 当前目标",
         "## 当前快照",
         "## 当前 Topic",
+        "## Topic Summary",
         "## Current Baseline",
         "## Topic Evidence Links",
         "## 最近成功实验",
@@ -2263,6 +2922,7 @@ def validate_handoff_text(text: str) -> list[str]:
         "active_plan": root() / "plans" / "active_plan.md",
         "active_topic": active_topic_path(),
         "topic_index": topic_index_path(),
+        "topic_board": topic_board_path(),
     }
     for key, path in required_paths.items():
         expected = f"- {key}: {path}"
@@ -2275,19 +2935,54 @@ def validate_handoff_text(text: str) -> list[str]:
     return errors
 
 
+def validate_topic_handoff_text(text: str, topic_id: str, path: Path) -> list[str]:
+    errors: list[str] = []
+    required_sections = [
+        "# Topic Handoff",
+        "## Topic Snapshot",
+        "## Topic Plan",
+        "## Topic Tasks",
+        "## Current Baseline",
+        "## Topic Evidence Links",
+        "## 下一步最小实验集合",
+        "## 读取顺序",
+    ]
+    for section in required_sections:
+        if section not in text:
+            errors.append(f"missing section: {section}")
+    required_lines = {
+        "topic_id": f"- topic_id: {topic_id}",
+        "topic_handoff": f"- topic_handoff: {path}",
+    }
+    for key, expected in required_lines.items():
+        if expected not in text:
+            errors.append(f"missing topic handoff field: {key}")
+    if not path.exists():
+        errors.append(f"topic handoff path does not exist: {path}")
+    return errors
+
+
 def command_handoff_generate(args: argparse.Namespace) -> int:
-    path, _based_on_run_id = save_handoff()
+    path, _based_on_run_id = save_handoff(args.topic_id)
     if args.print_path:
         print(f"generated {path.resolve()}")
     return 0
 
 
-def save_handoff() -> tuple[Path, str | None]:
-    path = root() / "handoffs" / "latest_handoff.md"
+def save_handoff(topic_id: str | None = None) -> tuple[Path, str | None]:
     with database() as db:
-        handoff_md, based_on_run_id = build_handoff(db)
+        if topic_id:
+            get_topic(db, topic_id)
+            path = topic_handoff_path(topic_id)
+            handoff_md, based_on_run_id = build_topic_handoff(db, topic_id)
+            archive = topic_handoff_archive_dir(topic_id) / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        else:
+            path = root() / "handoffs" / "latest_handoff.md"
+            handoff_md, based_on_run_id = build_handoff(db)
+            archive = root() / "handoffs" / "archive" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(handoff_md, encoding="utf-8")
-        archive = root() / "handoffs" / "archive" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_text(handoff_md, encoding="utf-8")
         handoff_id = new_id("H")
         db.execute(
@@ -2300,15 +2995,23 @@ def save_handoff() -> tuple[Path, str | None]:
     return path, based_on_run_id
 
 
-def command_handoff_validate(_args: argparse.Namespace) -> int:
-    path = root() / "handoffs" / "latest_handoff.md"
+def command_handoff_validate(args: argparse.Namespace) -> int:
+    path = topic_handoff_path(args.topic_id) if args.topic_id else root() / "handoffs" / "latest_handoff.md"
     if not path.exists():
         print("INVALID")
         print(f"- handoff missing: {path.resolve()}")
         return 1
-    errors = validate_handoff_text(path.read_text(encoding="utf-8"))
+    if args.topic_id:
+        with database() as db:
+            get_topic(db, args.topic_id)
+        errors = validate_topic_handoff_text(path.read_text(encoding="utf-8"), args.topic_id, path)
+    else:
+        errors = validate_handoff_text(path.read_text(encoding="utf-8"))
     _valid_decisions, projection_warnings = decision_projection_consistency()
     errors.extend(projection_warnings)
+    migration_warnings: list[str] = []
+    with database() as db:
+        migration_warnings = topic_plan_migration_warnings(db)
     if errors:
         print("INVALID")
         for error in errors:
@@ -2316,12 +3019,17 @@ def command_handoff_validate(_args: argparse.Namespace) -> int:
         return 1
     print("VALID")
     print(f"validated {path.resolve()}")
+    for warning in migration_warnings:
+        print(warning)
     return 0
 
 
 def command_checkpoint_save(args: argparse.Namespace) -> int:
-    path, _based_on_run_id = save_handoff()
-    errors = validate_handoff_text(path.read_text(encoding="utf-8"))
+    path, _based_on_run_id = save_handoff(args.topic_id)
+    if args.topic_id:
+        errors = validate_topic_handoff_text(path.read_text(encoding="utf-8"), args.topic_id, path)
+    else:
+        errors = validate_handoff_text(path.read_text(encoding="utf-8"))
     print("CHECKPOINT SAVED")
     print(f"text: {args.text}")
     print(f"handoff: {path.resolve()}")
@@ -2337,8 +3045,8 @@ def command_checkpoint_save(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_resume(_args: argparse.Namespace) -> int:
-    path = root() / "handoffs" / "latest_handoff.md"
+def command_resume(args: argparse.Namespace) -> int:
+    path = topic_handoff_path(args.topic_id) if args.topic_id else root() / "handoffs" / "latest_handoff.md"
     if not path.exists():
         print(f"handoff missing: {path.resolve()}")
         print("run `auto-iteration handoff generate` after at least one recorded run")
@@ -2407,6 +3115,8 @@ def context_files(include_raw_input: bool) -> list[Path]:
         "plans/*.md",
         "handoffs/latest_handoff.md",
         "topics/*.md",
+        "topics/*/plan.md",
+        "topics/*/latest_handoff.md",
         "topics/archive/*.md",
         "runs/*/summary.md",
         "runs/*/logs/error_summary.md",
@@ -2562,6 +3272,12 @@ def infer_source_type_and_id(path: Path, body: str) -> tuple[str, str]:
             return "error_summary", parts[1]
         return "run_artifact", parts[1]
     if parts[:1] == ["topics"]:
+        if rel == "topics/board.md":
+            return "topic_board", "board"
+        if len(parts) >= 3 and parts[2] == "plan.md":
+            return "topic_plan", parts[1]
+        if len(parts) >= 3 and parts[2] == "latest_handoff.md":
+            return "topic_handoff", parts[1]
         if len(parts) >= 3 and parts[1] == "archive":
             return "topic", path.stem
         match = re.search(r"topic_id:\s*(T-[A-Za-z0-9]+)", body)
@@ -3043,7 +3759,10 @@ def build_parser() -> argparse.ArgumentParser:
     init = subparsers.add_parser("init")
     init.set_defaults(func=command_init)
     doctor = subparsers.add_parser("doctor")
+    doctor.add_argument("--topic-id")
     doctor.set_defaults(func=command_doctor)
+    migrate = subparsers.add_parser("migrate")
+    migrate.set_defaults(func=command_migrate)
     install = subparsers.add_parser("install")
     install.add_argument("--bin-dir", default=str(default_bin_dir()))
     install.add_argument("--skills-dir", default=str(default_skills_dir()))
@@ -3065,7 +3784,8 @@ def build_parser() -> argparse.ArgumentParser:
     topic_show.add_argument("--topic-id", required=True)
     topic_show.set_defaults(func=command_topic_show)
     topic_link = topic_sub.add_parser("link")
-    topic_link.add_argument("--topic-id", required=True)
+    topic_link.add_argument("--topic-id")
+    topic_link.add_argument("--allow-default-topic", action="store_true")
     topic_link.add_argument("--run-id", action="append", default=[])
     topic_link.add_argument("--decision-id", action="append", default=[])
     topic_link.add_argument("--artifact-id", action="append", default=[])
@@ -3088,6 +3808,44 @@ def build_parser() -> argparse.ArgumentParser:
     topic_satisfy = topic_sub.add_parser("satisfy")
     topic_satisfy.add_argument("--summary", required=True)
     topic_satisfy.set_defaults(func=command_topic_satisfy)
+    topic_board = topic_sub.add_parser("board")
+    topic_board.set_defaults(func=command_topic_board)
+    topic_plan = topic_sub.add_parser("plan")
+    topic_plan_sub = topic_plan.add_subparsers(dest="topic_plan_command", required=True)
+    topic_plan_set = topic_plan_sub.add_parser("set")
+    topic_plan_set.add_argument("--topic-id")
+    topic_plan_set.add_argument("--allow-default-topic", action="store_true")
+    topic_plan_set.add_argument("--status", default="open")
+    topic_plan_set.add_argument("--goal", default="")
+    topic_plan_set.add_argument("--non-goal", action="append", default=[])
+    topic_plan_set.add_argument("--acceptance", action="append", default=[])
+    topic_plan_set.add_argument("--stop-condition", action="append", default=[])
+    topic_plan_set.add_argument("--escalation-condition", action="append", default=[])
+    topic_plan_set.set_defaults(func=command_topic_plan_set)
+    topic_plan_show = topic_plan_sub.add_parser("show")
+    topic_plan_show.add_argument("--topic-id", required=True)
+    topic_plan_show.set_defaults(func=command_topic_plan_show)
+    topic_plan_current = topic_plan_sub.add_parser("current")
+    topic_plan_current.set_defaults(func=command_topic_plan_current)
+    topic_task = topic_sub.add_parser("task")
+    topic_task_sub = topic_task.add_subparsers(dest="topic_task_command", required=True)
+    topic_task_add = topic_task_sub.add_parser("add")
+    topic_task_add.add_argument("--topic-id")
+    topic_task_add.add_argument("--allow-default-topic", action="store_true")
+    topic_task_add.add_argument("--status", choices=sorted(TOPIC_TASK_STATUSES), default="todo")
+    topic_task_add.add_argument("--title", required=True)
+    topic_task_add.add_argument("--description", default="")
+    topic_task_add.add_argument("--acceptance", default="")
+    topic_task_add.add_argument("--evidence", action="append", default=[])
+    topic_task_add.set_defaults(func=command_topic_task_add)
+    topic_task_set = topic_task_sub.add_parser("set")
+    topic_task_set.add_argument("--item-id", required=True)
+    topic_task_set.add_argument("--status", choices=sorted(TOPIC_TASK_STATUSES), required=True)
+    topic_task_set.add_argument("--evidence", action="append", default=[])
+    topic_task_set.set_defaults(func=command_topic_task_set)
+    topic_task_list = topic_task_sub.add_parser("list")
+    topic_task_list.add_argument("--topic-id", required=True)
+    topic_task_list.set_defaults(func=command_topic_task_list)
     add_common_run_subcommands(subparsers)
     decision = subparsers.add_parser("decision")
     decision_sub = decision.add_subparsers(dest="decision_command", required=True)
@@ -3119,13 +3877,16 @@ def build_parser() -> argparse.ArgumentParser:
     handoff = subparsers.add_parser("handoff")
     handoff_sub = handoff.add_subparsers(dest="handoff_command", required=True)
     generate = handoff_sub.add_parser("generate")
+    generate.add_argument("--topic-id")
     generate.add_argument("--print-path", action="store_true", help="print generated handoff path for manual debugging")
     generate.set_defaults(func=command_handoff_generate)
     validate = handoff_sub.add_parser("validate")
+    validate.add_argument("--topic-id")
     validate.set_defaults(func=command_handoff_validate)
     checkpoint = subparsers.add_parser("checkpoint")
     checkpoint_sub = checkpoint.add_subparsers(dest="checkpoint_command", required=True)
     checkpoint_save = checkpoint_sub.add_parser("save")
+    checkpoint_save.add_argument("--topic-id")
     checkpoint_save.add_argument("--text", required=True)
     checkpoint_save.set_defaults(func=command_checkpoint_save)
     context = subparsers.add_parser("context")
@@ -3154,6 +3915,7 @@ def build_parser() -> argparse.ArgumentParser:
     intent_check.add_argument("--text", required=True)
     intent_check.set_defaults(func=command_intent_check)
     resume = subparsers.add_parser("resume")
+    resume.add_argument("--topic-id")
     resume.set_defaults(func=command_resume)
     return parser
 

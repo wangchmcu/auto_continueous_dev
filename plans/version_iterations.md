@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.22
+- current_version: v0.32
 - status: done
-- goal: 让 AIT 命令在已初始化项目的子目录中运行时，自动使用最近父级状态库所在目录作为项目根。
+- goal: 完成 topic_id 长期方案的 topic 级 handoff、project board、context/search 接入、写入安全、文档同步和迁移兼容。
 
 ## v0.1 任务清单
 
@@ -709,6 +709,206 @@ v0.22 之后仍未覆盖的全局能力：
 2. 在已初始化项目子目录运行 `auto-iter run exec`，run 记录和 `runs/` 目录写入父级项目根目录。
 3. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.23 任务清单
+
+- status: done
+- goal: 建立 topic_id 解析和 default topic 兼容层，保留旧 active topic 恢复入口，同时为多 Codex thread 并行写入打基础。
+- [x] 新增统一 topic 解析：`--topic-id` 参数优先，其次 `AUTO_ITER_TOPIC_ID` 环境变量，最后回退 default topic。
+- [x] `auto-iter doctor` 输出 resolved topic 和来源。
+- [x] README、AGENTS、entry skill、workflow skill 和 global plan 把 `active topic` 解释为 default topic 兼容入口。
+- [x] 测试覆盖显式参数、环境变量、default topic 三种解析来源。
+
+## v0.23 距离 global plan
+
+v0.23 是 topic_id 驱动路线的兼容层，不删除旧 active topic，也不改变 run、decision、route check、search 的事实语义。
+
+v0.23 已覆盖的全局能力：
+
+- 多 Codex thread 可通过显式 topic_id 或环境变量表达工作 topic。
+- 单 thread 和旧项目仍可使用 default topic 作为默认恢复入口。
+- doctor 能暴露 resolved topic，降低错绑风险。
+
+v0.23 之后仍未覆盖的全局能力：
+
+- topic plan 基础结构。
+- topic 内任务状态。
+- topic 级 handoff 和 checkpoint。
+- project board 跨 topic 总览。
+- topic plan、topic handoff、project board 的 context index/search 接入。
+- 多 open topic 场景下的写入安全收紧。
+- global plan 瘦身和模板化。
+- 旧 active topic 项目迁移和兼容清理。
+
+## v0.23 验收标准
+
+1. `auto-iter doctor` 在无 topic 时显示 resolved topic 为 none。
+2. `AUTO_ITER_TOPIC_ID=<id> auto-iter doctor` 显示 resolved topic 来源为 environment。
+3. 存在 default topic 且无显式参数或环境变量时，`auto-iter doctor` 显示 resolved topic 来源为 default_topic。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.24 任务清单
+
+- status: done
+- goal: 为每个 topic 增加 topic plan 事实源和 Markdown projection，覆盖局部目标、非目标、验收、停止条件和升级条件。
+- [x] 新增 `topic_plans` 表。
+- [x] 新增 `auto-iter topic plan set/show/current`。
+- [x] 生成 `topics/<topic_id>/plan.md` 和 `topics/default_topic_plan.md`。
+- [x] `context index` 纳入 topic plan。
+- [x] README、AGENTS、entry skill、workflow skill 说明 topic plan 不能替代 decision 和 run evidence。
+- [x] 测试覆盖 topic plan 设置、展示、default plan projection 和 context index。
+
+## v0.24 距离 global plan
+
+v0.24 完成 topic plan 的基础结构，但还没有 topic 级 handoff、project board 或多 open topic 写入安全收紧。
+
+v0.24 已覆盖的全局能力：
+
+- 每个 topic 可以拥有独立的局部计划。
+- topic plan 已进入 SQLite 事实源和 Markdown projection。
+- context index 能按需发现 topic plan。
+
+v0.24 之后仍未覆盖的全局能力：
+
+- topic 级 handoff 和 checkpoint。
+- project board 跨 topic 总览。
+- topic plan、topic handoff、project board 的 search graph 接入。
+- 多 open topic 场景下的写入安全收紧。
+- global plan 瘦身和模板化。
+- 旧 active topic 项目迁移和兼容清理。
+
+## v0.24 验收标准
+
+1. `auto-iter topic plan set --topic-id <id>` 写入 topic plan。
+2. `auto-iter topic plan show --topic-id <id>` 输出同一份 plan。
+3. `auto-iter topic plan current` 输出 default topic 的 plan。
+4. `auto-iter context index` 包含 `topics/<topic_id>/plan.md` 和 `topics/default_topic_plan.md`。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.25 任务清单
+
+- status: done
+- goal: 为 topic plan 增加 topic 内任务状态，覆盖 todo、doing、done、blocked、dropped。
+- [x] 新增 `topic_plan_items` 表。
+- [x] 新增 `auto-iter topic task add/set/list`。
+- [x] topic plan projection 按状态显示 Todo、Doing、Done、Blocked、Dropped。
+- [x] README、AGENTS、entry skill、workflow skill 说明 topic task 是计划状态，不替代 decision 和 topic evidence。
+- [x] 测试覆盖任务新增、状态更新、列表和 plan projection。
+
+## v0.25 距离 global plan
+
+v0.25 让 topic plan 具备类似 Jira 的局部任务看板，但还没有项目级跨 topic board，也没有 topic 级 handoff。
+
+v0.25 已覆盖的全局能力：
+
+- 单个 topic 内可以记录 todo、doing、done、blocked、dropped。
+- topic plan projection 能按状态展示任务。
+
+v0.25 之后仍未覆盖的全局能力：
+
+- topic 级 handoff 和 checkpoint。
+- project board 跨 topic 总览。
+- topic plan、topic handoff、project board 的 search graph 接入。
+- 多 open topic 场景下的写入安全收紧。
+- global plan 瘦身和模板化。
+- 旧 active topic 项目迁移和兼容清理。
+
+## v0.25 验收标准
+
+1. `auto-iter topic task add --topic-id <id>` 新增 topic task。
+2. `auto-iter topic task set --item-id <id> --status doing` 更新任务状态。
+3. `auto-iter topic task list --topic-id <id>` 显示任务状态。
+4. `topics/<topic_id>/plan.md` 按状态展示任务。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.26 任务清单
+
+- status: done
+- goal: 为单个 topic 生成独立 handoff 和 checkpoint，避免多个 Codex thread 互相覆盖项目级 handoff。
+- [x] 新增 `topics/<topic_id>/latest_handoff.md`。
+- [x] `handoff generate --topic-id <id>` 和 `checkpoint save --topic-id <id>` 写 topic 级 handoff。
+- [x] `handoff validate --topic-id <id>` 校验 topic 级 handoff。
+- [x] 项目级 handoff 增加 Topic Summary，显示 default topic、recent topic、open topic 和 blocked task 摘要。
+
+## v0.26 验收标准
+
+1. `auto-iter handoff generate --topic-id <id>` 默认静默，并只写 `topics/<topic_id>/latest_handoff.md`。
+2. `auto-iter checkpoint save --topic-id <id> --text "<text>"` 生成有效 topic handoff。
+3. 项目级 handoff 包含 `## Topic Summary`。
+4. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
+## v0.27 任务清单
+
+- status: done
+- goal: 提供跨 topic 的 project board（项目 topic 总览：open、doing、blocked、done 和 ready to satisfy 摘要）。
+- [x] 新增 `topics/board.md`。
+- [x] 新增 `auto-iter topic board`。
+- [x] board 显示 open topics、doing tasks、blocked tasks、recent done tasks、ready to satisfy topics。
+
+## v0.27 验收标准
+
+1. `auto-iter topic board` 输出 project board。
+2. `topics/board.md` 与命令输出一致。
+3. blocked task 和 recent done task 能在 board 中按 topic 找到。
+
+## v0.28 任务清单
+
+- status: done
+- goal: topic plan、topic handoff、project board 进入 context index 和 search。
+- [x] `context index` 纳入 `topics/<topic_id>/latest_handoff.md`。
+- [x] search source type 区分 `topic_plan`、`topic_handoff`、`topic_board`。
+- [x] search graph 通过 topic_id 连接 topic projection、topic plan、topic handoff 和 board。
+
+## v0.28 验收标准
+
+1. `auto-iter context index` 能看到 topic plan、topic handoff 和 topic board。
+2. `auto-iter search index` 为 topic plan、topic handoff 和 topic board 建索引。
+3. 搜索结果能回到明确 path、heading 和 topic_id。
+
+## v0.29 任务清单
+
+- status: done
+- goal: 多 open topic 场景下，topic 级写入不能静默落到错误 topic。
+- [x] topic 级写入按 `--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 解析。
+- [x] 多 open topic 且隐式 default 写入时拒绝，除非显式 `--allow-default-topic`。
+- [x] topic 级写入输出 resolved topic 和来源。
+
+## v0.29 验收标准
+
+1. `AUTO_ITER_TOPIC_ID=<id> auto-iter topic plan set ...` 能写入指定 topic。
+2. 多 open topic 时，未显式绑定 topic 的写入被拒绝并提示 `--topic-id`、`AUTO_ITER_TOPIC_ID` 或 `--allow-default-topic`。
+3. 显式 `--allow-default-topic` 时可以写 default topic。
+
+## v0.30 任务清单
+
+- status: done
+- goal: global plan 保持长期方向、topic 模板、project board 读取规则和升级规则；单 topic 细节进入 topic plan、topic handoff 和 board。
+- [x] global plan 明确不承载单 topic 任务细节。
+- [x] project board 成为跨 topic 总览入口。
+- [x] active_plan/version_iterations 继续记录 AIT 自身版本实施状态。
+
+## v0.31 任务清单
+
+- status: done
+- goal: README、AGENTS 和 Codex skills 同步 topic_id 长期方案。
+- [x] README 增加 topic board、topic-scoped handoff、topic checkpoint、migrate 和多 open topic 写入规则。
+- [x] AGENTS 增加多 thread topic 绑定和 global plan 瘦身规则。
+- [x] `auto-iteration-entry` 和 `auto-iteration` skills 同步命令和规则。
+- [x] 安装测试覆盖新 skill 文案。
+
+## v0.32 任务清单
+
+- status: done
+- goal: 旧项目平滑升级到 topic_id/default topic/topic plan 结构。
+- [x] 新增 `auto-iter migrate`。
+- [x] migrate 为没有 topic plan 的旧 topic 创建空 plan，并刷新 topic projections 和 board。
+- [x] `handoff validate` 对缺 topic plan 的旧 topic 先 warning，不直接失败。
+
+## v0.32 验收标准
+
+1. `auto-iter migrate` 能为 legacy topic 创建 `topics/<topic_id>/plan.md`。
+2. `auto-iter migrate` 输出 default topic 和 board 路径。
+3. 缺 plan 的旧 topic 会在 `handoff validate` 中产生 warning，但 validate 仍可通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -794,6 +994,46 @@ v0.22 之后仍未覆盖的全局能力：
 ### v0.22
 
 - done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根，`run exec` 仍从项目根启动命令。
+
+### v0.23
+
+- done：topic_id 解析和 default topic 兼容层；`--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 三层解析，doctor 显示 resolved topic。
+
+### v0.24
+
+- done：topic plan 基础结构，新增 topic plan 事实源、投影和 `topic plan set/show/current`。
+
+### v0.25
+
+- done：topic 内 Jira 式任务状态，新增 todo、doing、done、blocked、dropped 任务项。
+
+### v0.26
+
+- done：topic 级 handoff 和 checkpoint，避免多 thread 覆盖项目级 handoff。
+
+### v0.27
+
+- done：project board 跨 topic 总览，承担类似 Jira 的项目级看板。
+
+### v0.28
+
+- done：topic plan、topic handoff、project board 接入 context index 和 search。
+
+### v0.29
+
+- done：写入安全和多 thread 防错，多个 open topic 时不能静默错绑 default topic。
+
+### v0.30
+
+- done：global plan 瘦身和模板化，只保留长期方向、topic 模板、跨 topic 摘要规则和升级规则。
+
+### v0.31
+
+- done：README、AGENTS、Codex skills 和安装同步。
+
+### v0.32
+
+- done：旧 active topic 项目平滑迁移和兼容清理。
 
 ### 后续可选
 

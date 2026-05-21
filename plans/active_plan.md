@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.22。
+- 当前版本：v0.32。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -31,7 +31,16 @@
 - v0.20 已完成：handoff 增加 `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）Markdown projection（从已有记录摘出的可读视图，不是新的事实源），只保留主线入口和证据入口。
 - v0.21 已完成：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序；`auto-iter init` 不创建它，AIT 也不把它当状态源。
 - v0.22 已完成：AIT 命令在已初始化项目子目录中运行时，自动使用最近父级 `state/agent_state.db` 所在目录作为项目根；`run exec` 仍从项目根启动命令。
-- 下一阶段：根据实际使用感受评估子目录恢复、`Current Baseline` 和可选 `AGENTS.md` 读取顺序是否足以支撑旧项目接管，或继续 topic 生命周期管理增强。
+- v0.23 已完成：topic_id 解析和 default topic 兼容层，保留旧 active topic 恢复入口，同时为多 Codex thread 并行写入打基础。
+- v0.24 已完成：topic plan 基础结构，新增 topic plan 事实源、投影和 `topic plan set/show/current`。
+- v0.25 已完成：topic 内任务状态，新增 `topic task add/set/list` 和 todo、doing、done、blocked、dropped projection。
+- v0.26 已完成：topic 级 handoff/checkpoint，新增 `topics/<topic_id>/latest_handoff.md`、topic 级 validate，并让项目级 handoff 展示 topic summary。
+- v0.27 已完成：project board 跨 topic 总览，新增 `auto-iter topic board` 和 `topics/board.md`。
+- v0.28 已完成：topic plan、topic handoff、project board 接入 context index 和 search。
+- v0.29 已完成：多 open topic 写入安全，topic 级写入必须显式绑定、使用 `AUTO_ITER_TOPIC_ID`，或明确 `--allow-default-topic`。
+- v0.30 已完成：global plan 瘦身职责确认，单 topic 细节落到 topic plan、topic handoff 和 project board。
+- v0.31 已完成：README、AGENTS、entry skill、workflow skill 和安装测试同步。
+- v0.32 已完成：迁移兼容，新增 `auto-iter migrate`，为旧 topic 补空 plan，并在 handoff validate 对缺 plan 先 warning。
 
 ## 下一步
 
@@ -54,4 +63,8 @@
 17. 新 session 恢复时先看 handoff 的 `Current Baseline` 段；该段只作为当前主线入口，细节仍回到 decision、run、artifact、topic evidence 和 plans。
 18. 项目根目录 `AGENTS.md` 是可选项目规则文件；handoff 只在该文件已经存在时列入读取顺序，缺失时不创建、不报缺失。
 19. 在已初始化 AIT 项目的子目录中运行命令时，先用 `auto-iter doctor` 确认解析出的项目根；`run exec` 的命令从项目根执行，实验需要子目录时把 `cd path/to/workdir && ...` 写入 `--command`。
-20. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+20. 保留旧 active topic 兼容入口，但文档和输出都改用 default topic 口径；topic_id 解析按 `--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 的顺序进行。
+21. topic plan 已覆盖目标、非目标、验收、停止条件、升级条件和 topic 内任务状态；topic handoff、project board、context/search 和 migrate 已对齐 topic_id 长期方案。
+22. 多 Codex thread 并行工作时，优先使用 `--topic-id` 或 `AUTO_ITER_TOPIC_ID`，用 `auto-iter handoff generate --topic-id <id>` 保存该 topic 的交接。
+23. 升级旧项目后运行 `auto-iter migrate`，再用 `auto-iter handoff validate` 检查是否还有 warning。
+24. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
