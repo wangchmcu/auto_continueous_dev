@@ -18,7 +18,7 @@
 
 - current_version: v0.32
 - status: done
-- goal: 完成 topic_id 长期方案的 topic 级 handoff、project board、context/search 接入、写入安全、文档同步和迁移兼容。
+- goal: 完成 topic_id 长期方案的 topic 级 handoff、project board、context/search 接入、写入安全、文档同步和迁移兼容；同时合入 `auto-iter update` 安装产物更新入口。
 
 ## v0.1 任务清单
 
@@ -680,23 +680,33 @@ v0.21 之后仍未覆盖的全局能力：
 ## v0.22 任务清单
 
 - status: done
-- goal: AIT 命令在已初始化项目的子目录中运行时，自动找到最近父级 `state/agent_state.db`，避免把子目录误当成新的项目根。
+- goal: AIT 命令在已初始化项目的子目录中运行时能找到最近父级状态库；同时提供 `auto-iter update` 刷新安装产物，默认保留项目状态、不运行 `init`。
 - [x] CLI 根目录解析从当前目录向上查找最近的 `state/agent_state.db`。
 - [x] 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
 - [x] `doctor` 从子目录运行时报告父级项目根目录。
 - [x] `run exec` 从解析后的项目根目录记录和执行命令，不在子目录新建 `runs/`。
 - [x] README、AGENTS、entry skill、workflow skill 和 global plan 说明子目录运行边界。
 - [x] 测试覆盖子目录运行 `doctor` 和 `run exec`。
+- [x] 新增 `update` CLI 子命令，复用安装路径选择、卸载安全检查和安装自检。
+- [x] `auto-iter update` 默认只更新安装产物，不删除或创建项目状态目录。
+- [x] 新增 `--check-project`：当前目录已有 AIT 状态时运行 `doctor`；没有状态时输出 skipped，不执行 `init`。
+- [x] README、AGENTS、entry skill 和 workflow skill 说明“更新 AIT”使用 `auto-iter update`。
+- [x] 测试覆盖 update 保留项目状态、刷新安装产物、不默认初始化项目、可选 project check。
+- [x] `python3 -Wd -m unittest discover -s tests -v` 通过。
 
 ## v0.22 距离 global plan
 
-v0.22 没有新增事实源；它修复了命令入口在真实工作目录可能位于项目子目录时的根目录定位问题。
+v0.22 没有新增事实源；它修复了命令入口在真实工作目录可能位于项目子目录时的根目录定位问题，并覆盖 Codex 入口能力中的安装产物更新入口，减少用户把“更新 AIT”和“初始化项目状态”混在一起的风险。
 
 v0.22 已覆盖的全局能力：
 
 - AIT 命令可从已初始化项目的子目录恢复到同一个 SQLite 状态库。
 - `run exec` 的状态记录仍落在项目根目录，避免子目录生成孤立的 `runs/`。
 - agent 文档明确：实验需要子目录执行时，把 `cd path/to/workdir && ...` 写入 `--command`。
+- 用户可用一个命令刷新 `auto-iter` wrapper 和 installed skills。
+- update 默认保留项目状态，避免误删长期 tracking 信息。
+- update 默认不运行 `init`，避免在错误目录创建 AIT 状态。
+- 需要项目健康检查时通过 `--check-project` 显式触发。
 
 v0.22 之后仍未覆盖的全局能力：
 
@@ -707,7 +717,9 @@ v0.22 之后仍未覆盖的全局能力：
 
 1. 在已初始化项目子目录运行 `auto-iter doctor`，输出的 root 是父级项目根目录。
 2. 在已初始化项目子目录运行 `auto-iter run exec`，run 记录和 `runs/` 目录写入父级项目根目录。
-3. `python3 -Wd -m unittest discover -s tests -v` 通过。
+3. `auto-iter update` 默认刷新安装产物但不创建项目状态。
+4. `auto-iter update --check-project` 能在已有项目状态时运行 doctor，没有状态时跳过。
+5. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
 ## v0.23 任务清单
 
@@ -993,7 +1005,7 @@ v0.25 之后仍未覆盖的全局能力：
 
 ### v0.22
 
-- done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根，`run exec` 仍从项目根启动命令。
+- done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根，`run exec` 仍从项目根启动命令；安装产物 update 入口也已合入。
 
 ### v0.23
 

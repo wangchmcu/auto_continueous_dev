@@ -267,6 +267,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("project-root `AGENTS.md`", skill_text)
         self.assertIn("does not create project-root `AGENTS.md`", skill_text)
         self.assertIn("auto-iter uninstall", skill_text)
+        self.assertIn("auto-iter update", skill_text)
         self.assertIn("does not remove project state", skill_text)
         self.assertIn("--keep-project-state", skill_text)
         self.assertIn("--remove-project-state", skill_text)
@@ -472,6 +473,87 @@ class CliTests(unittest.TestCase):
         self.assertFalse((self.tmp / "decisions").exists())
         self.assertFalse((self.tmp / "runs").exists())
         self.assertFalse((self.tmp / "handoffs").exists())
+
+    def test_update_replaces_installed_command_and_skills(self):
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        run_cli(self.tmp, "install", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+
+        command_path = bin_dir / "auto-iter"
+        expected_target = str(REPO_ROOT / "tools" / "auto_iter.py")
+        command_path.write_text(f"stale wrapper for {expected_target}\n", encoding="utf-8")
+        stale_skill_file = skills_dir / "auto-iteration-entry" / "STALE.txt"
+        stale_skill_file.write_text("old skill artifact\n", encoding="utf-8")
+
+        result = run_cli(self.tmp, "update", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+
+        self.assertIn("removed command", result.stdout)
+        self.assertIn("removed skill: auto-iteration-entry", result.stdout)
+        self.assertIn("installed command", result.stdout)
+        self.assertIn("installed skill", result.stdout)
+        self.assertIn("update check: ok", result.stdout)
+        self.assertTrue(command_path.exists())
+        self.assertNotIn("stale wrapper", command_path.read_text(encoding="utf-8"))
+        self.assertFalse(stale_skill_file.exists())
+
+    def test_update_preserves_existing_project_state_directories(self):
+        run_cli(self.tmp, "init")
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+        for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
+            marker = self.tmp / directory / "update-marker.txt"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(f"keep {directory}\n", encoding="utf-8")
+
+        result = run_cli(self.tmp, "update", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+
+        self.assertIn("project state preserved", result.stdout)
+        self.assertIn("update check: ok", result.stdout)
+        for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
+            self.assertTrue((self.tmp / directory).is_dir())
+            self.assertTrue((self.tmp / directory / "update-marker.txt").exists())
+
+    def test_update_in_empty_directory_does_not_create_project_state(self):
+        bin_dir = self.tmp / "bin"
+        skills_dir = self.tmp / "skills"
+
+        result = run_cli(self.tmp, "update", "--bin-dir", str(bin_dir), "--skills-dir", str(skills_dir))
+
+        self.assertIn("update check: ok", result.stdout)
+        for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
+            self.assertFalse((self.tmp / directory).exists(), directory)
+
+    def test_update_check_project_runs_doctor_or_skips_without_init(self):
+        initialized = self.tmp / "initialized"
+        empty = self.tmp / "empty"
+        initialized.mkdir()
+        empty.mkdir()
+        run_cli(initialized, "init")
+
+        initialized_result = run_cli(
+            initialized,
+            "update",
+            "--bin-dir",
+            str(initialized / "bin"),
+            "--skills-dir",
+            str(initialized / "skills"),
+            "--check-project",
+        )
+        empty_result = run_cli(
+            empty,
+            "update",
+            "--bin-dir",
+            str(empty / "bin"),
+            "--skills-dir",
+            str(empty / "skills"),
+            "--check-project",
+        )
+
+        self.assertIn("state: ok", initialized_result.stdout)
+        self.assertIn("database: ok", initialized_result.stdout)
+        self.assertIn("project check skipped", empty_result.stdout)
+        self.assertFalse((empty / "state").exists())
+        self.assertFalse((empty / "plans").exists())
 
     def test_topic_lifecycle_keeps_one_active_and_writes_projections(self):
         run_cli(self.tmp, "init")
@@ -1785,7 +1867,7 @@ class CliTests(unittest.TestCase):
         handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("## 读取顺序", handoff_text)
         self.assertNotIn(str(self.tmp / "AGENTS.md"), handoff_text)
-        self.assertIn(f"1. {self.tmp / 'handoffs' / 'latest_handoff.md'}", handoff_text)
+        self.assertIn(f"1. {(self.tmp / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
 
     def test_handoff_read_order_includes_existing_project_agents_file(self):
         run_cli(self.tmp, "init")
@@ -1794,8 +1876,8 @@ class CliTests(unittest.TestCase):
         run_cli(self.tmp, "handoff", "generate")
 
         handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
-        self.assertIn(f"1. {self.tmp / 'AGENTS.md'}", handoff_text)
-        self.assertIn(f"2. {self.tmp / 'handoffs' / 'latest_handoff.md'}", handoff_text)
+        self.assertIn(f"1. {(self.tmp / 'AGENTS.md').resolve()}", handoff_text)
+        self.assertIn(f"2. {(self.tmp / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
 
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")
@@ -1936,8 +2018,14 @@ class CliTests(unittest.TestCase):
         self.assertIn(f"accepted_start: decision {decision_id}: V8 remains the current SIL alignment reference", handoff_text)
         self.assertIn(f"accepted_result: run {run_id}: dataset=fr-split-demo status=success", handoff_text)
         self.assertIn("why_current: Use V8 as the accepted comparison start", handoff_text)
-        self.assertIn(f"evaluation_entry: {self.tmp / 'decisions' / 'active' / (decision_id + '.md')}", handoff_text)
-        self.assertIn(f"provenance_entry: {self.tmp / 'runs' / run_id / 'config_resolved.json'}", handoff_text)
+        self.assertIn(
+            f"evaluation_entry: {(self.tmp / 'decisions' / 'active' / (decision_id + '.md')).resolve()}",
+            handoff_text,
+        )
+        self.assertIn(
+            f"provenance_entry: {(self.tmp / 'runs' / run_id / 'config_resolved.json').resolve()}",
+            handoff_text,
+        )
         self.assertIn(f"diagnostic_entry: {artifact.resolve()}", handoff_text)
 
     def test_handoff_uses_newest_success_when_runs_share_timestamp(self):

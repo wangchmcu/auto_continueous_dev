@@ -15,6 +15,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user asks a fuzzy historical-memory question such as “之前是不是说过某个现象”, run `auto-iter search query --text "<用户原话>" --limit 10 --explain`, then load the exact source from the returned path, heading, `run_id`, `decision_id`, or topic evidence.
 - If the user asks to search `raw_input/`, do it only for initial setup or explicit missing-information lookup, then write useful information back into tracking information.
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
+- If the user asks to update or refresh installed AIT, run `auto-iter update`. Use `auto-iter update --check-project` only when the current directory should be checked after the refresh.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
 - If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
@@ -82,6 +83,19 @@ In an interactive terminal, uninstall asks whether to remove those project state
 directories too and prints a short description of each directory. In
 non-interactive runs, use `--keep-project-state` or `--remove-project-state` to
 make the choice explicit.
+
+To refresh installed artifacts without touching project state, run:
+
+```bash
+auto-iter update
+```
+
+`auto-iter update` removes the installed command wrapper and installed Codex
+skills owned by this checkout, then installs fresh copies. It does not run
+`init`, does not create project state directories, and never prompts to delete
+project state. Use `--bin-dir` and `--skills-dir` for custom locations, and use
+`--check-project` only when an existing AIT project in the current directory
+should be checked after the refresh.
 
 Install should prefer an operating-system-appropriate command directory already
 on `PATH` and writable. If it falls back to a user-owned directory, use the

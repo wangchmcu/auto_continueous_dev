@@ -62,6 +62,7 @@
 - 安装器应优先使用当前操作系统和 shell 已认可的命令目录；如果没有合适目录，回落到用户目录并提示路径，不默认修改用户 shell 配置。
 - `auto-iter handoff generate` 默认不输出 stdout，避免 Codex Stop hook 把普通文本当作 hook JSON 解析；需要人工调试时显式使用 `auto-iter handoff generate --print-path`，且不能依赖平台特定 shell 重定向。
 - 提供安装管理入口：可安装、卸载并重新安装命令和 Codex skills，且卸载不删除项目状态。
+- 提供更新入口 `auto-iter update`：更新已安装命令 wrapper 和 Codex skills，语义等价于保留项目状态的卸载再安装；默认不运行 `init`，避免在错误目录创建或污染项目状态。需要检查当前项目状态时显式使用 `--check-project`。
 - 用户在 Codex CLI 中表达任务，agent 在同一个会话里调用命令；用户不需要退出 Codex CLI。
 - 入口 skill 只负责流程触发和命令调用顺序；状态写入仍由 `auto_iteration` 完成。
 
@@ -470,6 +471,12 @@
 - 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
 - `run exec` 从解析后的项目根目录记录和执行命令；需要实际进入子目录时，由 `--command` 显式 `cd`。
 - README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
+
+同版本补充：安装产物 update 入口。
+
+- 新增 `auto-iter update`，用于刷新已安装 wrapper 和 Codex skills。
+- 默认只更新安装产物，保留 `state/`、`plans/`、`topics/`、`raw_input/`、`decisions/`、`runs/`、`handoffs/`，不执行 `init`。
+- `auto-iter update --check-project` 只在当前目录已有 AIT 状态时运行 `doctor`，没有状态时提示 skipped。
 
 ### v0.23：topic_id 解析和 default topic 兼容层
 
