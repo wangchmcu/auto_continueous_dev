@@ -444,7 +444,7 @@ The agent should:
 - load the exact source with `auto-iter context show`, `auto-iter run show`, or `auto-iter topic evidence`
 - answer from the exact source, not from the fuzzy search score alone
 
-`search query` refreshes the default tracking-information index before searching. For manual debugging, the local search index can also be built with:
+`search query` refreshes the default tracking-information index only when indexed inputs have changed; otherwise it reuses the existing index for a read-only search. For manual debugging, the local search index can also be built with:
 
 ```bash
 auto-iter search index

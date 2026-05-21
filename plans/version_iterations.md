@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.32
+- current_version: v0.33
 - status: done
-- goal: 完成 topic_id 长期方案的 topic 级 handoff、project board、context/search 接入、写入安全、文档同步和迁移兼容；同时合入 `auto-iter update` 安装产物更新入口。
+- goal: 完成 search query 按需刷新索引：索引输入未变化时复用已有索引，索引输入变化时自动重建，并避免并发 search 直接触发 SQLite 写锁失败。
 
 ## v0.1 任务清单
 
@@ -1056,6 +1056,15 @@ v0.25 之后仍未覆盖的全局能力：
 
 - done：旧 active topic 项目平滑迁移和兼容清理。
 
+### v0.33
+
+- done：`search query` 按需刷新索引；索引输入签名未变化时复用已有索引，避免每次查询全量重建。
+- done：新增 `search_index_meta` 记录默认索引和 raw-input 索引的输入签名、文档数、结构关系边数和 FTS 后端状态。
+- done：新增 `state/search_index.lock` 重建锁；并发 search 中只有一个进程执行重建，其他进程可继续使用旧索引并打印 stale warning（stale warning：提示索引可能不是最新，不代表原始记录丢失）。
+- done：README、AGENTS、Codex skills 已同步说明 search query 只在索引输入变化时刷新。
+- evidence：`python3 -Wd -m unittest discover -s tests -v` 通过 60 个测试；真实 Valeo AIT 项目第二次同查询从约 5.25 秒降到约 0.05 秒；并行两个 search query 不再出现 `database is locked`。
+
 ### 后续可选
 
 - 若轻量检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+- 若索引文档规模继续增大，再评估增量索引；增量索引指只更新变动文件对应的搜索文档和结构关系边，而不是每次全量重建。

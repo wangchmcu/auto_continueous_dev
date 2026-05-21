@@ -433,6 +433,8 @@
 - 组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
 - 默认排除 `raw_input/`，保持 tracking 信息优先。
 - 搜索结果回指 path、heading、`run_id`、`decision_id` 或 topic evidence，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
+- `search query` 在索引输入未变化时复用已有索引；索引输入变化时才刷新默认 tracking-information index（tracking-information index：由 plans、handoff、topics、decisions 和 run summaries 派生出的本地检索索引）。
+- 搜索索引是派生数据；索引 stale（索引可能不是最新）只表示最近写入内容可能暂时搜不到，不表示原始 run、decision、topic、handoff 或 plan 记录丢失。
 
 ### v0.20：handoff Current Baseline 投影
 
@@ -602,5 +604,6 @@
 
 任务：
 
+- 若索引规模明显变大，先评估增量索引；增量索引指只更新变动文件对应的搜索文档和结构关系边。
 - 若轻量模糊检索主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
 - 更重检索只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。

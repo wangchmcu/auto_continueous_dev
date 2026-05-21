@@ -194,7 +194,7 @@ For fuzzy historical-memory questions, search before broad manual reading:
 auto-iter search query --text "<用户原话>" --limit 10 --explain
 ```
 
-`search query` refreshes the default tracking-information index before searching. This local search combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. Treat the result as a candidate list only; confirm the answer from `context show`, `run show`, `decision` projection, or `topic evidence`.
+`search query` refreshes the default tracking-information index only when indexed inputs have changed; otherwise it reuses the existing index for a read-only search. This local search combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. Treat the result as a candidate list only; confirm the answer from `context show`, `run show`, `decision` projection, or `topic evidence`.
 
 ## Recording A Run
 

@@ -247,7 +247,7 @@ For fuzzy historical-memory questions, use the local search layer first:
 auto-iter search query --text "<用户原话>" --limit 10 --explain
 ```
 
-`search query` refreshes the default tracking-information index before searching. The search layer combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. After search returns candidates, load the exact source with `context show`, `run show`, or `topic evidence`.
+`search query` refreshes the default tracking-information index only when indexed inputs have changed; otherwise it reuses the existing index for a read-only search. The search layer combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. After search returns candidates, load the exact source with `context show`, `run show`, or `topic evidence`.
 
 ## Running An Experiment
 

@@ -1056,6 +1056,55 @@ class CliTests(unittest.TestCase):
         self.assertNotEqual(rows[0][0], rows[1][0])
         self.assertEqual({row[1] for row in rows}, {"Same Heading"})
 
+    def test_search_query_reuses_fresh_index(self):
+        run_cli(self.tmp, "init")
+        anchor = self.tmp / "plans" / "search_reuse.md"
+        anchor.write_text("# Search Reuse\nv030_reuse_anchor\n", encoding="utf-8")
+
+        first = run_cli(self.tmp, "search", "query", "--text", "v030_reuse_anchor", "--limit", "5")
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            first_updated_at = db.execute(
+                "select updated_at from search_documents where path = ?",
+                ("plans/search_reuse.md",),
+            ).fetchone()[0]
+
+        second = run_cli(self.tmp, "search", "query", "--text", "v030_reuse_anchor", "--limit", "5")
+
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            second_updated_at = db.execute(
+                "select updated_at from search_documents where path = ?",
+                ("plans/search_reuse.md",),
+            ).fetchone()[0]
+        self.assertIn("v030_reuse_anchor", first.stdout)
+        self.assertIn("v030_reuse_anchor", second.stdout)
+        self.assertEqual(first_updated_at, second_updated_at)
+
+    def test_search_query_refreshes_when_index_input_changes(self):
+        run_cli(self.tmp, "init")
+        first_anchor = self.tmp / "plans" / "search_refresh_a.md"
+        first_anchor.write_text("# Search Refresh A\nv030_refresh_a\n", encoding="utf-8")
+        run_cli(self.tmp, "search", "query", "--text", "v030_refresh_a", "--limit", "5")
+
+        second_anchor = self.tmp / "plans" / "search_refresh_b.md"
+        second_anchor.write_text("# Search Refresh B\nv030_refresh_b\n", encoding="utf-8")
+        refreshed = run_cli(self.tmp, "search", "query", "--text", "v030_refresh_b", "--limit", "5")
+
+        self.assertIn("v030_refresh_b", refreshed.stdout)
+
+    def test_search_query_uses_stale_index_when_refresh_is_locked(self):
+        run_cli(self.tmp, "init")
+        first_anchor = self.tmp / "plans" / "search_stale_a.md"
+        first_anchor.write_text("# Search Stale A\nv030_stale_a\n", encoding="utf-8")
+        run_cli(self.tmp, "search", "query", "--text", "v030_stale_a", "--limit", "5")
+        second_anchor = self.tmp / "plans" / "search_stale_b.md"
+        second_anchor.write_text("# Search Stale B\nv030_stale_b\n", encoding="utf-8")
+        (self.tmp / "state" / "search_index.lock").mkdir()
+
+        stale = run_cli(self.tmp, "search", "query", "--text", "v030_stale_a", "--limit", "5")
+
+        self.assertIn("v030_stale_a", stale.stdout)
+        self.assertIn("warning: search index refresh is already running", stale.stdout)
+
     def test_topic_evidence_links_runs_decisions_and_artifacts(self):
         run_cli(self.tmp, "init")
         topic_id = run_cli(

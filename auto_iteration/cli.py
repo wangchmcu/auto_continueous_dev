@@ -11,6 +11,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -981,6 +982,15 @@ def init_schema(db: sqlite3.Connection) -> None:
             relation_type text not null,
             summary text not null default '',
             primary key (source_doc_id, target_doc_id, relation_type)
+        );
+
+        create table if not exists search_index_meta (
+            scope text primary key,
+            indexed_at text not null,
+            source_signature text not null,
+            doc_count integer not null,
+            edge_count integer not null,
+            has_fts integer not null
         );
         """
     )
@@ -3376,6 +3386,133 @@ def clear_search_index(db: sqlite3.Connection, has_fts: bool) -> None:
     db.execute("delete from search_documents")
 
 
+def search_index_scope(include_raw_input: bool) -> str:
+    return "with_raw_input" if include_raw_input else "default"
+
+
+def search_index_lock_path() -> Path:
+    return root() / "state" / "search_index.lock"
+
+
+@contextmanager
+def search_index_lock(blocking: bool = False, timeout_seconds: float = 30.0):
+    lock_path = search_index_lock_path()
+    deadline = datetime.now().timestamp() + timeout_seconds
+    acquired = False
+    while True:
+        try:
+            lock_path.mkdir()
+            acquired = True
+            break
+        except FileExistsError:
+            try:
+                age_seconds = datetime.now().timestamp() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if age_seconds > 600:
+                try:
+                    lock_path.rmdir()
+                    continue
+                except OSError:
+                    pass
+            if not blocking or datetime.now().timestamp() >= deadline:
+                break
+            time.sleep(0.05)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                lock_path.rmdir()
+            except FileNotFoundError:
+                pass
+
+
+def search_source_signature(db: sqlite3.Connection, include_raw_input: bool) -> str:
+    file_rows = []
+    for path in context_files(include_raw_input):
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            continue
+        file_rows.append(
+            {
+                "path": path.relative_to(root()).as_posix(),
+                "mtime_ns": stat.st_mtime_ns,
+                "size": stat.st_size,
+            }
+        )
+    table_queries = [
+        ("runs", "select count(*), max(coalesce(ended_at, started_at, '')) from runs"),
+        ("metrics", "select count(*), '' from metrics"),
+        ("artifacts", "select count(*), '' from artifacts"),
+        ("decisions", "select count(*), max(created_at) from decisions"),
+        ("handoffs", "select count(*), max(created_at) from handoffs"),
+        ("route_checks", "select count(*), max(created_at) from route_checks"),
+        ("topics", "select count(*), max(updated_at) from topics"),
+        ("topic_events", "select count(*), max(created_at) from topic_events"),
+        ("topic_evidence_links", "select count(*), max(created_at) from topic_evidence_links"),
+        ("topic_plans", "select count(*), max(updated_at) from topic_plans"),
+        ("topic_plan_items", "select count(*), max(updated_at) from topic_plan_items"),
+    ]
+    db_rows = []
+    for name, query in table_queries:
+        count, latest = db.execute(query).fetchone()
+        db_rows.append({"table": name, "count": int(count), "latest": latest or ""})
+    payload = {
+        "include_raw_input": include_raw_input,
+        "files": file_rows,
+        "db": db_rows,
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def search_index_meta(db: sqlite3.Connection, include_raw_input: bool) -> sqlite3.Row | None:
+    return db.execute(
+        "select * from search_index_meta where scope = ?",
+        (search_index_scope(include_raw_input),),
+    ).fetchone()
+
+
+def search_index_is_fresh(db: sqlite3.Connection, include_raw_input: bool, source_signature: str) -> bool:
+    meta = search_index_meta(db, include_raw_input)
+    if meta is None:
+        return False
+    if meta["source_signature"] != source_signature:
+        return False
+    return db.execute("select count(*) from search_documents").fetchone()[0] > 0
+
+
+def update_search_index_meta(
+    db: sqlite3.Connection,
+    include_raw_input: bool,
+    source_signature: str,
+    doc_count: int,
+    edge_count: int,
+    has_fts: bool,
+) -> None:
+    db.execute(
+        """
+        insert into search_index_meta (scope, indexed_at, source_signature, doc_count, edge_count, has_fts)
+        values (?, ?, ?, ?, ?, ?)
+        on conflict(scope) do update set
+            indexed_at = excluded.indexed_at,
+            source_signature = excluded.source_signature,
+            doc_count = excluded.doc_count,
+            edge_count = excluded.edge_count,
+            has_fts = excluded.has_fts
+        """,
+        (
+            search_index_scope(include_raw_input),
+            now_iso(),
+            source_signature,
+            doc_count,
+            edge_count,
+            1 if has_fts else 0,
+        ),
+    )
+
+
 def token_counts_json(tokens: list[str]) -> tuple[str, float]:
     counts = Counter(tokens)
     norm = math.sqrt(sum(value * value for value in counts.values()))
@@ -3464,7 +3601,13 @@ def build_search_graph(db: sqlite3.Connection, documents: list[SearchDocument]) 
                 )
 
 
-def rebuild_search_index(db: sqlite3.Connection, include_raw_input: bool = False) -> tuple[int, int, bool]:
+def rebuild_search_index(
+    db: sqlite3.Connection,
+    include_raw_input: bool = False,
+    source_signature: str | None = None,
+) -> tuple[int, int, bool]:
+    if source_signature is None:
+        source_signature = search_source_signature(db, include_raw_input)
     has_fts = ensure_search_fts(db)
     clear_search_index(db, has_fts)
     documents = collect_search_documents(include_raw_input)
@@ -3473,12 +3616,16 @@ def rebuild_search_index(db: sqlite3.Connection, include_raw_input: bool = False
         insert_search_document(db, doc, has_fts, timestamp)
     build_search_graph(db, documents)
     edge_count = db.execute("select count(*) from search_graph_edges").fetchone()[0]
+    update_search_index_meta(db, include_raw_input, source_signature, len(documents), edge_count, has_fts)
     return len(documents), edge_count, has_fts
 
 
 def command_search_index(args: argparse.Namespace) -> int:
-    with database() as db:
-        doc_count, edge_count, has_fts = rebuild_search_index(db, args.include_raw_input)
+    with search_index_lock(blocking=True) as acquired:
+        if not acquired:
+            raise UserError("search index is locked by another process")
+        with database() as db:
+            doc_count, edge_count, has_fts = rebuild_search_index(db, args.include_raw_input)
     print(f"indexed search documents: {doc_count}")
     print(f"indexed graph edges: {edge_count}")
     print(f"raw_input: {'included' if args.include_raw_input else 'excluded'}")
@@ -3629,8 +3776,20 @@ def snippet(text: str, max_len: int = 180) -> str:
 
 
 def command_search_query(args: argparse.Namespace) -> int:
+    stale_warning = False
     with database() as db:
-        rebuild_search_index(db, include_raw_input=False)
+        source_signature = search_source_signature(db, include_raw_input=False)
+        fresh = search_index_is_fresh(db, include_raw_input=False, source_signature=source_signature)
+    if not fresh:
+        with search_index_lock(blocking=False) as acquired:
+            if acquired:
+                with database() as db:
+                    current_signature = search_source_signature(db, include_raw_input=False)
+                    if not search_index_is_fresh(db, include_raw_input=False, source_signature=current_signature):
+                        rebuild_search_index(db, include_raw_input=False, source_signature=current_signature)
+            else:
+                stale_warning = True
+    with database() as db:
         bm25_results = bm25_search(db, args.text, max(args.limit * 3, 20))
         vector_results = light_vector_search(db, args.text, max(args.limit * 3, 20))
         seeds = [doc_id for doc_id, _score in bm25_results[:5]]
@@ -3650,6 +3809,8 @@ def command_search_query(args: argparse.Namespace) -> int:
     print("# Search Results")
     print(f"query: {args.text}")
     print(f"indexed_documents: {total}")
+    if stale_warning:
+        print("warning: search index refresh is already running; results may not include recent writes")
     if not fused:
         print("no results")
         return 0
