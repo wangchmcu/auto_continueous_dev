@@ -68,4 +68,5 @@
 22. topic plan 已覆盖目标、非目标、验收、停止条件、升级条件和 topic 内任务状态；topic handoff、project board、context/search 和 migrate 已对齐 topic_id 长期方案。
 23. 多 Codex thread 并行工作时，优先使用 `--topic-id` 或 `AUTO_ITER_TOPIC_ID`，用 `auto-iter handoff generate --topic-id <id>` 保存该 topic 的交接。
 24. 升级旧项目后运行 `auto-iter migrate`，再用 `auto-iter handoff validate` 检查是否还有 warning。
-25. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+25. 实践中发现 topic_id 长期方案问题时，先按 `plans/version_iterations.md` 的 `v0.23-v0.32 实践期问题判定规则` 判断功能 bug 或功能缺失。已被 v0.23-v0.32 承诺的行为若不符合预期，直接沿既有计划修 bug，不重新开 global plan 分支。
+26. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。

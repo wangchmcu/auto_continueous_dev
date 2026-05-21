@@ -921,6 +921,15 @@ v0.25 之后仍未覆盖的全局能力：
 2. `auto-iter migrate` 输出 default topic 和 board 路径。
 3. 缺 plan 的旧 topic 会在 `handoff validate` 中产生 warning，但 validate 仍可通过。
 
+## v0.23-v0.32 实践期问题判定规则
+
+这轮 topic_id 长期方案的测试覆盖了核心命令路径，但测试不可能完整覆盖用户后续真实实践。后续实践中遇到问题时，先把问题对照本轮开发过程和验收边界，再判断是功能 bug 还是功能缺失。
+
+- 功能 bug：已经在 v0.23-v0.32 计划、任务清单、验收标准或文档规则中承诺过的行为，实际使用不符合承诺。例如显式 `--topic-id` 写错 topic、topic 级 handoff 覆盖项目级 handoff、多 open topic 时没有防错、migrate 没有给旧 topic 补空 plan、context/search 找不到已生成的 topic handoff。确认是 bug 时，不重新开 global plan 分支，直接沿本轮既有计划修复，并在对应版本记录下追加 bugfix 证据。
+- 功能缺失：实践中出现的新需求没有被 v0.23-v0.32 的计划、任务清单、验收标准或文档规则承诺。例如 topic merge、topic rename、跨 topic 依赖图、自动从对话推断 topic 切换等。确认是功能缺失时，先回到 global plan backlog 或新增后续版本，再实施。
+- 判定依据优先级：先看 `plans/version_iterations.md` 的 v0.23-v0.32 任务和验收标准，再看 `plans/global_plan.md` 的 topic plan 和 multi-thread topic binding 规则，然后看 README、AGENTS 和 skills 的用户入口说明，最后看测试只作为已覆盖路径的证据。
+- 修复记录要求：bugfix 要写明复现输入、期望行为、实际行为、对应承诺位置、修复文件和验证命令；不要因为测试当时没有覆盖就自动判为功能缺失。
+
 ## 后续版本方向
 
 ### v0.2

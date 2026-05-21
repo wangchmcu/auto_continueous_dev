@@ -308,6 +308,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("v0.19", global_plan)
         self.assertIn("auto-iter search query", global_plan)
 
+    def test_topic_id_rollout_records_practice_bug_triage_rule(self):
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        self.assertIn("v0.23-v0.32 实践期问题判定规则", version_tracking)
+        self.assertIn("功能 bug", version_tracking)
+        self.assertIn("功能缺失", version_tracking)
+        self.assertIn("不重新开 global plan 分支", version_tracking)
+        self.assertIn("实践期问题判定规则", active_plan)
+
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
         windows = cli.command_wrapper_spec(PureWindowsPath("C:/repo/tools/auto_iter.py"), platform_name="windows")
