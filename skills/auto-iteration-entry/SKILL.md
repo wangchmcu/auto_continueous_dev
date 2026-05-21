@@ -27,7 +27,10 @@ When the user says one of these plain-language requests, treat it as a request t
 
 ## Required Start
 
-Run these commands in the current project root:
+Run these commands in the current project root. If the shell is already inside
+a subdirectory of an initialized AIT project, `auto-iter` finds the nearest
+parent directory with `state/agent_state.db` and uses that parent as the project
+root; do not rerun `init` merely because the current shell is nested.
 
 ```bash
 auto-iter doctor
@@ -214,6 +217,14 @@ Prefer:
 
 ```bash
 auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
+`run exec` launches `<exact command>` from the resolved AIT project root. If the
+actual experiment must execute in a subdirectory, put the directory change in
+the command itself, for example:
+
+```bash
+--command "cd path/to/workdir && python experiment.py"
 ```
 
 Use `run start` and `run finish` only when the experiment cannot be launched from one command.

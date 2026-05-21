@@ -84,6 +84,49 @@ class CliTests(unittest.TestCase):
         self.assertIn("state: ok", doctor.stdout)
         self.assertIn("database: ok", doctor.stdout)
 
+    def test_commands_from_subdirectory_use_nearest_project_root(self):
+        run_cli(self.tmp, "init")
+        subdir = self.tmp / "nested" / "workdir"
+        subdir.mkdir(parents=True)
+
+        doctor = run_cli(subdir, "doctor")
+
+        self.assertIn("state: ok", doctor.stdout)
+        self.assertIn(f"root: {self.tmp}", doctor.stdout)
+
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        cwd_marker = self.tmp / "cwd.txt"
+        write_json(config, {"round": 1, "method": "subdir-root"})
+        write_json(metrics, {"ok": 1})
+        artifact.write_text("# subdir root report\n", encoding="utf-8")
+
+        executed = run_cli(
+            subdir,
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "subdir-root-demo",
+            "--command",
+            (
+                f"{sys.executable} -c "
+                f"\"from pathlib import Path; import os; "
+                f"Path(r'{cwd_marker}').write_text(os.getcwd(), encoding='utf-8')\""
+            ),
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+
+        self.assertIn("status=success", executed.stdout)
+        self.assertEqual(str(self.tmp), cwd_marker.read_text(encoding="utf-8"))
+        self.assertEqual(1, len(list((self.tmp / "runs").glob("R-*"))))
+        self.assertFalse((subdir / "runs").exists())
+
     def test_install_creates_short_command_and_entry_skill(self):
         run_cli(self.tmp, "init")
         bin_dir = self.tmp / "bin"

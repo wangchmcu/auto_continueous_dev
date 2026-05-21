@@ -13,13 +13,14 @@
 2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
 3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 4. Read decisions through `auto-iter context index` and `auto-iter context show`; do not treat Markdown files under `decisions/` as current context if `context index` reports them as orphan or stale projections.
-5. Before proposing or running a new experiment route, run:
+5. If the shell is nested inside an initialized AIT project, `auto-iter` should resolve the nearest parent containing `state/agent_state.db` as the project root. Confirm the reported root from `auto-iter doctor` before recording runs from a nested shell.
+6. Before proposing or running a new experiment route, run:
 
 ```bash
 auto-iter route check --config <config.json> --summary "<中文路线说明>"
 ```
 
-6. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
+7. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
 
 ## Version Task Tracking
 
@@ -71,6 +72,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Every experiment must save resolved config, metrics, logs, and artifacts.
 - Every conclusion must become a decision record with evidence run IDs.
 - For rejected parameter ranges, use `decision add --route-relation parameter-space --route-param name:min:max`.
+- `run exec` launches its command from the resolved AIT project root. If the real experiment must run in a subdirectory, include `cd path/to/workdir && ...` inside `--command`.
 - Raw logs stay under `runs/<run_id>/logs/`; do not paste full logs into context by default.
 - Read summaries, metrics, artifacts, and decisions first; read raw logs only for a specific failure investigation.
 - At session end, generate a handoff with:

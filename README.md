@@ -162,6 +162,16 @@ auto-iter init
 auto-iter doctor
 ```
 
+After a project has been initialized, `auto-iter` commands may also be run from
+a subdirectory. The CLI finds the nearest parent directory that contains
+`state/agent_state.db` and treats that parent as the project root. If no parent
+state database exists, `auto-iter init` still initializes the current directory.
+
+`run exec` records and launches its `--command` from the resolved project root.
+When the experiment itself must run inside a nested working directory, include
+that directory change inside `--command`, for example
+`--command "cd path/to/workdir && python experiment.py"`.
+
 If `auto-iter` is not installed yet, run the wrapper once:
 
 ```bash
@@ -446,6 +456,11 @@ auto-iter context show --path plans/global_plan.md --heading "Global Plan"
 - `runs/<run_id>/logs/stderr.log`: captured stderr.
 - `runs/<run_id>/logs/debug.jsonl`: structured execution events.
 - `runs/<run_id>/logs/error_summary.md`: bounded stderr summary for default reading.
+
+AIT project root discovery is based on `state/agent_state.db`. Commands run
+inside an initialized project's subdirectories use the nearest parent state
+database as the project root; commands run outside any initialized tree operate
+on the current directory.
 
 Demo or test histories may be kept under `examples/` when they explain what AIT capability was verified. They must state the test purpose and data boundary, and their sample run or decision IDs must not be treated as current project conclusions unless the current SQLite state contains matching records.
 

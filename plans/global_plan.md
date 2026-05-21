@@ -56,6 +56,7 @@
 ### 6. Codex 入口能力
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
+- AIT 命令在已初始化项目子目录中运行时，按最近的父级 `state/agent_state.db` 定位项目根目录；`run exec` 的命令从该项目根目录启动，实验需要子目录时由 `--command` 内部显式 `cd`。
 - 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
 - 安装和运行入口必须覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境；wrapper、Python 命令和文档不能写死某一个用户或系统路径。
 - 安装器应优先使用当前操作系统和 shell 已认可的命令目录；如果没有合适目录，回落到用户目录并提示路径，不默认修改用户 shell 配置。
@@ -444,6 +445,19 @@
 - `handoff generate` 检查项目根目录 `AGENTS.md` 是否存在。
 - 文件存在时，读取顺序把它列在 handoff 前。
 - 文件不存在时，读取顺序从 `handoffs/latest_handoff.md` 开始，不制造缺失文件提示。
+- README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
+
+### v0.22：子目录项目根目录发现
+
+状态：done。
+
+目标：AIT 命令在已初始化项目的子目录中运行时，自动找到最近的父级状态库，避免把子目录误当成新的项目根。
+
+任务：
+
+- CLI 根目录解析从当前目录向上查找最近的 `state/agent_state.db`。
+- 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
+- `run exec` 从解析后的项目根目录记录和执行命令；需要实际进入子目录时，由 `--command` 显式 `cd`。
 - README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
 
 ### 后续可选：更重的语义检索

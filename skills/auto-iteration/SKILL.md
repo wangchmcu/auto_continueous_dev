@@ -26,6 +26,11 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 auto-iter doctor
 ```
 
+If the shell is inside a subdirectory of an initialized AIT project, `auto-iter`
+finds the nearest parent directory with `state/agent_state.db` and uses that
+parent as the project root. Do not rerun `init` just because the current shell
+is nested under an existing project.
+
 2. Restore the latest handoff when present:
 
 ```bash
@@ -162,6 +167,14 @@ Prefer `run exec` when the experiment can be launched from one shell command. It
 
 ```bash
 auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
+`run exec` launches `<exact command>` from the resolved AIT project root. If the
+actual experiment must execute in a nested working directory, include that
+directory change inside the command, for example:
+
+```bash
+--command "cd path/to/workdir && python experiment.py"
 ```
 
 Use `run start` and `run finish` when the experiment must be launched manually.

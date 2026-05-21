@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.21
+- current_version: v0.22
 - status: done
-- goal: 让项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，避免 AIT 把可选项目规则文件误写成必读状态源。
+- goal: 让 AIT 命令在已初始化项目的子目录中运行时，自动使用最近父级状态库所在目录作为项目根。
 
 ## v0.1 任务清单
 
@@ -677,6 +677,38 @@ v0.21 之后仍未覆盖的全局能力：
 2. 存在项目根目录 `AGENTS.md` 时，`auto-iter handoff generate` 的读取顺序把该路径列在 handoff 前。
 3. `python3 -Wd -m unittest discover -s tests -v` 通过。
 
+## v0.22 任务清单
+
+- status: done
+- goal: AIT 命令在已初始化项目的子目录中运行时，自动找到最近父级 `state/agent_state.db`，避免把子目录误当成新的项目根。
+- [x] CLI 根目录解析从当前目录向上查找最近的 `state/agent_state.db`。
+- [x] 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
+- [x] `doctor` 从子目录运行时报告父级项目根目录。
+- [x] `run exec` 从解析后的项目根目录记录和执行命令，不在子目录新建 `runs/`。
+- [x] README、AGENTS、entry skill、workflow skill 和 global plan 说明子目录运行边界。
+- [x] 测试覆盖子目录运行 `doctor` 和 `run exec`。
+
+## v0.22 距离 global plan
+
+v0.22 没有新增事实源；它修复了命令入口在真实工作目录可能位于项目子目录时的根目录定位问题。
+
+v0.22 已覆盖的全局能力：
+
+- AIT 命令可从已初始化项目的子目录恢复到同一个 SQLite 状态库。
+- `run exec` 的状态记录仍落在项目根目录，避免子目录生成孤立的 `runs/`。
+- agent 文档明确：实验需要子目录执行时，把 `cd path/to/workdir && ...` 写入 `--command`。
+
+v0.22 之后仍未覆盖的全局能力：
+
+- topic rename、merge、delete、prune 等生命周期管理增强。
+- 显式 opt-in 的 shell PATH 配置写入命令。
+
+## v0.22 验收标准
+
+1. 在已初始化项目子目录运行 `auto-iter doctor`，输出的 root 是父级项目根目录。
+2. 在已初始化项目子目录运行 `auto-iter run exec`，run 记录和 `runs/` 目录写入父级项目根目录。
+3. `python3 -Wd -m unittest discover -s tests -v` 通过。
+
 ## 后续版本方向
 
 ### v0.2
@@ -758,6 +790,10 @@ v0.21 之后仍未覆盖的全局能力：
 ### v0.21
 
 - done：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序，缺失时不创建、不报缺失。
+
+### v0.22
+
+- done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根，`run exec` 仍从项目根启动命令。
 
 ### 后续可选
 

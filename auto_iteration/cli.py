@@ -709,7 +709,11 @@ def now_iso() -> str:
 
 
 def root() -> Path:
-    return Path.cwd().resolve()
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / DB_PATH).exists():
+            return candidate
+    return cwd
 
 
 def db_path() -> Path:
