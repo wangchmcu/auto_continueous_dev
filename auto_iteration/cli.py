@@ -3323,9 +3323,9 @@ def is_structured_search_id(value: str) -> bool:
     return bool(re.fullmatch(r"(?:R|D|T|H)-[A-Za-z0-9]+|A-[0-9a-fA-F]{10,}", value))
 
 
-def document_id(path: Path, heading: str) -> str:
+def document_id(path: Path, heading: str, section_index: int) -> str:
     rel = path.relative_to(root()).as_posix()
-    digest = hashlib.sha256(f"{rel}\n{heading}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(f"{rel}\n{heading}\n{section_index}".encode("utf-8")).hexdigest()[:16]
     return f"S-{digest}"
 
 
@@ -3334,7 +3334,7 @@ def collect_search_documents(include_raw_input: bool) -> list[SearchDocument]:
     for path in context_files(include_raw_input):
         if not include_raw_input and is_under(path, root() / "raw_input"):
             continue
-        for heading, body in markdown_sections(path):
+        for section_index, (heading, body) in enumerate(markdown_sections(path)):
             source_type, source_id = infer_source_type_and_id(path, body)
             title = heading or path.name
             related = extract_related_ids(body)
@@ -3342,7 +3342,7 @@ def collect_search_documents(include_raw_input: bool) -> list[SearchDocument]:
                 related = sorted(set([source_id, *related]))
             documents.append(
                 SearchDocument(
-                    doc_id=document_id(path, heading),
+                    doc_id=document_id(path, heading, section_index),
                     source_type=source_type,
                     source_id=source_id,
                     path=path,

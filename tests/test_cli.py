@@ -1028,6 +1028,34 @@ class CliTests(unittest.TestCase):
         self.assertEqual(source_types[topic_board], ("topic_board", "board"))
         self.assertGreater(edge_count, 0)
 
+    def test_search_index_handles_repeated_headings_in_one_file(self):
+        run_cli(self.tmp, "init")
+        repeated = self.tmp / "plans" / "repeated_headings.md"
+        repeated.write_text(
+            "# Same Heading\n"
+            "first v029_duplicate_heading_anchor\n\n"
+            "# Same Heading\n"
+            "second v029_duplicate_heading_anchor\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli(self.tmp, "search", "index")
+
+        self.assertIn("indexed search documents:", result.stdout)
+        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+            rows = db.execute(
+                """
+                select doc_id, heading, body
+                from search_documents
+                where path = ?
+                order by body
+                """,
+                ("plans/repeated_headings.md",),
+            ).fetchall()
+        self.assertEqual(len(rows), 2)
+        self.assertNotEqual(rows[0][0], rows[1][0])
+        self.assertEqual({row[1] for row in rows}, {"Same Heading"})
+
     def test_topic_evidence_links_runs_decisions_and_artifacts(self):
         run_cli(self.tmp, "init")
         topic_id = run_cli(
