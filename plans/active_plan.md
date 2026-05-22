@@ -72,4 +72,5 @@
 24. 升级旧项目后运行 `auto-iter migrate`，再用 `auto-iter handoff validate` 检查是否还有 warning。
 25. 实践中发现 topic_id 长期方案问题时，先按 `plans/version_iterations.md` 的 `v0.23-v0.32 实践期问题判定规则` 判断功能 bug 或功能缺失。已被 v0.23-v0.32 承诺的行为若不符合预期，直接沿既有计划修 bug，不重新开 global plan 分支。
 26. 在既有 topic 或相邻工作区继续改代码前，执行 topic evidence carryover check：读取 topic evidence、topic handoff/search 候选，并核对当前 branch/worktree 是否包含相关历史修复；topic plan alone is not enough。
-27. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+27. 用户再次提出 AIT update 功能开发时，先读取 `plans/global_plan.md` 的 `self update workflow` backlog，把其中的三层语义、风险边界和最小落地步骤作为初版开发方向。
+28. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。

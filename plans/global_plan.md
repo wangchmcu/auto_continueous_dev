@@ -171,6 +171,16 @@
 - topic_id 绑定：写入命令按 `--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 的顺序解析 topic；多个 open topic 场景下不能静默错绑。
 - global plan 瘦身：global plan 保留长期方向、topic 模板、跨 topic 总览规则、升级规则和 backlog；topic 细节放入 topic plan、topic handoff 和 project board。
 
+### self update workflow
+
+- 使用场景：用户在一个已被 AIT 接管的目标项目根目录说 `ait update` 或 `auto-iter update`，但 AIT 源码仓库在另一个固定 checkout 中。后续开发时，把本条作为 update 功能的初版方向。
+- 目标语义分三层：AIT source repo（AIT 源码仓库）、installed artifacts（已安装的 `auto-iter` 命令和 Codex skills）、managed project state（被管理项目里的 `state/`、`plans/`、`topics/`、`handoffs/` 等状态）。
+- 默认 update 应定位 AIT source repo，只允许在 clean fast-forward 条件下检查 remote 并拉取更新；dirty、diverged、detached、无 upstream 或多 remote 无法判定时停止并报告，不静默 merge、reset 或换分支。
+- 拉取源码后应重新执行新版本 updater，避免旧 updater 用旧逻辑处理新版本结构。
+- 安装产物刷新应趋向原子化：先写临时命令和临时 skill 目录，自检通过后替换，避免先删旧安装后新安装失败导致不可用。
+- 如果当前目录属于已接管项目，update 可以做兼容检查：`doctor`、`handoff validate`、迁移需求检测；只自动执行安全、幂等迁移（重复执行结果一样、不会删除或改变用户语义状态），有语义风险的迁移必须要求显式参数或用户确认。
+- 当前已知差距：现有 `auto-iter update` 只从当前 checkout 重装 wrapper 和 skills，不做 remote 检查、不拉源码、不重启新 updater、不自动 migrate；`--check-project` 只检查或跳过，且需要确认它使用解析后的项目根而不是相对当前目录判断。
+
 ## 版本路线
 
 ### v0.1：本地状态闭环
@@ -607,3 +617,16 @@
 - 若索引规模明显变大，先评估增量索引；增量索引指只更新变动文件对应的搜索文档和结构关系边。
 - 若轻量模糊检索主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
 - 更重检索只能作为补充入口，不能替代 SQLite、plans、handoff 和 evidence run IDs 的明确证据链。
+
+### 后续可选：AIT self update workflow
+
+状态：backlog。
+
+任务：
+
+- 将 `auto-iter update` 的语义扩展为 source repo、installed artifacts、managed project state 三层边界清晰的流程。
+- 实现 source repo 定位和 clean fast-forward 更新；拒绝 dirty、diverged、detached、无 upstream 或 remote 选择不明确的状态。
+- 拉取源码后重新执行新版本 updater。
+- 将安装刷新改为临时目录加自检后替换。
+- 增加项目结构版本和迁移需求检测；默认只自动执行安全、幂等迁移，其他迁移要求显式参数或用户确认。
+- 修正 `--check-project` 使用解析后的项目根，并在迁移后留下项目内 breadcrumb（可读迁移记录）。
