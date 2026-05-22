@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.33
+- current_version: v0.34
 - status: done
-- goal: 完成 search query 按需刷新索引：索引输入未变化时复用已有索引，索引输入变化时自动重建，并避免并发 search 直接触发 SQLite 写锁失败。
+- goal: 增加 topic evidence carryover check，避免同一 topic 或相邻工作区继续开发时只看 topic plan 而漏掉已有 evidence 里的历史修复、否定路径和踩坑记录。
 
 ## v0.1 任务清单
 
@@ -1063,6 +1063,12 @@ v0.25 之后仍未覆盖的全局能力：
 - done：新增 `state/search_index.lock` 重建锁；并发 search 中只有一个进程执行重建，其他进程可继续使用旧索引并打印 stale warning（stale warning：提示索引可能不是最新，不代表原始记录丢失）。
 - done：README、AGENTS、Codex skills 已同步说明 search query 只在索引输入变化时刷新。
 - evidence：`python3 -Wd -m unittest discover -s tests -v` 通过 60 个测试；真实 Valeo AIT 项目第二次同查询从约 5.25 秒降到约 0.05 秒；并行两个 search query 不再出现 `database is locked`。
+
+### v0.34
+
+- done：新增 topic evidence carryover check（topic 证据承接检查）规则：在既有 topic 或相邻工作区继续改代码前，必须读取 topic evidence、topic handoff/search 候选，并核对 current branch or worktree 是否包含相关历史修复。
+- done：AGENTS、README、entry skill、workflow skill 已写明 topic plan alone is not enough；topic plan 是计划状态，不替代 run、decision、artifact 和 topic evidence 构成的证据链。
+- evidence：新增 `test_topic_pitfall_carryover_rule_is_documented`，覆盖 AGENTS、README、两个 Codex skill 和版本记录。
 
 ### 后续可选
 

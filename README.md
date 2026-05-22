@@ -452,6 +452,16 @@ auto-iter search index
 
 `search index` excludes `raw_input/` by default. It combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. These are recall signals only; SQLite records, plans, handoffs, `run_id`, and `decision_id` remain the evidence chain.
 
+### Topic Evidence Carryover Check
+
+Before changing code in an existing topic or adjacent work area, the agent should run a topic evidence carryover check:
+
+- inspect `auto-iter topic evidence --topic-id <id>` for prior fixes, rejected paths, and known pitfalls
+- inspect the topic handoff and, when needed, run `auto-iter search query --text "<topic-specific terms>" --limit 10 --explain`
+- verify the current branch or worktree still contains any relevant fix before implementing nearby behavior
+
+The topic plan alone is not enough; it is planning state, not the evidence chain.
+
 ## Version Task Tracking
 
 Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.

@@ -36,6 +36,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Use `auto-iter context index` before reading broad history.
 - Use `auto-iter context show --path <file> --heading "<heading>"` to load only the needed section.
 - If the user asks a fuzzy memory question such as “之前是不是说过某个现象”, first run `auto-iter search query --text "<用户原话>" --limit 10 --explain`. This command refreshes the default tracking-information index only when indexed inputs have changed; otherwise it reuses the existing index for a read-only search. Search is only a recall helper; after it finds a candidate, load the exact source with `context show` or the matching `run_id`、`decision_id`、topic evidence command.
+- Before changing code in an existing topic or adjacent work area, run a topic evidence carryover check: inspect `auto-iter topic evidence --topic-id <id>` plus topic handoff/search results for prior fixes, rejected paths, and known pitfalls, then verify the current branch or worktree still contains any relevant fix. The topic plan alone is not enough; it is planning state, not the evidence chain.
 - `auto-iter search index` builds the local recall index from tracking information. It uses BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）.
 - Do not use `--include-raw-input` or `--allow-raw-input` unless the task is initial project setup or an explicit missing-information lookup.
 

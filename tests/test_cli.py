@@ -318,6 +318,20 @@ class CliTests(unittest.TestCase):
         self.assertIn("不重新开 global plan 分支", version_tracking)
         self.assertIn("实践期问题判定规则", active_plan)
 
+    def test_topic_pitfall_carryover_rule_is_documented(self):
+        agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        entry_skill = (REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md").read_text(encoding="utf-8")
+        workflow_skill = (REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+
+        for text in [agents, entry_skill, workflow_skill, readme]:
+            self.assertIn("topic evidence carryover check", text)
+            self.assertIn("topic plan alone is not enough", text)
+            self.assertIn("current branch or worktree", text)
+        self.assertIn("v0.34", version_tracking)
+        self.assertIn("topic evidence carryover check", version_tracking)
+
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
         windows = cli.command_wrapper_spec(PureWindowsPath("C:/repo/tools/auto_iter.py"), platform_name="windows")

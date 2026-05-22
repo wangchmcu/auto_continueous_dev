@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.32。
+- 当前版本：v0.34。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -41,6 +41,8 @@
 - v0.30 已完成：global plan 瘦身职责确认，单 topic 细节落到 topic plan、topic handoff 和 project board。
 - v0.31 已完成：README、AGENTS、entry skill、workflow skill 和安装测试同步。
 - v0.32 已完成：迁移兼容，新增 `auto-iter migrate`，为旧 topic 补空 plan，并在 handoff validate 对缺 plan 先 warning。
+- v0.33 已完成：`search query` 按需刷新索引；索引输入未变化时复用已有索引，索引输入变化时自动重建，并避免并发 search 直接触发 SQLite 写锁失败。
+- v0.34 已完成：topic evidence carryover check（topic 证据承接检查）：在既有 topic 或相邻工作区继续改代码前，必须读取 topic evidence、topic handoff/search 候选，并核对当前 branch/worktree 是否包含相关历史修复；topic plan alone is not enough。
 
 ## 下一步
 
@@ -69,4 +71,5 @@
 23. 多 Codex thread 并行工作时，优先使用 `--topic-id` 或 `AUTO_ITER_TOPIC_ID`，用 `auto-iter handoff generate --topic-id <id>` 保存该 topic 的交接。
 24. 升级旧项目后运行 `auto-iter migrate`，再用 `auto-iter handoff validate` 检查是否还有 warning。
 25. 实践中发现 topic_id 长期方案问题时，先按 `plans/version_iterations.md` 的 `v0.23-v0.32 实践期问题判定规则` 判断功能 bug 或功能缺失。已被 v0.23-v0.32 承诺的行为若不符合预期，直接沿既有计划修 bug，不重新开 global plan 分支。
-26. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+26. 在既有 topic 或相邻工作区继续改代码前，执行 topic evidence carryover check：读取 topic evidence、topic handoff/search 候选，并核对当前 branch/worktree 是否包含相关历史修复；topic plan alone is not enough。
+27. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。

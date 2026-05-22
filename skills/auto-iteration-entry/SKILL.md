@@ -249,6 +249,8 @@ auto-iter search query --text "<用户原话>" --limit 10 --explain
 
 `search query` refreshes the default tracking-information index only when indexed inputs have changed; otherwise it reuses the existing index for a read-only search. The search layer combines BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）and graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）. After search returns candidates, load the exact source with `context show`, `run show`, or `topic evidence`.
 
+Before changing code in an existing topic or adjacent work area, run a topic evidence carryover check: inspect `auto-iter topic evidence --topic-id <id>` plus topic handoff/search results for prior fixes, rejected paths, and known pitfalls, then verify the current branch or worktree still contains any relevant fix. The topic plan alone is not enough; it is planning state, not the evidence chain.
+
 ## Running An Experiment
 
 Prefer:
