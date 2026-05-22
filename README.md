@@ -239,10 +239,12 @@ auto-iter intent check --text "<用户原话>"
 Typical use:
 
 - User says “做个计划” or “更新计划”：the agent checks whether `plans/active_plan.md`, `plans/version_iterations.md`, or `plans/global_plan.md` should change.
+- The agent or user creates, accepts, or changes a concrete plan for the current topic: update `topic plan` and `topic task` immediately. This is not limited to session end; checkpoint and handoff must project the topic plan instead of carrying the only copy of the plan.
 - User says “执行吧”, “实施吧”, or “确定执行”：the agent checks whether `route check` is needed and whether config, dataset, command, metrics, and artifacts are clear enough for `run exec`.
 - User says “拿到结果了”, “跑完数据了”, or “测试结束了”：the agent checks metrics, artifacts, and evidence `run_id` before writing a decision.
 - User says “中途记录一下”, “先保存当前状态”, or “做个阶段记录”：the agent saves the current handoff checkpoint without ending the session and without committing or pushing unless explicitly requested.
 - User says “结束当前 session” or “做 handoff”：the agent generates and validates handoff, then commits and pushes if requested.
+- User says the current session should end and the next session should implement a named direction: before generating handoff, the agent updates the current topic plan and adds a concrete topic task for the next-session implementation work.
 
 For a mid-session record, the agent uses the same state-save scope as session end, but the user does not need to name internal files or commands:
 
@@ -281,6 +283,20 @@ auto-iter handoff generate
 auto-iter handoff validate
 ```
 
+If the current topic's plan changed, or if handoff is meant to carry a
+next-session implementation direction, do not rely on free-form handoff text
+alone. First update topic planning state:
+
+```bash
+auto-iter topic plan set --topic-id <topic-id> --goal "<updated goal>" --non-goal "<non-goal>" --acceptance "<acceptance>"
+auto-iter topic task add --topic-id <topic-id> --title "<next implementation task>" --description "<what to build next>" --acceptance "<how to verify it>"
+auto-iter topic plan show --topic-id <topic-id>
+```
+
+Only generate checkpoint or handoff after `topic plan show` contains the
+adopted direction. This keeps the next session from resuming an old topic plan
+while a new direction exists only in chat, a loose checkpoint, or handoff prose.
+
 ## Codex Entry
 
 The Codex entry is the installed skill `auto-iteration-entry`.
@@ -305,7 +321,19 @@ Use it after a concrete auto_iteration workflow problem has been solved and you 
 auto it self improve：把刚才解决的问题抽象成通用规则，更新 auto_iteration 系统。不要把本项目的具体路径、数据集、一次性参数或临时文件名写进系统规则。
 ```
 
-The agent should use the installed `auto-it-self-improve` skill, choose the appropriate files to update, add tests when generated templates or installation behavior changes, and report which concrete details were intentionally excluded.
+The agent should use the installed `auto-it-self-improve` skill. Before
+patching, it checks auto_iteration history for related design, classifies the
+scope as bug, feature gap, or ambiguous, and then chooses the appropriate files
+to update. A bug is behavior already promised by prior plans, docs, skills, or
+tests but not followed in practice; a feature gap is behavior not covered by
+those commitments.
+
+The self-improve result should generalize from first principles: name the
+system invariant being protected, such as source of truth, evidence chain, state
+transition, recovery boundary, or contamination boundary. Do not only patch the
+literal symptom or one-off wording. Add tests when generated templates or
+installation behavior changes, and report which concrete details were
+intentionally excluded.
 
 If the concrete problem also shows that the self improve workflow itself is
 insufficient, the agent should treat that as a second-order self improve item in

@@ -85,6 +85,7 @@
 - topic evidence link（topic 证据关联）把 topic 与相关 run、decision、artifact 建立可查询关联，避免恢复 topic 时逐个翻找历史。
 - topic plan（topic 内计划：单个 topic 的目标、非目标、任务状态、验收、停止条件和升级条件）承担类似 Jira 的局部看板；global plan 只保留长期方向、模板、跨 topic 总览规则和升级规则。
 - project board（项目 topic 总览：跨 topic 的 open、doing、blocked、done 摘要）承担类似 Jira 的全局看板，不把单个 topic 的细节塞进 global plan。
+- 当当前 topic 的目标、非目标、验收或下一步任务在对话中形成、被采纳或变化时，该方向必须先落到 topic plan 和 topic task；checkpoint 和 handoff 是恢复投影，不能是 changed topic plan 的唯一保存位置。
 
 ### 9. 自然语言接力入口
 
@@ -97,9 +98,10 @@
 - `auto it self improve` 是固定触发短句和能力名，指 auto_iteration 的系统改进沉淀能力：用户和 agent 解决了一个具体使用问题后，agent 把这个问题抽象成通用能力改进，并更新到 auto_iteration 系统中。
 - 这个能力不能自动触发，只能在用户明确点名 `auto it self improve` 或 `auto-it-self-improve` skill 名时触发。
 - 输入是已解决的对话片段、相关文件改动、失败现象和最终处理方式；输出是对 auto_iteration 系统的通用改进建议或补丁。
+- 修补前必须先回查 auto_iteration 历史中是否已有类似功能或承诺，再判定 scope：功能 bug（已有承诺未兑现）按原需求对齐修复；功能缺失（原设计未覆盖）先进入 backlog、当前版本计划或新增版本再实施；不确定时记录已查承诺和不确定原因。
 - 改进落点由 agent 根据问题类型选择，例如 `AGENTS.md`、README、entry skill、workflow skill、CLI 命令、初始化模板、测试、plans 或 handoff 模板。
-- 必须先抽象成通用规则，再写入系统；不得把具体项目名称、具体数据集、一次性参数、临时文件路径或用户当次私有场景直接写成系统规则。
-- 每次执行都应说明“具体问题是什么”“抽象后的通用问题是什么”“为什么应该改这些文件”“哪些具体细节没有写入系统”。
+- 必须基于第一性原则抽象成通用规则，再写入系统；这里第一性原则指先找系统必须保持的不变量，例如事实源、证据链、状态流转、恢复边界或污染边界，而不是只修字面症状、关键词或一次性表达。
+- 每次执行都应说明“具体问题是什么”“查过哪些历史承诺”“scope 判定是什么”“抽象后的通用问题是什么”“基于哪个不变量”“为什么应该改这些文件”“哪些具体细节没有写入系统”。
 
 ### 11. Intent Checkpoint（意图检查点）
 
@@ -108,6 +110,7 @@
 - `auto-iter intent check --text "<用户原话>"` 只输出检查清单；它不直接写 SQLite、不启动实验、不生成结论。
 - Codex entry skill 负责在用户说“做个计划”“更新计划”“执行吧”“实施吧”“确定执行”“拿到结果了”“跑完数据了”“测试结束了”“结束当前 session”等相似短句时调用该命令。
 - 检查结果必须继续落回现有明确流程：计划文件、`route check`、`run exec`、`decision add`、`handoff generate` 和 `handoff validate`。
+- 如果检查结果显示 topic plan carryover（当前 topic 计划承接）或 next-session implementation carryover（下一会话实施方向承接），agent 先更新 topic plan、添加 topic task、展示 topic plan，再继续执行、保存 checkpoint 或生成 handoff。
 
 ### 12. 中途记录黑盒入口
 

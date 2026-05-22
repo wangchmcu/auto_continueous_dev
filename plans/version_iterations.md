@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.34
+- current_version: v0.36
 - status: done
-- goal: 增加 topic evidence carryover check，避免同一 topic 或相邻工作区继续开发时只看 topic plan 而漏掉已有 evidence 里的历史修复、否定路径和踩坑记录。
+- goal: 补强 auto it self improve 自身流程：修补前先查历史承诺并判定 bug/功能缺失 scope，再基于第一性原则抽象成通用能力，避免只按表面症状补丁。
 
 ## v0.1 任务清单
 
@@ -1069,6 +1069,20 @@ v0.25 之后仍未覆盖的全局能力：
 - done：新增 topic evidence carryover check（topic 证据承接检查）规则：在既有 topic 或相邻工作区继续改代码前，必须读取 topic evidence、topic handoff/search 候选，并核对 current branch or worktree 是否包含相关历史修复。
 - done：AGENTS、README、entry skill、workflow skill 已写明 topic plan alone is not enough；topic plan 是计划状态，不替代 run、decision、artifact 和 topic evidence 构成的证据链。
 - evidence：新增 `test_topic_pitfall_carryover_rule_is_documented`，覆盖 AGENTS、README、两个 Codex skill 和版本记录。
+
+### v0.35
+
+- done：补强 topic plan carryover（topic plan 承接执行补强）：当前 topic 的目标、非目标、验收或下一步任务一旦在对话中形成、被采纳或变化，agent 不能只写聊天、checkpoint 或 handoff；必须更新既有 topic plan，并按需要添加 topic task。
+- done：`auto-iter intent check` 增加通用 topic-plan-carryover 检查，覆盖“计划、方案、下一步、实施方向、开发方向、验收、不做、acceptance、todo”等表达；“新 session / 下一 session / 新会话 / 下一会话” 只是额外的高风险提示。
+- done：README 和 entry skill 已同步说明 handoff 是投影，不应成为当前 topic 计划变化的唯一落点。
+- evidence：新增 intent-check 测试断言 topic-plan-carryover 输出，并保留 next-session 场景作为子场景覆盖。
+
+### v0.36
+
+- done：补强 `auto-it-self-improve` skill：自进化修补前必须回查 `plans/version_iterations.md`、`plans/global_plan.md`、README、相关 skills 和测试里的历史承诺。
+- done：自进化必须先判定 scope：功能 bug 表示已有承诺未兑现，按原需求对齐修复；功能缺失表示原设计未覆盖，先进入 backlog、当前版本计划或新增版本再实施；不确定时记录已查承诺和不确定原因。
+- done：自进化必须基于第一性原则抽象通用能力，先说明要保护的系统不变量，例如事实源、证据链、状态流转、恢复边界或污染边界，避免只修字面症状、关键词或一次性表达。
+- evidence：安装测试断言 `auto-it-self-improve` skill 包含历史回查、bug/feature gap 判定和 first principles 要求。
 
 ### 后续可选
 

@@ -24,7 +24,9 @@ When the user says one of these plain-language requests, treat it as a request t
 - If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
 - If the user asks for new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If the agent or user creates, accepts, or changes a concrete plan for the current topic, persist it in the topic plan immediately. Topic plan is the current topic's execution plan, not a session-end note. Update `auto-iter topic plan set --topic-id <id> ...` for goal/non-goal/acceptance changes, add concrete work with `auto-iter topic task add --topic-id <id> ...`, and run `auto-iter topic plan show --topic-id <id>` before checkpoint, handoff, or continuing from that plan.
 - “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
+- If the user says the current session should end and the next session should implement a specific direction, do not leave that direction only in chat, checkpoint text, or handoff prose. Before `handoff generate`, update the current topic plan with `auto-iter topic plan set --topic-id <id> ...`, add a concrete next-session implementation task with `auto-iter topic task add --topic-id <id> ...`, and run `auto-iter topic plan show --topic-id <id>` to confirm the plan now contains that direction.
 
 ## Required Start
 
@@ -198,6 +200,7 @@ Rules:
 - New sessions read `handoffs/latest_handoff.md` and `topics/active_topic.md`; archived topic files under `topics/archive/` are loaded only on demand.
 - When a topic has clear supporting evidence, link the relevant run, decision, or artifact with `auto-iter topic link` so future sessions can use `auto-iter topic evidence` instead of manually searching all history.
 - When a topic starts to carry local planning work, use `auto-iter topic plan set/show/current`; keep topic tasks and acceptance checks in topic plan, while final claims still go through `decision add` with evidence.
+- If a handoff, checkpoint, or user instruction names future implementation work for the same topic, the topic plan and topic task list must carry that work before the session is closed. Handoff text is a projection; it must not be the only place where a changed next-session plan exists.
 - Use `auto-iter topic task add/set/list` for topic-local task status. Marking a task done does not replace `decision add` or `topic link`.
 - Use `auto-iter topic board` for the cross-topic project view; keep per-topic detail in topic plan, topic handoff, and topic board instead of global plan.
 - Use topic-scoped handoff or checkpoint commands when separate Codex threads work on separate topics. They write `topics/<topic_id>/latest_handoff.md`.
@@ -304,9 +307,20 @@ The user should not need to name internal files such as `active_plan`, `version_
 Run:
 
 ```bash
+auto-iter intent check --text "<用户原话>"
 auto-iter handoff generate
 auto-iter handoff validate
 ```
+
+If `intent check` reports a topic plan carryover or next-session implementation carryover, first run:
+
+```bash
+auto-iter topic plan set --topic-id <id> --goal "<updated goal>" --non-goal "<non-goal>" --acceptance "<acceptance>"
+auto-iter topic task add --topic-id <id> --title "<next implementation task>" --description "<what to build next>" --acceptance "<how to verify it>"
+auto-iter topic plan show --topic-id <id>
+```
+
+Only continue to checkpoint or `handoff generate` after `topic plan show` includes the adopted direction.
 
 `auto-iter handoff generate` is silent by default so hook stdout stays empty while the handoff is still written. Use `auto-iter handoff generate --print-path` only for manual debugging. Do not use shell redirection for this because the same hook should work on Windows, WSL/Linux, and macOS.
 

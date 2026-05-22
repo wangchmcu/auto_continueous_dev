@@ -3876,6 +3876,26 @@ INTENT_RULES: list[tuple[str, list[str], list[str]]] = [
         ],
     ),
     (
+        "topic-plan-carryover",
+        ["计划", "方案", "下一步", "实施方向", "开发方向", "验收", "不做", "acceptance", "todo"],
+        [
+            "If the discussion created or accepted work that changes the current topic goal, non-goal, acceptance, or next tasks, persist it in the topic plan immediately.",
+            "Use auto-iter topic plan set --topic-id <id> when the current topic goal, non-goal, or acceptance changed.",
+            "Use auto-iter topic task add --topic-id <id> when concrete implementation or verification work was identified.",
+            "Run auto-iter topic plan show --topic-id <id> and confirm the adopted plan is visible before checkpoint or handoff.",
+        ],
+    ),
+    (
+        "session-end-implementation-carryover",
+        ["新 session", "下一 session", "下个 session", "新会话", "下一会话", "下个会话"],
+        [
+            "If the text names a next-session implementation direction, update the topic plan before handoff generate.",
+            "Use auto-iter topic plan set --topic-id <id> when the current goal, non-goal, or acceptance changed.",
+            "Use auto-iter topic task add --topic-id <id> for concrete next-session implementation work.",
+            "Run auto-iter topic plan show --topic-id <id> and confirm the next-session direction appears before handoff generate.",
+        ],
+    ),
+    (
         "session-end",
         ["结束当前 session", "做 handoff", "准备关", "关 session"],
         [

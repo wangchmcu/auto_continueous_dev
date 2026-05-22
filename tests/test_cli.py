@@ -285,6 +285,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("If skills changed, run the install command", improve_skill_text)
         self.assertIn("second-order", improve_skill_text)
         self.assertIn("self improve workflow itself", improve_skill_text)
+        self.assertIn("Search the auto_iteration history", improve_skill_text)
+        self.assertIn("Classify the scope before patching", improve_skill_text)
+        self.assertIn("Bug: the prior plan", improve_skill_text)
+        self.assertIn("Feature gap", improve_skill_text)
+        self.assertIn("First principles", improve_skill_text)
+        self.assertIn("source of truth", improve_skill_text)
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
@@ -1795,6 +1801,20 @@ class CliTests(unittest.TestCase):
         before_execution = run_cli(self.tmp, "intent", "check", "--text", "确定执行，先跑实验")
         after_result = run_cli(self.tmp, "intent", "check", "--text", "拿到结果了，测试结束了")
         mid_session_record = run_cli(self.tmp, "intent", "check", "--text", "中途记录一下当前状态")
+        adopted_plan = run_cli(
+            self.tmp,
+            "intent",
+            "check",
+            "--text",
+            "方案是增加导出模式，下一步实现配置切换，并补充验收测试",
+        )
+        session_end_with_next_plan = run_cli(
+            self.tmp,
+            "intent",
+            "check",
+            "--text",
+            "准备关 session，然后新 session 实施这个开发",
+        )
 
         self.assertIn("INTENT CHECKPOINT", before_execution.stdout)
         self.assertIn("intent: pre-execution", before_execution.stdout)
@@ -1806,6 +1826,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("intent: mid-session-record", mid_session_record.stdout)
         self.assertIn("auto-iter checkpoint save", mid_session_record.stdout)
         self.assertIn("do not commit or push unless the user explicitly asks", mid_session_record.stdout)
+        self.assertIn("intent: topic-plan-carryover", adopted_plan.stdout)
+        self.assertIn("persist it in the topic plan immediately", adopted_plan.stdout)
+        self.assertIn("auto-iter topic plan set", adopted_plan.stdout)
+        self.assertIn("auto-iter topic task add", adopted_plan.stdout)
+        self.assertIn("before checkpoint or handoff", adopted_plan.stdout)
+        self.assertIn("intent: session-end-implementation-carryover", session_end_with_next_plan.stdout)
+        self.assertIn("auto-iter topic plan set", session_end_with_next_plan.stdout)
+        self.assertIn("auto-iter topic task add", session_end_with_next_plan.stdout)
+        self.assertIn("before handoff generate", session_end_with_next_plan.stdout)
 
     def test_checkpoint_save_generates_valid_handoff_without_commit_push(self):
         run_cli(self.tmp, "init")

@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.34。
+- 当前版本：v0.36。
 - global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -43,6 +43,8 @@
 - v0.32 已完成：迁移兼容，新增 `auto-iter migrate`，为旧 topic 补空 plan，并在 handoff validate 对缺 plan 先 warning。
 - v0.33 已完成：`search query` 按需刷新索引；索引输入未变化时复用已有索引，索引输入变化时自动重建，并避免并发 search 直接触发 SQLite 写锁失败。
 - v0.34 已完成：topic evidence carryover check（topic 证据承接检查）：在既有 topic 或相邻工作区继续改代码前，必须读取 topic evidence、topic handoff/search 候选，并核对当前 branch/worktree 是否包含相关历史修复；topic plan alone is not enough。
+- v0.35 已完成：topic plan carryover enforcement（topic plan 承接执行补强）：当当前 topic 的目标、非目标、验收或下一步任务已经形成或变化时，agent 必须把它写入 topic plan 和 topic task；session 结束和 handoff 只是高风险场景，不是唯一触发条件。
+- v0.36 已完成：self improve scope triage（自进化 scope 判定）：自进化修补前必须先查历史承诺，判断是功能 bug 还是功能缺失，并基于第一性原则抽象成通用能力，避免头疼医头式补丁。
 
 ## 下一步
 
@@ -73,4 +75,6 @@
 25. 实践中发现 topic_id 长期方案问题时，先按 `plans/version_iterations.md` 的 `v0.23-v0.32 实践期问题判定规则` 判断功能 bug 或功能缺失。已被 v0.23-v0.32 承诺的行为若不符合预期，直接沿既有计划修 bug，不重新开 global plan 分支。
 26. 在既有 topic 或相邻工作区继续改代码前，执行 topic evidence carryover check：读取 topic evidence、topic handoff/search 候选，并核对当前 branch/worktree 是否包含相关历史修复；topic plan alone is not enough。
 27. 用户再次提出 AIT update 功能开发时，先读取 `plans/global_plan.md` 的 `self update workflow` backlog，把其中的三层语义、风险边界和最小落地步骤作为初版开发方向。
-28. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+28. 用户或 agent 已经形成当前 topic 的计划变化时，先运行 `auto-iter intent check --text "<用户原话>"`；若提示 topic plan carryover，则运行 `topic plan set`、`topic task add` 和 `topic plan show`，确认 topic plan 已包含被采纳的方向，再继续执行、checkpoint 或 handoff。
+29. 执行 `auto it self improve` 时，先回查 `plans/version_iterations.md`、`plans/global_plan.md`、README、skills 和测试，判定 bug/功能缺失/不确定；再写通用规则和验证，不直接按表面症状打补丁。
+30. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
