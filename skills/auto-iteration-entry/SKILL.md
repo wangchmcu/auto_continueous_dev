@@ -24,6 +24,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
 - If the user asks for new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If `intent check` prints `ownership-routing`, treat it as 需求归属判断：before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself. In managed projects, project direction belongs in `plans/project_plan.md` and project-specific AIT recording rules belong in `plans/project_record_rules.md`. If the request is about AIT, `auto-iter`, update, migrate, search, handoff, or skills, switch to the AIT source repository and update AIT's own plan files. Do not write AIT tool work into the managed project's project plan or topic plan.
 - If the agent or user creates, accepts, or changes a concrete plan for the current topic, persist it in the topic plan immediately. Topic plan is the current topic's execution plan, not a session-end note. Update `auto-iter topic plan set --topic-id <id> ...` for goal/non-goal/acceptance changes, add concrete work with `auto-iter topic task add --topic-id <id> ...`, and run `auto-iter topic plan show --topic-id <id>` before checkpoint, handoff, or continuing from that plan.
 - “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 - If the user says the current session should end and the next session should implement a specific direction, do not leave that direction only in chat, checkpoint text, or handoff prose. Before `handoff generate`, update the current topic plan with `auto-iter topic plan set --topic-id <id> ...`, add a concrete next-session implementation task with `auto-iter topic task add --topic-id <id> ...`, and run `auto-iter topic plan show --topic-id <id>` to confirm the plan now contains that direction.
@@ -43,11 +44,12 @@ auto-iter resume
 Then read:
 
 1. `handoffs/latest_handoff.md`, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
-2. `plans/global_plan.md`
-3. `plans/version_iterations.md`
-4. `plans/active_plan.md`
-5. `topics/active_topic.md` if it exists
-6. decision entries listed by `auto-iter context index`
+2. `plans/project_plan.md` and `plans/project_record_rules.md` when they exist
+3. `plans/global_plan.md`
+4. `plans/version_iterations.md`
+5. `plans/active_plan.md`
+6. `topics/active_topic.md` if it exists
+7. decision entries listed by `auto-iter context index`
 
 If the generated handoff read order includes a project-root `AGENTS.md`, read it
 as project-specific Codex process rules. If it is not listed, do not invent or
@@ -205,6 +207,7 @@ Rules:
 - Use `auto-iter topic board` for the cross-topic project view; keep per-topic detail in topic plan, topic handoff, and topic board instead of global plan.
 - Use topic-scoped handoff or checkpoint commands when separate Codex threads work on separate topics. They write `topics/<topic_id>/latest_handoff.md`.
 - Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed projections.
+- The same `auto-iter migrate` also performs the project plan split for old projects: it creates `plans/project_plan.md`, creates `plans/project_record_rules.md`, preserves legacy `plans/global_plan.md` content, and writes a compatibility `plans/global_plan.md`.
 
 ## Before A New Experiment Route
 

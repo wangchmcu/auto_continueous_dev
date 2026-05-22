@@ -5,13 +5,13 @@
 - 普通讨论使用中文；代码、命令、字段名和文件名保持英文。
 - 不要裸写自造实验名、缩写或参数标签。必须使用时，紧接着解释中文含义、对应代码或数据位置、每个数字或字母参数的含义。
 - 实验结果、参数对比、方案排序等包含数字列时，不使用普通 Markdown pipe table；改用对齐代码块或普通列表。
-- 每次结束任务前，最终回复必须报告当前版本号、本次完成了哪些、当前版本内部还剩哪些、当前版本整体距离 `global plan` 还有哪些全局能力未覆盖。这里的 `global plan` 暂时指整个长周期算法迭代上下文管理方案，不只指当前版本。
+- 每次结束任务前，最终回复必须报告当前版本号、本次完成了哪些、当前版本内部还剩哪些、当前版本整体距离 `global plan` 还有哪些全局能力未覆盖。这里的 `global plan` 在 AIT 源仓指整个长周期算法迭代上下文管理方案；在被接管项目里，`plans/global_plan.md` 只是兼容入口，项目长期计划改读 `plans/project_plan.md`。
 
 ## Before Any Coding Or Experiment
 
 1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, install from the AIT source checkout with the platform-appropriate Python command: Windows Codex app uses `py -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; WSL/Linux Codex CLI and macOS Codex app use `python3 -m auto_iteration.cli install` or `python -m auto_iteration.cli install`.
 2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
-3. Read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
+3. Read `plans/project_plan.md` and `plans/project_record_rules.md` when they exist, then read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`. In a managed project, `plans/project_plan.md` is the project direction, `plans/project_record_rules.md` is project-specific AIT recording rules, and `plans/global_plan.md` is a compatibility entry. In the AIT source repository, `plans/global_plan.md` remains AIT's own tool-level global plan.
 4. Read decisions through `auto-iter context index` and `auto-iter context show`; do not treat Markdown files under `decisions/` as current context if `context index` reports them as orphan or stale projections.
 5. If the shell is nested inside an initialized AIT project, `auto-iter` should resolve the nearest parent containing `state/agent_state.db` as the project root. Confirm the reported root from `auto-iter doctor` before recording runs from a nested shell.
 6. Before proposing or running a new experiment route, run:
@@ -25,7 +25,8 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 ## Version Task Tracking
 
 - `plans/version_iterations.md` is the version-level task tracker.
-- `plans/global_plan.md` is the global plan for the whole long-running algorithm iteration context-management system.
+- In the AIT source repository, `plans/global_plan.md` is the global plan for the whole long-running algorithm iteration context-management system.
+- In a managed project, `plans/project_plan.md` is the project-level long-term plan and `plans/project_record_rules.md` is the project-level AIT recording rule file; `plans/global_plan.md` remains only as a compatibility entry for older workflows.
 - Every version entry must include the version name, status, goal, task checklist, acceptance checks, and next-version direction.
 - Every version entry must include a `global plan` distance section that states which global capabilities the current version covers and which global capabilities remain outside the current version.
 - When a task status changes, update `plans/version_iterations.md` in the same change.
@@ -47,6 +48,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - If initialization happens in the middle of an existing conversation, create a bootstrap checkpoint: summarize confirmed facts, user-confirmed goals, exposed problems, open questions, and candidate checks with source labels. Keep `agent_inferred` and `proposed_not_accepted` items out of formal version routes.
 - If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If `intent check` prints `ownership-routing`, treat it as 需求归属判断：before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself. If it is AIT tool work, switch to the auto_iteration source repository and update AIT's own `plans/global_plan.md`, `plans/version_iterations.md`, or topic plan. Do not write AIT tool work into the managed project's project plan or topic plan.
 - If the user says “结束当前 session” or “做 handoff”, run `auto-iter handoff generate` and `auto-iter handoff validate`; if the user asks to submit or push, also commit and push the relevant changes.
 - If the user says “继续这个 auto-iteration 项目” or “接着上个 session”, run `auto-iter doctor`, `auto-iter resume`, and `auto-iter context index`, then restore context from plans, decisions, and run summaries.
 - If the user asks to inspect a historical detail, choose the relevant file and heading from `auto-iter context index`, then run `auto-iter context show --path <file> --heading "<heading>"`; do not ask the user to provide the full command.
@@ -62,7 +64,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Use `auto-iter topic board` for the cross-topic project view. It writes `topics/board.md`; do not move per-topic task detail into `plans/global_plan.md`.
 - In multi-thread work, use `auto-iter handoff generate --topic-id <id>` and `auto-iter checkpoint save --topic-id <id> --text "<text>"` for topic-scoped state so one thread does not overwrite another thread's topic handoff.
 - If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`; do not silently rely on the default topic.
-- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed topic projections.
+- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans, refreshed topic projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, plus a compatibility `plans/global_plan.md`).
 - If a topic has clear supporting evidence, link it explicitly with `auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"`; inspect linked evidence with `auto-iter topic evidence --topic-id <id>`.
 - If the user proposes new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 

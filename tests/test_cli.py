@@ -55,11 +55,15 @@ class CliTests(unittest.TestCase):
         self.assertTrue((self.tmp / "decisions" / "rejected").is_dir())
         self.assertTrue((self.tmp / "handoffs" / "archive").is_dir())
         self.assertTrue((self.tmp / "plans" / "global_plan.md").exists())
+        self.assertTrue((self.tmp / "plans" / "project_plan.md").exists())
+        self.assertTrue((self.tmp / "plans" / "project_record_rules.md").exists())
         self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
         self.assertTrue((self.tmp / "plans" / "version_iterations.md").exists())
         active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
         version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
         global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        project_plan = (self.tmp / "plans" / "project_plan.md").read_text(encoding="utf-8")
+        project_record_rules = (self.tmp / "plans" / "project_record_rules.md").read_text(encoding="utf-8")
         self.assertIn("低假设初始化", active_plan)
         self.assertIn("当前业务目标：待用户定义", active_plan)
         self.assertIn("对话中途接入", active_plan)
@@ -71,15 +75,22 @@ class CliTests(unittest.TestCase):
         self.assertIn("status: pending_user_plan", version_tracking)
         self.assertIn("不要把 agent 推断写成正式路线", version_tracking)
         self.assertIn("context index --include-raw-input", version_tracking)
-        self.assertIn("低假设项目初始化", global_plan)
-        self.assertIn("来源标注", global_plan)
-        self.assertIn("bootstrap checkpoint", global_plan)
-        self.assertIn("raw_input 初期输入", global_plan)
+        self.assertIn("compatibility entry", global_plan)
+        self.assertIn("plans/project_plan.md", global_plan)
+        self.assertIn("plans/project_record_rules.md", global_plan)
+        self.assertIn("AIT 工具自身迭代", global_plan)
+        self.assertIn("低假设项目初始化", project_plan)
+        self.assertIn("来源标注", project_plan)
+        self.assertIn("bootstrap checkpoint", project_plan)
+        self.assertIn("raw_input 初期输入", project_plan)
+        self.assertIn("Project Record Rules", project_record_rules)
+        self.assertIn("项目定制规则", project_record_rules)
+        self.assertIn("不能记录 AIT 工具自身功能迭代任务", project_record_rules)
         self.assertNotIn("当前版本：v0.8", active_plan)
         self.assertNotIn("v0.6 任务清单", version_tracking)
         self.assertNotIn("v0.7 任务清单", version_tracking)
         self.assertNotIn("v0.8 任务清单", version_tracking)
-        self.assertNotIn("后续可选：语义检索", global_plan)
+        self.assertNotIn("后续可选：语义检索", project_plan)
 
         doctor = run_cli(self.tmp, "doctor")
 
@@ -337,6 +348,28 @@ class CliTests(unittest.TestCase):
             self.assertIn("current branch or worktree", text)
         self.assertIn("v0.34", version_tracking)
         self.assertIn("topic evidence carryover check", version_tracking)
+
+    def test_project_plan_split_and_ait_ownership_routing_are_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (REPO_ROOT / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("plans/project_plan.md", text, str(path))
+            self.assertIn("plans/project_record_rules.md", text, str(path))
+            self.assertIn("ownership-routing", text, str(path))
+            self.assertIn("Do not write AIT tool work into the managed project's project plan or topic plan", text, str(path))
+        for text in [version_tracking, global_plan, active_plan]:
+            self.assertIn("project plan split", text)
+            self.assertIn("ownership-routing", text)
+            self.assertIn("project_record_rules", text)
 
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
@@ -850,6 +883,51 @@ class CliTests(unittest.TestCase):
         self.assertTrue(plan_path.exists())
         self.assertTrue(board_path.exists())
         self.assertIn("## Goal", plan_path.read_text(encoding="utf-8"))
+
+    def test_migrate_splits_project_plan_without_losing_legacy_global_plan(self):
+        run_cli(self.tmp, "init")
+        legacy_global_plan = self.tmp / "plans" / "global_plan.md"
+        legacy_global_plan.write_text(
+            "# Global Plan\n\n## Valeo Direction\n\nlegacy-valeo-project-route\n",
+            encoding="utf-8",
+        )
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "Valeo RSPVis topic",
+            "--summary",
+            "旧 Valeo topic",
+        ).stdout.strip().split()[-1]
+
+        migrated = run_cli(self.tmp, "migrate")
+
+        project_plan = self.tmp / "plans" / "project_plan.md"
+        project_record_rules = self.tmp / "plans" / "project_record_rules.md"
+        legacy_archive = self.tmp / "plans" / "legacy_global_plan_before_project_plan_split.md"
+        compatibility_global_plan = self.tmp / "plans" / "global_plan.md"
+        migration_notes = list((self.tmp / "topics").glob("migration_*_project_plan_split.md"))
+
+        self.assertIn("project_plan", migrated.stdout)
+        self.assertIn("project_record_rules", migrated.stdout)
+        self.assertIn("legacy_global_plan", migrated.stdout)
+        self.assertTrue(project_plan.exists())
+        self.assertTrue(project_record_rules.exists())
+        self.assertTrue(legacy_archive.exists())
+        self.assertEqual(
+            legacy_archive.read_text(encoding="utf-8"),
+            "# Global Plan\n\n## Valeo Direction\n\nlegacy-valeo-project-route\n",
+        )
+        self.assertIn("compatibility entry", compatibility_global_plan.read_text(encoding="utf-8"))
+        self.assertEqual(len(migration_notes), 1)
+        migration_text = migration_notes[0].read_text(encoding="utf-8")
+        self.assertIn(topic_id, migration_text)
+        self.assertIn("legacy_global_plan_before_project_plan_split.md", migration_text)
+        self.assertTrue((self.tmp / "topics" / topic_id / "plan.md").exists())
+        migrated_again = run_cli(self.tmp, "migrate")
+        self.assertEqual(len(list((self.tmp / "topics").glob("migration_*_project_plan_split.md"))), 1)
+        self.assertIn(str(migration_notes[0].resolve()), migrated_again.stdout)
 
     def test_handoff_validate_warns_about_topic_without_plan_without_failing(self):
         run_cli(self.tmp, "init")
@@ -1815,6 +1893,13 @@ class CliTests(unittest.TestCase):
             "--text",
             "准备关 session，然后新 session 实施这个开发",
         )
+        ait_self_iteration = run_cli(
+            self.tmp,
+            "intent",
+            "check",
+            "--text",
+            "在 Valeo 目录里改 AIT update 和 auto-iter migrate 的计划",
+        )
 
         self.assertIn("INTENT CHECKPOINT", before_execution.stdout)
         self.assertIn("intent: pre-execution", before_execution.stdout)
@@ -1835,6 +1920,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("auto-iter topic plan set", session_end_with_next_plan.stdout)
         self.assertIn("auto-iter topic task add", session_end_with_next_plan.stdout)
         self.assertIn("before handoff generate", session_end_with_next_plan.stdout)
+        self.assertIn("intent: ownership-routing", ait_self_iteration.stdout)
+        self.assertIn("If the request is about AIT itself", ait_self_iteration.stdout)
+        self.assertIn("auto_iteration source repository", ait_self_iteration.stdout)
+        self.assertIn("Do not write AIT tool work into the managed project's project plan or topic plan", ait_self_iteration.stdout)
 
     def test_checkpoint_save_generates_valid_handoff_without_commit_push(self):
         run_cli(self.tmp, "init")
@@ -2061,7 +2150,11 @@ class CliTests(unittest.TestCase):
         text = handoff_path.read_text(encoding="utf-8")
         self.assertEqual(handoff.stdout, "")
         self.assertIn("## 当前目标", text)
-        self.assertIn("global_plan", text)
+        self.assertIn("project_plan", text)
+        self.assertIn(str((self.tmp / "plans" / "project_plan.md").resolve()), text)
+        self.assertIn("project_record_rules", text)
+        self.assertIn(str((self.tmp / "plans" / "project_record_rules.md").resolve()), text)
+        self.assertIn("global_plan_compat", text)
         self.assertIn(str((self.tmp / "plans" / "global_plan.md").resolve()), text)
         self.assertIn("version_task_tracking", text)
         self.assertIn(str((self.tmp / "plans" / "version_iterations.md").resolve()), text)

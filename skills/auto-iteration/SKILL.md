@@ -17,6 +17,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
 - If the user asks to update or refresh installed AIT, run `auto-iter update`. Use `auto-iter update --check-project` only when the current directory should be checked after the refresh.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If `intent check` prints `ownership-routing`, treat it as 需求归属判断：before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself. Managed-project direction belongs in `plans/project_plan.md`, and project-specific AIT recording rules belong in `plans/project_record_rules.md`. If the request is AIT tool work, switch to the AIT source repository and update AIT's own plan files. Do not write AIT tool work into the managed project's project plan or topic plan.
 - If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
 ## Required Start
@@ -38,7 +39,7 @@ is nested under an existing project.
 auto-iter resume
 ```
 
-3. Read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）, then read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
+3. Read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）, then read `plans/project_plan.md` and `plans/project_record_rules.md` when they exist, followed by `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
 
 4. Run `auto-iter context index` before reading decisions. Read only decision projections listed by the index; if it reports orphan or stale projections, do not treat those Markdown files as current context.
 
@@ -146,7 +147,7 @@ Rules:
 - Use `topic task` for topic-local todo, doing, done, blocked, and dropped items. Task status is planning state; completed claims still need decisions and evidence links.
 - Use `topic board` for cross-topic status; keep detailed topic tasks in topic plan, topic handoff, and board rather than global plan.
 - Use topic-scoped handoff or checkpoint commands for parallel Codex threads. They write `topics/<topic_id>/latest_handoff.md`.
-- Use `auto-iter migrate` after upgrading old project state so legacy topics get empty topic plans and refreshed projections.
+- Use `auto-iter migrate` after upgrading old project state so legacy topics get empty topic plans, refreshed projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`).
 
 ## Before A New Experiment
 
@@ -278,6 +279,6 @@ auto-iter handoff validate
 
 The generated `handoffs/latest_handoff.md` should be the first document a fresh session reads unless the handoff read order lists an existing project-root `AGENTS.md` before it.
 
-When implementation scope changes, update `plans/global_plan.md` if the global capability set changes, then update `plans/version_iterations.md` so the next session can see the current version tasks.
+When AIT implementation scope changes in the AIT source repository, update `plans/global_plan.md` if the global capability set changes, then update `plans/version_iterations.md` so the next session can see the current version tasks. In a managed project, use `plans/project_plan.md` as the project plan and `plans/project_record_rules.md` as the project-specific AIT recording rule file. Apply `ownership-routing`（需求归属判断）before plan edits. Do not write AIT tool work into the managed project's project plan or topic plan.
 
 Before ending a task, report the current version, what changed in this task, what remains inside the current version, and what global capabilities remain outside the current version. Use `global plan` to mean the full long-running algorithm iteration context-management plan.

@@ -145,6 +145,14 @@
 - 检索层组合 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）。
 - 检索结果只能作为候选入口，不能替代 SQLite、plans、handoff、`run_id`、`decision_id` 和 topic evidence 的明确证据链。
 
+### 16. project plan split and ownership-routing
+
+- project plan split（项目计划拆分）：被接管项目的长期计划放入 `plans/project_plan.md`，项目定制的 AIT 记录规则放入 `plans/project_record_rules.md`，被接管项目里的 `plans/global_plan.md` 只保留兼容入口。
+- AIT 源仓自己的 `plans/global_plan.md` 仍然是 AIT 工具级 global plan，继续记录 AIT 的长期能力方向、backlog 和版本距离。
+- `ownership-routing`（需求归属判断）：写任何计划前先判断需求属于被接管项目，还是属于 AIT 工具自身。AIT、auto-iter、update、migrate、search、handoff、skill 等工具迭代应切回 AIT 源仓。
+- Do not write AIT tool work into the managed project's project plan or topic plan.
+- `auto-iter migrate` 对旧项目执行 project plan split：归档旧 `plans/global_plan.md`，创建 `plans/project_plan.md` 和 `plans/project_record_rules.md`，再写入兼容 `plans/global_plan.md`，同时保留已有 topic plan、topic evidence 和最近更新的坑点规避规则。
+
 ## 后续 Backlog
 
 这些条目是 `global plan backlog`（全局计划待办）。当用户以后提出上下文管理、历史检索、topic 管理或证据关联相关的新能力时，agent 必须先检查这里和 `plans/version_iterations.md` 的未覆盖能力，再决定是否延续已有路线；如果匹配，不要另开独立 plan 分支。
@@ -183,6 +191,11 @@
 - 安装产物刷新应趋向原子化：先写临时命令和临时 skill 目录，自检通过后替换，避免先删旧安装后新安装失败导致不可用。
 - 如果当前目录属于已接管项目，update 可以做兼容检查：`doctor`、`handoff validate`、迁移需求检测；只自动执行安全、幂等迁移（重复执行结果一样、不会删除或改变用户语义状态），有语义风险的迁移必须要求显式参数或用户确认。
 - 当前已知差距：现有 `auto-iter update` 只从当前 checkout 重装 wrapper 和 skills，不做 remote 检查、不拉源码、不重启新 updater、不自动 migrate；`--check-project` 只检查或跳过，且需要确认它使用解析后的项目根而不是相对当前目录判断。
+
+### managed project planning ownership
+
+- 若用户在被接管项目里提出 AIT 功能修改，先通过 `ownership-routing` 判断归属，再切回 AIT 源仓执行；不能把 AIT 功能开发写入该项目的 `plans/project_plan.md`、`plans/project_record_rules.md` 或当前 topic plan。
+- 后续如果发现 migration 会覆盖 topic evidence carryover check、topic plan carryover enforcement 或 search freshness（检索新鲜度：索引输入变化时重建，未变化时复用）的能力，按功能 bug 处理，而不是另开项目计划。
 
 ## 版本路线
 

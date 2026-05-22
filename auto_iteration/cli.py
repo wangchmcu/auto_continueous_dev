@@ -649,11 +649,11 @@ LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE = """# Version Iteration Tracking
 - 当前项目是否需要实验 run、decision 或 handoff 仍待用户确认。
 """
 
-LOW_ASSUMPTION_GLOBAL_PLAN_TEMPLATE = """# Global Plan
+LOW_ASSUMPTION_PROJECT_PLAN_TEMPLATE = """# Project Plan
 
 ## 定义
 
-`global plan` 描述当前目标项目如何使用 AIT 进行长期状态管理。初始化时采用低假设项目初始化：只建立结构，不替用户规划业务路线。
+`project plan` 描述当前目标项目自己的长期方向。初始化时采用低假设项目初始化：只建立结构，不替用户规划业务路线，也不记录 AIT 工具自身迭代任务。
 
 ## 低假设项目初始化
 
@@ -704,6 +704,34 @@ LOW_ASSUMPTION_GLOBAL_PLAN_TEMPLATE = """# Global Plan
 
 - 新 session 先读取 handoff、plans、decisions 和状态库。
 - 默认不读取 raw_input，除非是初始导入或明确缺失信息查询。
+"""
+
+LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE = """# Project Record Rules
+
+## 定义
+
+`project record rules` 描述当前项目如何定制使用 AIT 记录系统。它不是项目知识库，也不是 AIT 通用说明。
+
+## 默认规则
+
+- 当前项目暂未定义项目定制规则。
+- 本文件只记录项目级记录流程定制，例如本项目是否要求特定证据链、恢复入口或 topic 绑定方式。
+- 本文件不能记录 AIT 工具自身功能迭代任务；AIT update、migrate、search、handoff、skill 等工具改动应进入 AIT source repository 的计划。
+- 本文件不记录代码坑点或技术结论；这些应进入 topic evidence、decision、handoff、run summary 或具体 topic plan。
+"""
+
+GLOBAL_PLAN_COMPAT_TEMPLATE = """# Global Plan
+
+## Compatibility Entry
+
+This file is a compatibility entry for older AIT workflows that still look for `plans/global_plan.md`.
+
+Current project planning lives in:
+
+- `plans/project_plan.md`
+- `plans/project_record_rules.md`
+
+AIT 工具自身迭代任务不能写入被接管项目。若需求对象是 AIT、auto-iter、update、migrate、search、handoff 或 skill，请切到 AIT source repository，并更新 AIT 自己的 global plan、version tracking 或 topic plan。
 """
 
 
@@ -829,9 +857,101 @@ def write_if_missing(path: Path, text: str) -> None:
 
 
 def ensure_plan_files() -> None:
-    write_if_missing(root() / "plans" / "global_plan.md", LOW_ASSUMPTION_GLOBAL_PLAN_TEMPLATE)
+    write_if_missing(root() / "plans" / "project_plan.md", LOW_ASSUMPTION_PROJECT_PLAN_TEMPLATE)
+    write_if_missing(root() / "plans" / "project_record_rules.md", LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE)
+    write_if_missing(root() / "plans" / "global_plan.md", GLOBAL_PLAN_COMPAT_TEMPLATE)
     write_if_missing(root() / "plans" / "active_plan.md", LOW_ASSUMPTION_ACTIVE_PLAN_TEMPLATE)
     write_if_missing(root() / "plans" / "version_iterations.md", LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE)
+
+
+def is_global_plan_compat(text: str) -> bool:
+    return "Compatibility Entry" in text and "plans/project_plan.md" in text
+
+
+def unique_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    candidate = path.with_name(f"{path.stem}_{stamp}{path.suffix}")
+    index = 2
+    while candidate.exists():
+        candidate = path.with_name(f"{path.stem}_{stamp}_{index}{path.suffix}")
+        index += 1
+    return candidate
+
+
+def migrate_project_plan_files() -> dict[str, str]:
+    plans = root() / "plans"
+    plans.mkdir(parents=True, exist_ok=True)
+    project_plan = plans / "project_plan.md"
+    project_record_rules = plans / "project_record_rules.md"
+    global_plan = plans / "global_plan.md"
+    legacy_global_plan = plans / "legacy_global_plan_before_project_plan_split.md"
+    result = {
+        "project_plan": str(project_plan.resolve()),
+        "project_record_rules": str(project_record_rules.resolve()),
+        "legacy_global_plan": "none",
+        "global_plan_compat": str(global_plan.resolve()),
+        "migration_note": "none",
+    }
+    created_project_plan = not project_plan.exists()
+    created_project_record_rules = not project_record_rules.exists()
+    global_text = global_plan.read_text(encoding="utf-8", errors="replace") if global_plan.exists() else None
+    rewrite_global_plan = global_text is None or not is_global_plan_compat(global_text)
+    write_if_missing(project_plan, LOW_ASSUMPTION_PROJECT_PLAN_TEMPLATE)
+    write_if_missing(project_record_rules, LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE)
+    if rewrite_global_plan:
+        if global_text:
+            legacy_path = unique_path(legacy_global_plan)
+            legacy_path.write_text(global_text, encoding="utf-8")
+            result["legacy_global_plan"] = str(legacy_path.resolve())
+        global_plan.write_text(GLOBAL_PLAN_COMPAT_TEMPLATE.rstrip() + "\n", encoding="utf-8")
+    changed = created_project_plan or created_project_record_rules or rewrite_global_plan
+    if changed:
+        note_path = unique_path(
+            root() / "topics" / f"migration_{datetime.now(timezone.utc).strftime('%Y%m%d')}_project_plan_split.md"
+        )
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(render_project_plan_split_migration_note(result), encoding="utf-8")
+        result["migration_note"] = str(note_path.resolve())
+    else:
+        existing_notes = sorted((root() / "topics").glob("migration_*_project_plan_split.md"))
+        if existing_notes:
+            result["migration_note"] = str(existing_notes[-1].resolve())
+    return result
+
+
+def render_project_plan_split_migration_note(result: dict[str, str]) -> str:
+    topic_ids: list[str] = []
+    db_path = root() / DB_PATH
+    if db_path.exists():
+        with database() as db:
+            topic_ids = [row["topic_id"] for row in db.execute("select topic_id from topics order by updated_at desc").fetchall()]
+            current = active_topic(db)
+    else:
+        current = None
+    default_topic = current["topic_id"] if current else "none"
+    topic_lines = "\n".join(f"- {topic_id}" for topic_id in topic_ids) or "- none"
+    return (
+        "# Project Plan Split Migration\n\n"
+        f"- migrated_at: {now_iso()}\n"
+        f"- project_plan: {result['project_plan']}\n"
+        f"- project_record_rules: {result['project_record_rules']}\n"
+        f"- legacy_global_plan: {result['legacy_global_plan']}\n"
+        f"- global_plan_compat: {result['global_plan_compat']}\n"
+        f"- default_topic_id: {default_topic}\n\n"
+        "## Recovery Entrypoints\n\n"
+        f"- handoff: {root() / 'handoffs' / 'latest_handoff.md'}\n"
+        f"- topic_index: {topic_index_path()}\n"
+        f"- topic_board: {topic_board_path()}\n"
+        "- topic_plan: topics/<topic_id>/plan.md\n\n"
+        "## Topic IDs At Migration\n\n"
+        f"{topic_lines}\n\n"
+        "## Notes\n\n"
+        "- This is operational migration metadata, not a project technical conclusion.\n"
+        "- The legacy global plan is kept as readable history so old project detail remains searchable.\n"
+        "- New project planning should use project_plan and project_record_rules; AIT tool work belongs in the AIT source repository.\n"
+    )
 
 
 def init_schema(db: sqlite3.Connection) -> None:
@@ -1025,9 +1145,11 @@ def command_doctor(args: argparse.Namespace) -> int:
         raise UserError("missing directories: " + ", ".join(missing))
     missing_files = [
         name
-        for name in ["plans/global_plan.md", "plans/active_plan.md", "plans/version_iterations.md"]
+        for name in ["plans/active_plan.md", "plans/version_iterations.md"]
         if not (root() / name).exists()
     ]
+    if not (root() / "plans" / "project_plan.md").exists() and not (root() / "plans" / "global_plan.md").exists():
+        missing_files.append("plans/project_plan.md")
     if missing_files:
         raise UserError("missing plan files: " + ", ".join(missing_files))
     print("state: ok")
@@ -1038,17 +1160,25 @@ def command_doctor(args: argparse.Namespace) -> int:
         raise UserError("database schema is incomplete")
     print("database: ok")
     print(f"root: {root()}")
+    if not (root() / "plans" / "project_plan.md").exists() and (root() / "plans" / "global_plan.md").exists():
+        print("migration_hint: legacy global_plan detected; run `auto-iter migrate` to create project_plan.md")
     print(f"resolved_topic_id: {resolution.topic_id or 'none'}")
     print(f"resolved_topic_source: {resolution.source}")
     return 0
 
 
 def command_migrate(_args: argparse.Namespace) -> int:
+    plan_migration = migrate_project_plan_files()
     with database() as db:
         created_topic_plans = create_missing_topic_plans(db)
         write_topic_projections(db)
         current = active_topic(db)
     print("migration complete")
+    print(f"project_plan: {plan_migration['project_plan']}")
+    print(f"project_record_rules: {plan_migration['project_record_rules']}")
+    print(f"legacy_global_plan: {plan_migration['legacy_global_plan']}")
+    print(f"global_plan_compat: {plan_migration['global_plan_compat']}")
+    print(f"migration_note: {plan_migration['migration_note']}")
     print(f"created_topic_plans: {created_topic_plans}")
     print(f"default_topic_id: {current['topic_id'] if current else 'none'}")
     print(f"topic_board: {topic_board_path().resolve()}")
@@ -2720,8 +2850,14 @@ def handoff_read_order_lines() -> list[str]:
     agents_path = root() / "AGENTS.md"
     if agents_path.exists():
         entries.append(str(agents_path))
+    entries.append(str(root() / "handoffs" / "latest_handoff.md"))
+    project_plan = root() / "plans" / "project_plan.md"
+    project_record_rules = root() / "plans" / "project_record_rules.md"
+    if project_plan.exists():
+        entries.append(str(project_plan))
+    if project_record_rules.exists():
+        entries.append(str(project_record_rules))
     entries += [
-        str(root() / "handoffs" / "latest_handoff.md"),
         str(root() / "plans" / "global_plan.md"),
         str(root() / "plans" / "version_iterations.md"),
         str(root() / "plans" / "active_plan.md"),
@@ -2746,6 +2882,12 @@ def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
     plan_path = topic_plan_path(topic_id)
     if plan_path.exists():
         entries.append(str(plan_path))
+    project_plan = root() / "plans" / "project_plan.md"
+    project_record_rules = root() / "plans" / "project_record_rules.md"
+    if project_plan.exists():
+        entries.append(str(project_plan))
+    if project_record_rules.exists():
+        entries.append(str(project_record_rules))
     entries += [
         str(topic_index_path()),
         str(active_topic_path()),
@@ -2781,7 +2923,16 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- commit: {git_commit()}",
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
-        f"- global_plan: {root() / 'plans' / 'global_plan.md'}",
+    ]
+    project_plan = root() / "plans" / "project_plan.md"
+    project_record_rules = root() / "plans" / "project_record_rules.md"
+    if project_plan.exists():
+        lines.append(f"- project_plan: {project_plan}")
+    if project_record_rules.exists():
+        lines.append(f"- project_record_rules: {project_record_rules}")
+    global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
+    lines += [
+        f"- {global_key}: {root() / 'plans' / 'global_plan.md'}",
         f"- version_task_tracking: {root() / 'plans' / 'version_iterations.md'}",
         f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
         f"- active_topic: {active_topic_path()}",
@@ -2952,20 +3103,31 @@ def validate_handoff_text(text: str) -> list[str]:
     for section in required_sections:
         if section not in text:
             errors.append(f"missing section: {section}")
+    project_plan = root() / "plans" / "project_plan.md"
+    project_record_rules = root() / "plans" / "project_record_rules.md"
+    global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     required_paths = {
-        "global_plan": root() / "plans" / "global_plan.md",
+        global_key: root() / "plans" / "global_plan.md",
         "version_task_tracking": root() / "plans" / "version_iterations.md",
         "active_plan": root() / "plans" / "active_plan.md",
         "active_topic": active_topic_path(),
         "topic_index": topic_index_path(),
         "topic_board": topic_board_path(),
     }
+    if project_plan.exists():
+        required_paths["project_plan"] = project_plan
+    if project_record_rules.exists():
+        required_paths["project_record_rules"] = project_record_rules
     for key, path in required_paths.items():
         expected = f"- {key}: {path}"
         if expected not in text:
             errors.append(f"missing snapshot path: {key}")
         elif not path.exists():
             errors.append(f"snapshot path does not exist: {path}")
+    if project_plan.exists() and str(project_plan) not in text:
+        errors.append("read order missing project plan")
+    if project_record_rules.exists() and str(project_record_rules) not in text:
+        errors.append("read order missing project record rules")
     if str(root() / "plans" / "global_plan.md") not in text:
         errors.append("read order missing global plan")
     return errors
@@ -3840,11 +4002,21 @@ def command_search_query(args: argparse.Namespace) -> int:
 
 INTENT_RULES: list[tuple[str, list[str], list[str]]] = [
     (
+        "ownership-routing",
+        ["AIT", "auto-iter", "auto_iteration", "update", "migrate", "search query", "handoff", "skill"],
+        [
+            "Before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself.",
+            "If the request is about AIT itself, switch to the auto_iteration source repository and update AIT's own global plan, version tracking, or topic plan.",
+            "Do not write AIT tool work into the managed project's project plan or topic plan.",
+        ],
+    ),
+    (
         "planning",
         ["做个计划", "更新计划", "计划一下", "方案", "plan"],
         [
             "Check whether plans/active_plan.md or plans/version_iterations.md should change.",
-            "If the request changes global capability scope, update plans/global_plan.md first.",
+            "If the request changes managed-project direction, update plans/project_plan.md first.",
+            "If the request changes AIT tool capability scope, switch to the auto_iteration source repository and update AIT's global plan first.",
             "Do not record an experiment run only from a planning phrase.",
         ],
     ),

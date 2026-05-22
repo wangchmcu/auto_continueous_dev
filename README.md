@@ -136,7 +136,10 @@ Use topic-scoped handoff commands when two Codex threads work on different
 topics under the same project. They write `topics/<topic_id>/latest_handoff.md`
 and do not overwrite the project-level `handoffs/latest_handoff.md`.
 Use `migrate` after upgrading an older project; it creates empty topic plans
-for legacy topics and refreshes topic projections.
+for legacy topics, refreshes topic projections, and performs the project plan
+split. The project plan split means preserving any old `plans/global_plan.md`
+content as a legacy readable file, then creating `plans/project_plan.md`,
+`plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`.
 
 Then start Codex from the target algorithm project:
 
@@ -164,6 +167,10 @@ auto-iter init
 `auto-iter init` is intentionally low-assumption. It creates the state store and
 tracking files, but it must not invent a business roadmap for the target project.
 The generated plans start with the project's goal marked as pending user input.
+For managed projects, project direction lives in `plans/project_plan.md` and
+project-specific AIT recording rules live in `plans/project_record_rules.md`.
+The generated `plans/global_plan.md` is a compatibility entry for older AIT
+workflows that still read that path.
 
 If initialization happens in the middle of an existing Codex conversation, the
 agent should create a bootstrap checkpoint after init. The checkpoint is a
@@ -238,7 +245,8 @@ auto-iter intent check --text "<用户原话>"
 
 Typical use:
 
-- User says “做个计划” or “更新计划”：the agent checks whether `plans/active_plan.md`, `plans/version_iterations.md`, or `plans/global_plan.md` should change.
+- User says “做个计划” or “更新计划”：the agent checks whether `plans/active_plan.md`, `plans/version_iterations.md`, or the managed project's `plans/project_plan.md` should change. In the AIT source repository, AIT tool-level scope still belongs in `plans/global_plan.md`.
+- If the request mentions AIT, `auto-iter`, update, migrate, search, handoff, or skill work, `auto-iter intent check` may print `ownership-routing`（需求归属判断：写计划前判断需求属于被接管项目还是 AIT 工具自身）. If the request is AIT tool work, switch to the AIT source repository before updating AIT plans. Do not write AIT tool work into the managed project's project plan or topic plan.
 - The agent or user creates, accepts, or changes a concrete plan for the current topic: update `topic plan` and `topic task` immediately. This is not limited to session end; checkpoint and handoff must project the topic plan instead of carrying the only copy of the plan.
 - User says “执行吧”, “实施吧”, or “确定执行”：the agent checks whether `route check` is needed and whether config, dataset, command, metrics, and artifacts are clear enough for `run exec`.
 - User says “拿到结果了”, “跑完数据了”, or “测试结束了”：the agent checks metrics, artifacts, and evidence `run_id` before writing a decision.
@@ -435,7 +443,7 @@ The agent should:
 - run `auto-iter resume`
 - run `auto-iter context index`
 - read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
-- read `plans/global_plan.md`, `plans/version_iterations.md`, `plans/active_plan.md`, and the relevant decisions
+- read `plans/project_plan.md` and `plans/project_record_rules.md` when they exist, then read `plans/global_plan.md`, `plans/version_iterations.md`, `plans/active_plan.md`, and the relevant decisions
 - read project-root `AGENTS.md` only when it exists; `auto-iter init` does not create it and AIT does not require it as a state source
 - avoid `raw_input/` unless this is initial setup or explicit missing-information lookup
 - summarize current goal, active decisions, rejected routes, and next minimum experiment
@@ -492,7 +500,13 @@ The topic plan alone is not enough; it is planning state, not the evidence chain
 
 ## Version Task Tracking
 
-Use `plans/global_plan.md` as the global plan and `plans/version_iterations.md` as the version-level task tracker. The version tracker records each version's goal, task checklist, acceptance checks, evidence, and next-version direction.
+In the AIT source repository, use `plans/global_plan.md` as the tool global
+plan and `plans/version_iterations.md` as the version-level task tracker. In a
+managed project, use `plans/project_plan.md` for the project's long-term plan
+and `plans/project_record_rules.md` for project-specific AIT recording rules.
+Keep `ownership-routing`（需求归属判断）in mind before editing any plan: AIT tool
+work goes to the AIT source repository. Do not write AIT tool work into the
+managed project's project plan or topic plan.
 
 Before changing implementation scope, update:
 

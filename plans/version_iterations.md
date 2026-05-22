@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.36
+- current_version: v0.37
 - status: done
-- goal: 补强 auto it self improve 自身流程：修补前先查历史承诺并判定 bug/功能缺失 scope，再基于第一性原则抽象成通用能力，避免只按表面症状补丁。
+- goal: 完成 project plan split and ownership-routing，让被接管项目的项目计划和 AIT 工具自身计划分离，并让迁移不覆盖现有 topic plan、坑点规避和检索增强能力。
 
 ## v0.1 任务清单
 
@@ -1084,8 +1084,18 @@ v0.25 之后仍未覆盖的全局能力：
 - done：自进化必须基于第一性原则抽象通用能力，先说明要保护的系统不变量，例如事实源、证据链、状态流转、恢复边界或污染边界，避免只修字面症状、关键词或一次性表达。
 - evidence：安装测试断言 `auto-it-self-improve` skill 包含历史回查、bug/feature gap 判定和 first principles 要求。
 
+### v0.37
+
+- done：project plan split（项目计划拆分）：被接管项目使用 `plans/project_plan.md` 记录项目长期计划，使用 `plans/project_record_rules.md` 记录项目定制的 AIT 记录规则；被接管项目里的 `plans/global_plan.md` 改为兼容入口。
+- done：`auto-iter migrate` 会归档旧 `plans/global_plan.md`，生成 project plan split migration note，并保留既有 topic plan、topic task、topic evidence、handoff 和 SQLite 状态。
+- done：`ownership-routing`（需求归属判断）：`auto-iter intent check` 在 AIT、auto-iter、update、migrate、search、handoff、skill 等请求中提示先判断计划归属。Do not write AIT tool work into the managed project's project plan or topic plan.
+- done：handoff 和 resume 读取顺序优先列出 `plans/project_plan.md`、`plans/project_record_rules.md`，再列兼容 `plans/global_plan.md`，旧项目未迁移时仍能用旧入口恢复。
+- done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 project plan split、`project_record_rules` 与 ownership-routing。
+- evidence：新增 `test_project_plan_split_and_ait_ownership_routing_are_documented`、迁移测试、intent check 测试和 handoff snapshot 测试；完整验证命令记录在本次实现会话。
+
 ### 后续可选
 
 - 若轻量检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
 - 若索引文档规模继续增大，再评估增量索引；增量索引指只更新变动文件对应的搜索文档和结构关系边，而不是每次全量重建。
 - 若用户再次提出 AIT update 功能开发，先读取 `plans/global_plan.md` 的 `self update workflow` backlog；该条记录了 2026-05-22 对 `ait update` 期望、风险和更稳语义的初版方向。
+- 若迁移后发现某个被接管项目仍把 AIT 工具开发写入项目 topic plan，先按 ownership-routing 处理为 AIT 计划归属 bug，再补迁移或入口规则。
