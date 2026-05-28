@@ -20,7 +20,10 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
+AIT_STATE_DIR = ".auto_iter"
 DB_PATH = Path("state") / "agent_state.db"
+SINGLE_DIR_LAYOUT = "single-dir"
+LEGACY_LAYOUT = "legacy"
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 DECISION_STATUSES = {"active", "rejected", "superseded", "open"}
 RUN_STATUSES = {"running", "success", "failed", "aborted"}
@@ -739,16 +742,48 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
+def state_root_for_project(project_root: Path, prefer_legacy: bool = False) -> Path:
+    if (project_root / AIT_STATE_DIR / DB_PATH).exists():
+        return project_root / AIT_STATE_DIR
+    if (project_root / DB_PATH).exists():
+        return project_root
+    return project_root if prefer_legacy else project_root / AIT_STATE_DIR
+
+
 def root() -> Path:
     cwd = Path.cwd().resolve()
     for candidate in (cwd, *cwd.parents):
+        if candidate.name == AIT_STATE_DIR and (candidate / DB_PATH).exists():
+            return candidate.parent
+        if (candidate / AIT_STATE_DIR / DB_PATH).exists():
+            return candidate
         if (candidate / DB_PATH).exists():
             return candidate
     return cwd
 
 
-def db_path() -> Path:
-    return root() / DB_PATH
+def state_root(prefer_legacy: bool = False) -> Path:
+    return state_root_for_project(root(), prefer_legacy=prefer_legacy)
+
+
+def state_path(*parts: str | Path, prefer_legacy: bool = False) -> Path:
+    path = state_root(prefer_legacy=prefer_legacy)
+    for part in parts:
+        path /= part
+    return path
+
+
+def project_layout() -> str:
+    return SINGLE_DIR_LAYOUT if state_root() != root() else LEGACY_LAYOUT
+
+
+def db_path(prefer_legacy: bool = False) -> Path:
+    return state_path(DB_PATH, prefer_legacy=prefer_legacy)
+
+
+def has_project_state() -> bool:
+    project_root = root()
+    return (project_root / AIT_STATE_DIR / DB_PATH).exists() or (project_root / DB_PATH).exists()
 
 
 def connect() -> sqlite3.Connection:
@@ -761,11 +796,11 @@ def connect() -> sqlite3.Connection:
 
 
 @contextmanager
-def database(require_existing: bool = True) -> sqlite3.Connection:
+def database(require_existing: bool = True, prefer_legacy: bool = False) -> sqlite3.Connection:
     if require_existing:
         db = connect()
     else:
-        db = sqlite3.connect(db_path())
+        db = sqlite3.connect(db_path(prefer_legacy=prefer_legacy))
         db.row_factory = sqlite3.Row
     init_schema(db)
     try:
@@ -806,7 +841,7 @@ def file_sha256(path: Path) -> str:
 
 
 def run_dir(run_id: str) -> Path:
-    return root() / "runs" / run_id
+    return state_path("runs", run_id)
 
 
 def logs_dir(run_id: str) -> Path:
@@ -835,7 +870,7 @@ def git_branch() -> str:
     return git_value(["branch", "--show-current"])
 
 
-def ensure_dirs() -> None:
+def ensure_dirs(prefer_legacy: bool = False) -> None:
     for path in [
         "state",
         "runs",
@@ -848,7 +883,7 @@ def ensure_dirs() -> None:
         "decisions/open",
         "plans",
     ]:
-        (root() / path).mkdir(parents=True, exist_ok=True)
+        state_path(path, prefer_legacy=prefer_legacy).mkdir(parents=True, exist_ok=True)
 
 
 def write_if_missing(path: Path, text: str) -> None:
@@ -856,12 +891,18 @@ def write_if_missing(path: Path, text: str) -> None:
         path.write_text(text.rstrip() + "\n", encoding="utf-8")
 
 
-def ensure_plan_files() -> None:
-    write_if_missing(root() / "plans" / "project_plan.md", LOW_ASSUMPTION_PROJECT_PLAN_TEMPLATE)
-    write_if_missing(root() / "plans" / "project_record_rules.md", LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE)
-    write_if_missing(root() / "plans" / "global_plan.md", GLOBAL_PLAN_COMPAT_TEMPLATE)
-    write_if_missing(root() / "plans" / "active_plan.md", LOW_ASSUMPTION_ACTIVE_PLAN_TEMPLATE)
-    write_if_missing(root() / "plans" / "version_iterations.md", LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE)
+def ensure_plan_files(prefer_legacy: bool = False) -> None:
+    write_if_missing(state_path("plans", "project_plan.md", prefer_legacy=prefer_legacy), LOW_ASSUMPTION_PROJECT_PLAN_TEMPLATE)
+    write_if_missing(
+        state_path("plans", "project_record_rules.md", prefer_legacy=prefer_legacy),
+        LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE,
+    )
+    write_if_missing(state_path("plans", "global_plan.md", prefer_legacy=prefer_legacy), GLOBAL_PLAN_COMPAT_TEMPLATE)
+    write_if_missing(state_path("plans", "active_plan.md", prefer_legacy=prefer_legacy), LOW_ASSUMPTION_ACTIVE_PLAN_TEMPLATE)
+    write_if_missing(
+        state_path("plans", "version_iterations.md", prefer_legacy=prefer_legacy),
+        LOW_ASSUMPTION_VERSION_ITERATIONS_TEMPLATE,
+    )
 
 
 def is_global_plan_compat(text: str) -> bool:
@@ -881,7 +922,7 @@ def unique_path(path: Path) -> Path:
 
 
 def migrate_project_plan_files() -> dict[str, str]:
-    plans = root() / "plans"
+    plans = state_path("plans")
     plans.mkdir(parents=True, exist_ok=True)
     project_plan = plans / "project_plan.md"
     project_record_rules = plans / "project_record_rules.md"
@@ -909,13 +950,13 @@ def migrate_project_plan_files() -> dict[str, str]:
     changed = created_project_plan or created_project_record_rules or rewrite_global_plan
     if changed:
         note_path = unique_path(
-            root() / "topics" / f"migration_{datetime.now(timezone.utc).strftime('%Y%m%d')}_project_plan_split.md"
+            state_path("topics", f"migration_{datetime.now(timezone.utc).strftime('%Y%m%d')}_project_plan_split.md")
         )
         note_path.parent.mkdir(parents=True, exist_ok=True)
         note_path.write_text(render_project_plan_split_migration_note(result), encoding="utf-8")
         result["migration_note"] = str(note_path.resolve())
     else:
-        existing_notes = sorted((root() / "topics").glob("migration_*_project_plan_split.md"))
+        existing_notes = sorted(state_path("topics").glob("migration_*_project_plan_split.md"))
         if existing_notes:
             result["migration_note"] = str(existing_notes[-1].resolve())
     return result
@@ -923,8 +964,8 @@ def migrate_project_plan_files() -> dict[str, str]:
 
 def render_project_plan_split_migration_note(result: dict[str, str]) -> str:
     topic_ids: list[str] = []
-    db_path = root() / DB_PATH
-    if db_path.exists():
+    current_db_path = db_path()
+    if current_db_path.exists():
         with database() as db:
             topic_ids = [row["topic_id"] for row in db.execute("select topic_id from topics order by updated_at desc").fetchall()]
             current = active_topic(db)
@@ -941,7 +982,7 @@ def render_project_plan_split_migration_note(result: dict[str, str]) -> str:
         f"- global_plan_compat: {result['global_plan_compat']}\n"
         f"- default_topic_id: {default_topic}\n\n"
         "## Recovery Entrypoints\n\n"
-        f"- handoff: {root() / 'handoffs' / 'latest_handoff.md'}\n"
+        f"- handoff: {state_path('handoffs', 'latest_handoff.md')}\n"
         f"- topic_index: {topic_index_path()}\n"
         f"- topic_board: {topic_board_path()}\n"
         "- topic_plan: topics/<topic_id>/plan.md\n\n"
@@ -1116,10 +1157,11 @@ def init_schema(db: sqlite3.Connection) -> None:
     )
 
 
-def command_init(_args: argparse.Namespace) -> int:
-    ensure_dirs()
-    ensure_plan_files()
-    with database(require_existing=False) as db:
+def command_init(args: argparse.Namespace) -> int:
+    prefer_legacy = bool(getattr(args, "legacy_layout", False))
+    ensure_dirs(prefer_legacy=prefer_legacy)
+    ensure_plan_files(prefer_legacy=prefer_legacy)
+    with database(require_existing=False, prefer_legacy=prefer_legacy) as db:
         init_schema(db)
         project_id = hashlib.sha256(str(root()).encode("utf-8")).hexdigest()[:12]
         db.execute(
@@ -1139,16 +1181,16 @@ def command_doctor(args: argparse.Namespace) -> int:
     missing = [
         name
         for name in ["state", "runs", "handoffs", "raw_input", "decisions", "plans"]
-        if not (root() / name).exists()
+        if not state_path(name).exists()
     ]
     if missing:
         raise UserError("missing directories: " + ", ".join(missing))
     missing_files = [
         name
         for name in ["plans/active_plan.md", "plans/version_iterations.md"]
-        if not (root() / name).exists()
+        if not state_path(name).exists()
     ]
-    if not (root() / "plans" / "project_plan.md").exists() and not (root() / "plans" / "global_plan.md").exists():
+    if not state_path("plans", "project_plan.md").exists() and not state_path("plans", "global_plan.md").exists():
         missing_files.append("plans/project_plan.md")
     if missing_files:
         raise UserError("missing plan files: " + ", ".join(missing_files))
@@ -1160,14 +1202,82 @@ def command_doctor(args: argparse.Namespace) -> int:
         raise UserError("database schema is incomplete")
     print("database: ok")
     print(f"root: {root()}")
-    if not (root() / "plans" / "project_plan.md").exists() and (root() / "plans" / "global_plan.md").exists():
+    print(f"state_dir: {state_root()}")
+    print(f"layout: {project_layout()}")
+    if not state_path("plans", "project_plan.md").exists() and state_path("plans", "global_plan.md").exists():
         print("migration_hint: legacy global_plan detected; run `auto-iter migrate` to create project_plan.md")
     print(f"resolved_topic_id: {resolution.topic_id or 'none'}")
     print(f"resolved_topic_source: {resolution.source}")
     return 0
 
 
-def command_migrate(_args: argparse.Namespace) -> int:
+def migrate_single_dir_layout() -> dict[str, Any]:
+    if project_layout() == SINGLE_DIR_LAYOUT:
+        return {
+            "status": "already-single-dir",
+            "state_dir": str(state_root().resolve()),
+            "moved": [],
+            "migration_note": "none",
+        }
+    project_root = root()
+    target = project_root / AIT_STATE_DIR
+    if target.exists() and any(target.iterdir()):
+        raise UserError(f"{AIT_STATE_DIR} already exists and is not empty")
+    target.mkdir(parents=True, exist_ok=True)
+    moved: list[str] = []
+    for name, _description in PROJECT_STATE_DIRS:
+        source = project_root / name
+        destination = target / name
+        if source.exists():
+            shutil.move(str(source), str(destination))
+            moved.append(name)
+    note_path = unique_path(
+        target / "topics" / f"migration_{datetime.now(timezone.utc).strftime('%Y%m%d')}_single_dir_layout.md"
+    )
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_text(render_single_dir_layout_migration_note(project_root, target, moved), encoding="utf-8")
+    return {
+        "status": "migrated",
+        "state_dir": str(target.resolve()),
+        "moved": moved,
+        "migration_note": str(note_path.resolve()),
+    }
+
+
+def render_single_dir_layout_migration_note(project_root: Path, target: Path, moved: list[str]) -> str:
+    moved_lines = "\n".join(f"- {name}/ -> {AIT_STATE_DIR}/{name}/" for name in moved) or "- none"
+    return (
+        "# Single Directory Layout Migration\n\n"
+        "## Summary\n\n"
+        f"- migrated_at: {now_iso()}\n"
+        f"- project_root: {project_root}\n"
+        f"- state_dir: {target}\n"
+        f"- database: {target / DB_PATH}\n\n"
+        "## Moved Directories\n\n"
+        f"{moved_lines}\n\n"
+        "## Recovery Entrypoints\n\n"
+        f"- handoff: {target / 'handoffs' / 'latest_handoff.md'}\n"
+        f"- plans: {target / 'plans'}\n"
+        f"- topics: {target / 'topics'}\n"
+    )
+
+
+def command_migrate(args: argparse.Namespace) -> int:
+    if getattr(args, "layout", "project-plan") == SINGLE_DIR_LAYOUT:
+        layout_migration = migrate_single_dir_layout()
+        with database() as db:
+            created_topic_plans = create_missing_topic_plans(db)
+            write_topic_projections(db)
+            current = active_topic(db)
+        print("layout migration complete")
+        print(f"status: {layout_migration['status']}")
+        print(f"state_dir: {layout_migration['state_dir']}")
+        print(f"moved: {', '.join(layout_migration['moved']) if layout_migration['moved'] else 'none'}")
+        print(f"migration_note: {layout_migration['migration_note']}")
+        print(f"created_topic_plans: {created_topic_plans}")
+        print(f"default_topic_id: {current['topic_id'] if current else 'none'}")
+        print(f"topic_board: {topic_board_path().resolve()}")
+        return 0
     plan_migration = migrate_project_plan_files()
     with database() as db:
         created_topic_plans = create_missing_topic_plans(db)
@@ -1362,7 +1472,7 @@ def command_update(args: argparse.Namespace) -> int:
     verify_installation(command_path, installed_skills)
     print("project state preserved")
     if args.check_project:
-        if DB_PATH.exists():
+        if has_project_state():
             print("project check:")
             command_doctor(argparse.Namespace())
         else:
@@ -1373,8 +1483,11 @@ def command_update(args: argparse.Namespace) -> int:
 
 def print_project_state_summary() -> None:
     print("Project state directories:")
-    for name, description in PROJECT_STATE_DIRS:
-        print(f"- {name}/: {description}")
+    if project_layout() == SINGLE_DIR_LAYOUT:
+        print(f"- {AIT_STATE_DIR}/: consolidated AIT project state directory")
+    else:
+        for name, description in PROJECT_STATE_DIRS:
+            print(f"- {name}/: {description}")
 
 
 def should_remove_project_state(args: argparse.Namespace) -> bool:
@@ -1391,6 +1504,17 @@ def should_remove_project_state(args: argparse.Namespace) -> bool:
 
 
 def remove_project_state_dirs() -> None:
+    if project_layout() == SINGLE_DIR_LAYOUT:
+        path = state_root()
+        if path.is_dir():
+            shutil.rmtree(path)
+            print(f"removed project state: {AIT_STATE_DIR}")
+        elif path.exists():
+            path.unlink()
+            print(f"removed project state: {AIT_STATE_DIR}")
+        else:
+            print(f"project state not found: {AIT_STATE_DIR}")
+        return
     for name, _description in PROJECT_STATE_DIRS:
         path = root() / name
         if path.is_dir():
@@ -1404,7 +1528,7 @@ def remove_project_state_dirs() -> None:
 
 
 def topics_dir() -> Path:
-    return root() / "topics"
+    return state_path("topics")
 
 
 def topic_archive_dir() -> Path:
@@ -2551,7 +2675,7 @@ def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
 
 
 def decision_path(status: str, decision_id: str) -> Path:
-    return root() / "decisions" / status / f"{decision_id}.md"
+    return state_path("decisions", status, f"{decision_id}.md")
 
 
 def write_decision_projection(
@@ -2850,21 +2974,21 @@ def handoff_read_order_lines() -> list[str]:
     agents_path = root() / "AGENTS.md"
     if agents_path.exists():
         entries.append(str(agents_path))
-    entries.append(str(root() / "handoffs" / "latest_handoff.md"))
-    project_plan = root() / "plans" / "project_plan.md"
-    project_record_rules = root() / "plans" / "project_record_rules.md"
+    entries.append(str(state_path("handoffs", "latest_handoff.md")))
+    project_plan = state_path("plans", "project_plan.md")
+    project_record_rules = state_path("plans", "project_record_rules.md")
     if project_plan.exists():
         entries.append(str(project_plan))
     if project_record_rules.exists():
         entries.append(str(project_record_rules))
     entries += [
-        str(root() / "plans" / "global_plan.md"),
-        str(root() / "plans" / "version_iterations.md"),
-        str(root() / "plans" / "active_plan.md"),
+        str(state_path("plans", "global_plan.md")),
+        str(state_path("plans", "version_iterations.md")),
+        str(state_path("plans", "active_plan.md")),
         str(active_topic_path()),
         str(topic_board_path()),
-        str(root() / "state" / "agent_state.db"),
-        f"{root() / 'decisions'}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
+        str(db_path()),
+        f"{state_path('decisions')}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
         "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
         "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
@@ -2882,8 +3006,8 @@ def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
     plan_path = topic_plan_path(topic_id)
     if plan_path.exists():
         entries.append(str(plan_path))
-    project_plan = root() / "plans" / "project_plan.md"
-    project_record_rules = root() / "plans" / "project_record_rules.md"
+    project_plan = state_path("plans", "project_plan.md")
+    project_record_rules = state_path("plans", "project_record_rules.md")
     if project_plan.exists():
         entries.append(str(project_plan))
     if project_record_rules.exists():
@@ -2891,10 +3015,10 @@ def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
     entries += [
         str(topic_index_path()),
         str(active_topic_path()),
-        str(root() / "plans" / "active_plan.md"),
-        str(root() / "plans" / "version_iterations.md"),
-        str(root() / "plans" / "global_plan.md"),
-        str(root() / "state" / "agent_state.db"),
+        str(state_path("plans", "active_plan.md")),
+        str(state_path("plans", "version_iterations.md")),
+        str(state_path("plans", "global_plan.md")),
+        str(db_path()),
         f"用 `auto-iter topic evidence --topic-id {topic_id}` 查看该 topic 的 run、decision、artifact 证据链。",
         "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
@@ -2924,17 +3048,17 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
     ]
-    project_plan = root() / "plans" / "project_plan.md"
-    project_record_rules = root() / "plans" / "project_record_rules.md"
+    project_plan = state_path("plans", "project_plan.md")
+    project_record_rules = state_path("plans", "project_record_rules.md")
     if project_plan.exists():
         lines.append(f"- project_plan: {project_plan}")
     if project_record_rules.exists():
         lines.append(f"- project_record_rules: {project_record_rules}")
     global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     lines += [
-        f"- {global_key}: {root() / 'plans' / 'global_plan.md'}",
-        f"- version_task_tracking: {root() / 'plans' / 'version_iterations.md'}",
-        f"- active_plan: {root() / 'plans' / 'active_plan.md'}",
+        f"- {global_key}: {state_path('plans', 'global_plan.md')}",
+        f"- version_task_tracking: {state_path('plans', 'version_iterations.md')}",
+        f"- active_plan: {state_path('plans', 'active_plan.md')}",
         f"- active_topic: {active_topic_path()}",
         f"- topic_index: {topic_index_path()}",
         f"- topic_board: {topic_board_path()}",
@@ -3103,13 +3227,13 @@ def validate_handoff_text(text: str) -> list[str]:
     for section in required_sections:
         if section not in text:
             errors.append(f"missing section: {section}")
-    project_plan = root() / "plans" / "project_plan.md"
-    project_record_rules = root() / "plans" / "project_record_rules.md"
+    project_plan = state_path("plans", "project_plan.md")
+    project_record_rules = state_path("plans", "project_record_rules.md")
     global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     required_paths = {
-        global_key: root() / "plans" / "global_plan.md",
-        "version_task_tracking": root() / "plans" / "version_iterations.md",
-        "active_plan": root() / "plans" / "active_plan.md",
+        global_key: state_path("plans", "global_plan.md"),
+        "version_task_tracking": state_path("plans", "version_iterations.md"),
+        "active_plan": state_path("plans", "active_plan.md"),
         "active_topic": active_topic_path(),
         "topic_index": topic_index_path(),
         "topic_board": topic_board_path(),
@@ -3128,7 +3252,7 @@ def validate_handoff_text(text: str) -> list[str]:
         errors.append("read order missing project plan")
     if project_record_rules.exists() and str(project_record_rules) not in text:
         errors.append("read order missing project record rules")
-    if str(root() / "plans" / "global_plan.md") not in text:
+    if str(state_path("plans", "global_plan.md")) not in text:
         errors.append("read order missing global plan")
     return errors
 
@@ -3175,9 +3299,9 @@ def save_handoff(topic_id: str | None = None) -> tuple[Path, str | None]:
             handoff_md, based_on_run_id = build_topic_handoff(db, topic_id)
             archive = topic_handoff_archive_dir(topic_id) / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
         else:
-            path = root() / "handoffs" / "latest_handoff.md"
+            path = state_path("handoffs", "latest_handoff.md")
             handoff_md, based_on_run_id = build_handoff(db)
-            archive = root() / "handoffs" / "archive" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            archive = state_path("handoffs", "archive", f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(handoff_md, encoding="utf-8")
         archive.parent.mkdir(parents=True, exist_ok=True)
@@ -3194,7 +3318,7 @@ def save_handoff(topic_id: str | None = None) -> tuple[Path, str | None]:
 
 
 def command_handoff_validate(args: argparse.Namespace) -> int:
-    path = topic_handoff_path(args.topic_id) if args.topic_id else root() / "handoffs" / "latest_handoff.md"
+    path = topic_handoff_path(args.topic_id) if args.topic_id else state_path("handoffs", "latest_handoff.md")
     if not path.exists():
         print("INVALID")
         print(f"- handoff missing: {path.resolve()}")
@@ -3244,7 +3368,7 @@ def command_checkpoint_save(args: argparse.Namespace) -> int:
 
 
 def command_resume(args: argparse.Namespace) -> int:
-    path = topic_handoff_path(args.topic_id) if args.topic_id else root() / "handoffs" / "latest_handoff.md"
+    path = topic_handoff_path(args.topic_id) if args.topic_id else state_path("handoffs", "latest_handoff.md")
     if not path.exists():
         print(f"handoff missing: {path.resolve()}")
         print("run `auto-iteration handoff generate` after at least one recorded run")
@@ -3262,6 +3386,14 @@ def is_under(path: Path, parent: Path) -> bool:
         return False
 
 
+def display_relative_path(path: Path) -> Path:
+    return path.resolve().relative_to(root())
+
+
+def state_relative_path(path: Path) -> Path:
+    return path.resolve().relative_to(state_root())
+
+
 @dataclass(frozen=True)
 class SearchDocument:
     doc_id: str
@@ -3275,7 +3407,7 @@ class SearchDocument:
 
 
 def decision_projection_files() -> list[Path]:
-    return sorted(path.resolve() for path in root().glob("decisions/*/*.md") if path.is_file())
+    return sorted(path.resolve() for path in state_path("decisions").glob("*/*.md") if path.is_file())
 
 
 def decision_statuses_from_db() -> dict[str, str]:
@@ -3292,7 +3424,7 @@ def decision_projection_consistency() -> tuple[list[Path], list[str]]:
     valid: list[Path] = []
     warnings: list[str] = []
     for path in decision_projection_files():
-        rel = path.relative_to(root())
+        rel = display_relative_path(path)
         decision_id = path.stem
         projected_status = path.parent.name
         actual_status = statuses.get(decision_id)
@@ -3321,11 +3453,11 @@ def context_files(include_raw_input: bool) -> list[Path]:
     ]
     files: list[Path] = []
     for pattern in patterns:
-        files.extend(root().glob(pattern))
+        files.extend(state_root().glob(pattern))
     valid_decisions, _warnings = decision_projection_consistency()
     files.extend(valid_decisions)
     if include_raw_input:
-        files.extend(path for path in (root() / "raw_input").glob("**/*") if path.is_file())
+        files.extend(path for path in state_path("raw_input").glob("**/*") if path.is_file())
     return sorted({path.resolve() for path in files if path.is_file()})
 
 
@@ -3345,7 +3477,7 @@ def markdown_headings(path: Path) -> list[str]:
 def command_context_index(args: argparse.Namespace) -> int:
     print("# Context Index")
     for path in context_files(args.include_raw_input):
-        rel = path.relative_to(root())
+        rel = display_relative_path(path)
         print(f"- path: {rel}")
         headings = markdown_headings(path)
         if headings:
@@ -3394,7 +3526,7 @@ def command_context_show(args: argparse.Namespace) -> int:
     path = Path(args.path).expanduser().resolve()
     if not path.exists():
         raise UserError(f"context path does not exist: {path}")
-    if is_under(path, root() / "raw_input") and not args.allow_raw_input:
+    if is_under(path, state_path("raw_input")) and not args.allow_raw_input:
         raise UserError("raw_input requires --allow-raw-input")
     if not is_under(path, root()):
         raise UserError(f"context path must be under project root: {path}")
@@ -3455,7 +3587,7 @@ def markdown_sections(path: Path) -> list[tuple[str, str]]:
 
 
 def infer_source_type_and_id(path: Path, body: str) -> tuple[str, str]:
-    rel = path.relative_to(root()).as_posix()
+    rel = state_relative_path(path).as_posix()
     parts = rel.split("/")
     if parts[:1] == ["plans"]:
         return "plan", path.stem
@@ -3496,7 +3628,7 @@ def is_structured_search_id(value: str) -> bool:
 
 
 def document_id(path: Path, heading: str, section_index: int) -> str:
-    rel = path.relative_to(root()).as_posix()
+    rel = state_relative_path(path).as_posix()
     digest = hashlib.sha256(f"{rel}\n{heading}\n{section_index}".encode("utf-8")).hexdigest()[:16]
     return f"S-{digest}"
 
@@ -3504,7 +3636,7 @@ def document_id(path: Path, heading: str, section_index: int) -> str:
 def collect_search_documents(include_raw_input: bool) -> list[SearchDocument]:
     documents: list[SearchDocument] = []
     for path in context_files(include_raw_input):
-        if not include_raw_input and is_under(path, root() / "raw_input"):
+        if not include_raw_input and is_under(path, state_path("raw_input")):
             continue
         for section_index, (heading, body) in enumerate(markdown_sections(path)):
             source_type, source_id = infer_source_type_and_id(path, body)
@@ -3553,7 +3685,7 @@ def search_index_scope(include_raw_input: bool) -> str:
 
 
 def search_index_lock_path() -> Path:
-    return root() / "state" / "search_index.lock"
+    return state_path("state", "search_index.lock")
 
 
 @contextmanager
@@ -3699,7 +3831,7 @@ def insert_search_document(db: sqlite3.Connection, doc: SearchDocument, has_fts:
             doc.doc_id,
             doc.source_type,
             doc.source_id,
-            str(doc.path.relative_to(root())),
+            str(display_relative_path(doc.path)),
             doc.heading,
             doc.title,
             doc.body,
@@ -4136,11 +4268,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auto-iteration")
     subparsers = parser.add_subparsers(dest="command", required=True)
     init = subparsers.add_parser("init")
+    init.add_argument("--legacy-layout", action="store_true", help="create project state in the pre-.auto_iter layout")
     init.set_defaults(func=command_init)
     doctor = subparsers.add_parser("doctor")
     doctor.add_argument("--topic-id")
     doctor.set_defaults(func=command_doctor)
     migrate = subparsers.add_parser("migrate")
+    migrate.add_argument("--layout", choices=["project-plan", SINGLE_DIR_LAYOUT], default="project-plan")
     migrate.set_defaults(func=command_migrate)
     install = subparsers.add_parser("install")
     install.add_argument("--bin-dir", default=str(default_bin_dir()))

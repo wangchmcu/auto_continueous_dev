@@ -153,6 +153,14 @@
 - Do not write AIT tool work into the managed project's project plan or topic plan.
 - `auto-iter migrate` 对旧项目执行 project plan split：归档旧 `plans/global_plan.md`，创建 `plans/project_plan.md` 和 `plans/project_record_rules.md`，再写入兼容 `plans/global_plan.md`，同时保留已有 topic plan、topic evidence 和最近更新的坑点规避规则。
 
+### 17. project state single-dir layout
+
+- project state single-dir layout（项目状态单目录布局）：新接管项目默认把 AIT 生成和维护的状态集中到 `.auto_iter/`，避免 `state/`、`plans/`、`topics/`、`handoffs/`、`decisions/`、`runs/` 和 `raw_input/` 散落在项目根目录。
+- `.auto_iter/state/agent_state.db` 是新布局的 SQLite 事实源；旧项目的 `state/agent_state.db` 继续兼容。
+- `auto-iter doctor` 必须显示 `root`、`state_dir` 和 `layout`，让 agent 在写入前确认实际落点。
+- `auto-iter migrate --layout single-dir` 显式执行旧布局到 `.auto_iter/` 的迁移；如果 `.auto_iter/` 已存在且非空，必须停止，不能覆盖已有状态。
+- `.codex/` 不属于 AIT 项目状态目录；它是 Codex hook 或本地配置入口，不随 `.auto_iter/` 迁移。
+
 ## 后续 Backlog
 
 这些条目是 `global plan backlog`（全局计划待办）。当用户以后提出上下文管理、历史检索、topic 管理或证据关联相关的新能力时，agent 必须先检查这里和 `plans/version_iterations.md` 的未覆盖能力，再决定是否延续已有路线；如果匹配，不要另开独立 plan 分支。
@@ -623,6 +631,19 @@
 - 旧 `active topic` 自动映射为 default topic。
 - 没有 topic plan 的旧 topic 自动生成空 plan。
 - handoff validate 先 warning，再按后续版本收紧。
+
+### v0.38：项目状态单目录布局
+
+状态：done。
+
+目标：新接管项目默认把 AIT 状态集中到 `.auto_iter/`，旧项目继续兼容并可显式迁移。
+
+任务：
+
+- `auto-iter init` 默认创建 `.auto_iter/state/agent_state.db` 和 `.auto_iter/` 下的 plans、topics、handoffs、decisions、runs、raw_input。
+- `auto-iter doctor` 输出 `root`、`state_dir` 和 `layout`。
+- `auto-iter migrate --layout single-dir` 把旧 root-level 状态目录移动到 `.auto_iter/`，并拒绝覆盖非空 `.auto_iter/`。
+- context、search、handoff、topic、run 和 decision 命令都通过状态目录抽象读写。
 
 ### 后续可选：更重的语义检索
 

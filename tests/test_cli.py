@@ -49,21 +49,24 @@ class CliTests(unittest.TestCase):
         result = run_cli(self.tmp, "init")
 
         self.assertIn("initialized", result.stdout)
-        self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
-        self.assertTrue((self.tmp / "runs").is_dir())
-        self.assertTrue((self.tmp / "raw_input").is_dir())
-        self.assertTrue((self.tmp / "decisions" / "rejected").is_dir())
-        self.assertTrue((self.tmp / "handoffs" / "archive").is_dir())
-        self.assertTrue((self.tmp / "plans" / "global_plan.md").exists())
-        self.assertTrue((self.tmp / "plans" / "project_plan.md").exists())
-        self.assertTrue((self.tmp / "plans" / "project_record_rules.md").exists())
-        self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
-        self.assertTrue((self.tmp / "plans" / "version_iterations.md").exists())
-        active_plan = (self.tmp / "plans" / "active_plan.md").read_text(encoding="utf-8")
-        version_tracking = (self.tmp / "plans" / "version_iterations.md").read_text(encoding="utf-8")
-        global_plan = (self.tmp / "plans" / "global_plan.md").read_text(encoding="utf-8")
-        project_plan = (self.tmp / "plans" / "project_plan.md").read_text(encoding="utf-8")
-        project_record_rules = (self.tmp / "plans" / "project_record_rules.md").read_text(encoding="utf-8")
+        state_root = self.tmp / ".auto_iter"
+        self.assertTrue((state_root / "state" / "agent_state.db").exists())
+        self.assertTrue((state_root / "runs").is_dir())
+        self.assertTrue((state_root / "raw_input").is_dir())
+        self.assertTrue((state_root / "decisions" / "rejected").is_dir())
+        self.assertTrue((state_root / "handoffs" / "archive").is_dir())
+        self.assertTrue((state_root / "plans" / "global_plan.md").exists())
+        self.assertTrue((state_root / "plans" / "project_plan.md").exists())
+        self.assertTrue((state_root / "plans" / "project_record_rules.md").exists())
+        self.assertTrue((state_root / "plans" / "active_plan.md").exists())
+        self.assertTrue((state_root / "plans" / "version_iterations.md").exists())
+        self.assertFalse((self.tmp / "state").exists())
+        self.assertFalse((self.tmp / "plans").exists())
+        active_plan = (state_root / "plans" / "active_plan.md").read_text(encoding="utf-8")
+        version_tracking = (state_root / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (state_root / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        project_plan = (state_root / "plans" / "project_plan.md").read_text(encoding="utf-8")
+        project_record_rules = (state_root / "plans" / "project_record_rules.md").read_text(encoding="utf-8")
         self.assertIn("低假设初始化", active_plan)
         self.assertIn("当前业务目标：待用户定义", active_plan)
         self.assertIn("对话中途接入", active_plan)
@@ -96,6 +99,20 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("state: ok", doctor.stdout)
         self.assertIn("database: ok", doctor.stdout)
+        self.assertIn(f"state_dir: {state_root}", doctor.stdout)
+        self.assertIn("layout: single-dir", doctor.stdout)
+
+    def test_legacy_layout_init_remains_available(self):
+        result = run_cli(self.tmp, "init", "--legacy-layout")
+
+        self.assertIn("initialized", result.stdout)
+        self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
+        self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
+
+        doctor = run_cli(self.tmp, "doctor")
+
+        self.assertIn(f"state_dir: {self.tmp}", doctor.stdout)
+        self.assertIn("layout: legacy", doctor.stdout)
 
     def test_commands_from_subdirectory_use_nearest_project_root(self):
         run_cli(self.tmp, "init")
@@ -137,7 +154,7 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("status=success", executed.stdout)
         self.assertEqual(str(self.tmp), cwd_marker.read_text(encoding="utf-8"))
-        self.assertEqual(1, len(list((self.tmp / "runs").glob("R-*"))))
+        self.assertEqual(1, len(list((self.tmp / ".auto_iter" / "runs").glob("R-*"))))
         self.assertFalse((subdir / "runs").exists())
 
     def test_doctor_reports_no_resolved_topic_without_default(self):
@@ -371,6 +388,26 @@ class CliTests(unittest.TestCase):
             self.assertIn("ownership-routing", text)
             self.assertIn("project_record_rules", text)
 
+    def test_single_dir_layout_is_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (REPO_ROOT / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(".auto_iter", text, str(path))
+            self.assertIn("migrate --layout single-dir", text, str(path))
+        for text in [version_tracking, global_plan, active_plan]:
+            self.assertIn("v0.38", text)
+            self.assertIn(".auto_iter", text)
+            self.assertIn("project state single-dir layout", text)
+
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
         windows = cli.command_wrapper_spec(PureWindowsPath("C:/repo/tools/auto_iter.py"), platform_name="windows")
@@ -490,14 +527,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("removed skill: auto-iteration-entry", result.stdout)
         self.assertIn("removed skill: auto-it-self-improve", result.stdout)
         self.assertIn("Project state directories", result.stdout)
-        self.assertIn("state/: SQLite", result.stdout)
+        self.assertIn(".auto_iter/: consolidated AIT project state directory", result.stdout)
         self.assertIn("project state preserved", result.stdout)
         self.assertFalse(command_path.exists())
         self.assertFalse(entry_skill_path.exists())
         self.assertFalse(improve_skill_path.exists())
-        self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
-        self.assertTrue((self.tmp / "plans" / "active_plan.md").exists())
-        self.assertTrue((self.tmp / "raw_input").is_dir())
+        self.assertTrue((self.tmp / ".auto_iter" / "state" / "agent_state.db").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "plans" / "active_plan.md").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "raw_input").is_dir())
 
     def test_uninstall_can_remove_project_state_when_explicitly_requested(self):
         run_cli(self.tmp, "init")
@@ -523,19 +560,9 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertIn("Project state directories", result.stdout)
-        self.assertIn("raw_input/: original input", result.stdout)
-        self.assertIn("removed project state: state", result.stdout)
-        self.assertIn("removed project state: plans", result.stdout)
-        self.assertIn("removed project state: raw_input", result.stdout)
-        self.assertIn("removed project state: decisions", result.stdout)
-        self.assertIn("removed project state: runs", result.stdout)
-        self.assertIn("removed project state: handoffs", result.stdout)
-        self.assertFalse((self.tmp / "state").exists())
-        self.assertFalse((self.tmp / "plans").exists())
-        self.assertFalse((self.tmp / "raw_input").exists())
-        self.assertFalse((self.tmp / "decisions").exists())
-        self.assertFalse((self.tmp / "runs").exists())
-        self.assertFalse((self.tmp / "handoffs").exists())
+        self.assertIn(".auto_iter/: consolidated AIT project state directory", result.stdout)
+        self.assertIn("removed project state: .auto_iter", result.stdout)
+        self.assertFalse((self.tmp / ".auto_iter").exists())
 
     def test_update_replaces_installed_command_and_skills(self):
         bin_dir = self.tmp / "bin"
@@ -563,8 +590,9 @@ class CliTests(unittest.TestCase):
         run_cli(self.tmp, "init")
         bin_dir = self.tmp / "bin"
         skills_dir = self.tmp / "skills"
+        state_root = self.tmp / ".auto_iter"
         for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
-            marker = self.tmp / directory / "update-marker.txt"
+            marker = state_root / directory / "update-marker.txt"
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text(f"keep {directory}\n", encoding="utf-8")
 
@@ -573,8 +601,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("project state preserved", result.stdout)
         self.assertIn("update check: ok", result.stdout)
         for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
-            self.assertTrue((self.tmp / directory).is_dir())
-            self.assertTrue((self.tmp / directory / "update-marker.txt").exists())
+            self.assertTrue((state_root / directory).is_dir())
+            self.assertTrue((state_root / directory / "update-marker.txt").exists())
 
     def test_update_in_empty_directory_does_not_create_project_state(self):
         bin_dir = self.tmp / "bin"
@@ -585,6 +613,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("update check: ok", result.stdout)
         for directory in ["state", "plans", "topics", "raw_input", "decisions", "runs", "handoffs"]:
             self.assertFalse((self.tmp / directory).exists(), directory)
+        self.assertFalse((self.tmp / ".auto_iter").exists())
 
     def test_update_check_project_runs_doctor_or_skips_without_init(self):
         initialized = self.tmp / "initialized"
@@ -636,7 +665,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("started topic", first.stdout)
         self.assertIn("Topic A", current.stdout)
         self.assertIn("active", current.stdout)
-        self.assertIn("第一个 topic 的摘要", (self.tmp / "topics" / "active_topic.md").read_text(encoding="utf-8"))
+        self.assertIn("第一个 topic 的摘要", (self.tmp / ".auto_iter" / "topics" / "active_topic.md").read_text(encoding="utf-8"))
 
         second = run_cli(
             self.tmp,
@@ -651,7 +680,7 @@ class CliTests(unittest.TestCase):
         )
         second_topic_id = second.stdout.strip().split()[-1]
         listed = run_cli(self.tmp, "topic", "list")
-        first_archive = self.tmp / "topics" / "archive" / f"{first_topic_id}.md"
+        first_archive = self.tmp / ".auto_iter" / "topics" / "archive" / f"{first_topic_id}.md"
 
         self.assertIn("Topic A", listed.stdout)
         self.assertIn("archived_open", listed.stdout)
@@ -659,7 +688,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("active", listed.stdout)
         self.assertTrue(first_archive.exists())
         self.assertIn("Topic A 当前现场", first_archive.read_text(encoding="utf-8"))
-        self.assertIn("Topic B", (self.tmp / "topics" / "active_topic.md").read_text(encoding="utf-8"))
+        self.assertIn("Topic B", (self.tmp / ".auto_iter" / "topics" / "active_topic.md").read_text(encoding="utf-8"))
 
         switched = run_cli(
             self.tmp,
@@ -672,7 +701,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn(f"switched topic {first_topic_id}", switched.stdout)
         self.assertIn("Topic A", run_cli(self.tmp, "topic", "current").stdout)
-        self.assertIn("Topic B 当前现场", (self.tmp / "topics" / "archive" / f"{second_topic_id}.md").read_text(encoding="utf-8"))
+        self.assertIn("Topic B 当前现场", (self.tmp / ".auto_iter" / "topics" / "archive" / f"{second_topic_id}.md").read_text(encoding="utf-8"))
 
         satisfied = run_cli(self.tmp, "topic", "satisfy", "--summary", "Topic A 阶段性达到预期")
         no_current = run_cli(self.tmp, "topic", "current", check=False)
@@ -683,7 +712,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("archived_satisfied", run_cli(self.tmp, "topic", "list").stdout)
         self.assertIn("Topic A 阶段性达到预期", first_archive.read_text(encoding="utf-8"))
 
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             active_count = db.execute("select count(*) from topics where status = 'active'").fetchone()[0]
             event_names = [row[0] for row in db.execute("select event_type from topic_events order by created_at, rowid")]
         self.assertEqual(active_count, 0)
@@ -709,7 +738,7 @@ class CliTests(unittest.TestCase):
 
         index = run_cli(self.tmp, "context", "index")
         handoff = run_cli(self.tmp, "handoff", "generate")
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         skill_text = (skills_dir / "auto-iteration-entry" / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertIn("topics/index.md", index.stdout)
@@ -717,11 +746,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("Topic Archive MVP", index.stdout)
         self.assertEqual(handoff.stdout, "")
         self.assertIn("active_topic", handoff_text)
-        self.assertIn(str((self.tmp / "topics" / "active_topic.md").resolve()), handoff_text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "active_topic.md").resolve()), handoff_text)
         self.assertIn("topic_index", handoff_text)
-        self.assertIn(str((self.tmp / "topics" / "index.md").resolve()), handoff_text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "index.md").resolve()), handoff_text)
         self.assertIn("topic_board", handoff_text)
-        self.assertIn(str((self.tmp / "topics" / "board.md").resolve()), handoff_text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "board.md").resolve()), handoff_text)
         self.assertIn("是不是已经切入新的 topic 了", skill_text)
         self.assertIn("auto-iter topic", skill_text)
         self.assertIn("install check: ok", installed.stdout)
@@ -756,8 +785,8 @@ class CliTests(unittest.TestCase):
             "--escalation-condition",
             "影响多个 topic 时升级到 active_plan",
         )
-        plan_path = self.tmp / "topics" / topic_id / "plan.md"
-        default_plan_path = self.tmp / "topics" / "default_topic_plan.md"
+        plan_path = self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md"
+        default_plan_path = self.tmp / ".auto_iter" / "topics" / "default_topic_plan.md"
 
         self.assertIn(f"saved topic plan {topic_id}", saved.stdout)
         self.assertTrue(plan_path.exists())
@@ -808,7 +837,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("resolved_topic_source: environment", saved.stdout)
         self.assertIn(f"resolved_topic_id: {topic_id}", added.stdout)
         self.assertIn("resolved_topic_source: environment", added.stdout)
-        self.assertIn("环境变量指定 task", (self.tmp / "topics" / topic_id / "plan.md").read_text(encoding="utf-8"))
+        self.assertIn("环境变量指定 task", (self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md").read_text(encoding="utf-8"))
 
     def test_topic_write_rejects_implicit_default_when_multiple_topics_are_open(self):
         run_cli(self.tmp, "init")
@@ -857,11 +886,13 @@ class CliTests(unittest.TestCase):
         self.assertIn("--topic-id", blocked.stderr)
         self.assertIn(f"resolved_topic_id: {topic_b}", allowed.stdout)
         self.assertIn("resolved_topic_source: default_topic", allowed.stdout)
-        self.assertFalse((self.tmp / "topics" / topic_a / "plan.md").exists())
-        self.assertTrue((self.tmp / "topics" / topic_b / "plan.md").exists())
+        self.assertFalse((self.tmp / ".auto_iter" / "topics" / topic_a / "plan.md").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "topics" / topic_b / "plan.md").exists())
 
     def test_migrate_creates_empty_topic_plans_and_board_for_existing_topics(self):
         run_cli(self.tmp, "init")
+        legacy_global_plan = self.tmp / ".auto_iter" / "plans" / "global_plan.md"
+        legacy_global_plan.write_text("# Global Plan\n\n## Legacy Topic Routing\n\nold-route\n", encoding="utf-8")
         topic_id = run_cli(
             self.tmp,
             "topic",
@@ -871,21 +902,24 @@ class CliTests(unittest.TestCase):
             "--summary",
             "旧 topic 没有 plan",
         ).stdout.strip().split()[-1]
-        self.assertFalse((self.tmp / "topics" / topic_id / "plan.md").exists())
+        self.assertFalse((self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md").exists())
 
         migrated = run_cli(self.tmp, "migrate")
 
-        plan_path = self.tmp / "topics" / topic_id / "plan.md"
-        board_path = self.tmp / "topics" / "board.md"
+        plan_path = self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md"
+        board_path = self.tmp / ".auto_iter" / "topics" / "board.md"
+        migration_notes = list((self.tmp / ".auto_iter" / "topics").glob("migration_*_project_plan_split.md"))
         self.assertIn("migration complete", migrated.stdout)
         self.assertIn("created_topic_plans: 1", migrated.stdout)
         self.assertIn(f"default_topic_id: {topic_id}", migrated.stdout)
         self.assertTrue(plan_path.exists())
         self.assertTrue(board_path.exists())
+        self.assertEqual(len(migration_notes), 1)
+        self.assertIn(topic_id, migration_notes[0].read_text(encoding="utf-8"))
         self.assertIn("## Goal", plan_path.read_text(encoding="utf-8"))
 
     def test_migrate_splits_project_plan_without_losing_legacy_global_plan(self):
-        run_cli(self.tmp, "init")
+        run_cli(self.tmp, "init", "--legacy-layout")
         legacy_global_plan = self.tmp / "plans" / "global_plan.md"
         legacy_global_plan.write_text(
             "# Global Plan\n\n## Valeo Direction\n\nlegacy-valeo-project-route\n",
@@ -928,6 +962,84 @@ class CliTests(unittest.TestCase):
         migrated_again = run_cli(self.tmp, "migrate")
         self.assertEqual(len(list((self.tmp / "topics").glob("migration_*_project_plan_split.md"))), 1)
         self.assertIn(str(migration_notes[0].resolve()), migrated_again.stdout)
+
+    def test_migrate_single_dir_layout_moves_legacy_state_without_losing_records(self):
+        run_cli(self.tmp, "init", "--legacy-layout")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        raw_note = self.tmp / "raw_input" / "legacy.md"
+        write_json(config, {"case": "single-dir-layout"})
+        write_json(metrics, {"score": 1})
+        artifact.write_text("# report\n\nsingle-dir-layout artifact\n", encoding="utf-8")
+        raw_note.write_text("# Raw\n\nraw survives migration\n", encoding="utf-8")
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "migration-dataset",
+            "--command",
+            "python demo_task.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            run_id,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--title",
+            "single dir migration keeps records",
+            "--claim",
+            "迁移后仍能读取 run 和 decision。",
+            "--evidence",
+            run_id,
+        )
+
+        result = run_cli(self.tmp, "migrate", "--layout", "single-dir")
+        state_root = self.tmp / ".auto_iter"
+        doctor = run_cli(self.tmp, "doctor")
+        index = run_cli(self.tmp, "context", "index", "--include-raw-input")
+        handoff = run_cli(self.tmp, "handoff", "generate", "--print-path")
+        validated = run_cli(self.tmp, "handoff", "validate")
+
+        self.assertIn("layout migration complete", result.stdout)
+        self.assertTrue((state_root / "state" / "agent_state.db").exists())
+        self.assertTrue((state_root / "runs" / run_id / "summary.md").exists())
+        self.assertTrue((state_root / "raw_input" / "legacy.md").exists())
+        self.assertFalse((self.tmp / "state").exists())
+        self.assertFalse((self.tmp / "runs").exists())
+        self.assertIn("layout: single-dir", doctor.stdout)
+        self.assertIn(f"state_dir: {state_root}", doctor.stdout)
+        self.assertIn(".auto_iter/plans/global_plan.md", index.stdout)
+        self.assertIn(".auto_iter/raw_input/legacy.md", index.stdout)
+        self.assertIn(str(state_root / "handoffs" / "latest_handoff.md"), handoff.stdout)
+        self.assertIn("VALID", validated.stdout)
+
+    def test_migrate_single_dir_layout_refuses_to_overwrite_existing_state_dir(self):
+        run_cli(self.tmp, "init", "--legacy-layout")
+        (self.tmp / ".auto_iter").mkdir()
+        (self.tmp / ".auto_iter" / "marker.txt").write_text("existing state\n", encoding="utf-8")
+
+        result = run_cli(self.tmp, "migrate", "--layout", "single-dir", check=False)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(".auto_iter already exists and is not empty", result.stderr)
+        self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
 
     def test_handoff_validate_warns_about_topic_without_plan_without_failing(self):
         run_cli(self.tmp, "init")
@@ -980,7 +1092,7 @@ class CliTests(unittest.TestCase):
 
         moved = run_cli(self.tmp, "topic", "task", "set", "--item-id", item_id, "--status", "doing")
         listed = run_cli(self.tmp, "topic", "task", "list", "--topic-id", topic_id)
-        plan_text = (self.tmp / "topics" / topic_id / "plan.md").read_text(encoding="utf-8")
+        plan_text = (self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md").read_text(encoding="utf-8")
 
         self.assertIn(f"added topic task {item_id}", added.stdout)
         self.assertIn(f"updated topic task {item_id}", moved.stdout)
@@ -1040,7 +1152,7 @@ class CliTests(unittest.TestCase):
 
         board = run_cli(self.tmp, "topic", "board")
 
-        board_path = self.tmp / "topics" / "board.md"
+        board_path = self.tmp / ".auto_iter" / "topics" / "board.md"
         self.assertTrue(board_path.exists())
         self.assertIn("# Project Topic Board", board.stdout)
         self.assertIn("## Open Topics", board.stdout)
@@ -1092,16 +1204,16 @@ class CliTests(unittest.TestCase):
         search_index = run_cli(self.tmp, "search", "index")
         query = run_cli(self.tmp, "search", "query", "--text", "v028_search_anchor", "--limit", "5", "--explain")
 
-        topic_plan = f"topics/{topic_id}/plan.md"
-        topic_handoff = f"topics/{topic_id}/latest_handoff.md"
-        topic_board = "topics/board.md"
+        topic_plan = f".auto_iter/topics/{topic_id}/plan.md"
+        topic_handoff = f".auto_iter/topics/{topic_id}/latest_handoff.md"
+        topic_board = ".auto_iter/topics/board.md"
         self.assertIn(topic_plan, index.stdout)
         self.assertIn(topic_handoff, index.stdout)
         self.assertIn(topic_board, index.stdout)
         self.assertIn("indexed graph edges:", search_index.stdout)
         self.assertIn("v028_search_anchor", query.stdout)
         self.assertIn(topic_id, query.stdout)
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             rows = db.execute(
                 """
                 select source_type, source_id, path
@@ -1128,7 +1240,7 @@ class CliTests(unittest.TestCase):
 
     def test_search_index_handles_repeated_headings_in_one_file(self):
         run_cli(self.tmp, "init")
-        repeated = self.tmp / "plans" / "repeated_headings.md"
+        repeated = self.tmp / ".auto_iter" / "plans" / "repeated_headings.md"
         repeated.write_text(
             "# Same Heading\n"
             "first v029_duplicate_heading_anchor\n\n"
@@ -1140,7 +1252,7 @@ class CliTests(unittest.TestCase):
         result = run_cli(self.tmp, "search", "index")
 
         self.assertIn("indexed search documents:", result.stdout)
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             rows = db.execute(
                 """
                 select doc_id, heading, body
@@ -1148,7 +1260,7 @@ class CliTests(unittest.TestCase):
                 where path = ?
                 order by body
                 """,
-                ("plans/repeated_headings.md",),
+                (".auto_iter/plans/repeated_headings.md",),
             ).fetchall()
         self.assertEqual(len(rows), 2)
         self.assertNotEqual(rows[0][0], rows[1][0])
@@ -1156,22 +1268,22 @@ class CliTests(unittest.TestCase):
 
     def test_search_query_reuses_fresh_index(self):
         run_cli(self.tmp, "init")
-        anchor = self.tmp / "plans" / "search_reuse.md"
+        anchor = self.tmp / ".auto_iter" / "plans" / "search_reuse.md"
         anchor.write_text("# Search Reuse\nv030_reuse_anchor\n", encoding="utf-8")
 
         first = run_cli(self.tmp, "search", "query", "--text", "v030_reuse_anchor", "--limit", "5")
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             first_updated_at = db.execute(
                 "select updated_at from search_documents where path = ?",
-                ("plans/search_reuse.md",),
+                (".auto_iter/plans/search_reuse.md",),
             ).fetchone()[0]
 
         second = run_cli(self.tmp, "search", "query", "--text", "v030_reuse_anchor", "--limit", "5")
 
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             second_updated_at = db.execute(
                 "select updated_at from search_documents where path = ?",
-                ("plans/search_reuse.md",),
+                (".auto_iter/plans/search_reuse.md",),
             ).fetchone()[0]
         self.assertIn("v030_reuse_anchor", first.stdout)
         self.assertIn("v030_reuse_anchor", second.stdout)
@@ -1179,11 +1291,11 @@ class CliTests(unittest.TestCase):
 
     def test_search_query_refreshes_when_index_input_changes(self):
         run_cli(self.tmp, "init")
-        first_anchor = self.tmp / "plans" / "search_refresh_a.md"
+        first_anchor = self.tmp / ".auto_iter" / "plans" / "search_refresh_a.md"
         first_anchor.write_text("# Search Refresh A\nv030_refresh_a\n", encoding="utf-8")
         run_cli(self.tmp, "search", "query", "--text", "v030_refresh_a", "--limit", "5")
 
-        second_anchor = self.tmp / "plans" / "search_refresh_b.md"
+        second_anchor = self.tmp / ".auto_iter" / "plans" / "search_refresh_b.md"
         second_anchor.write_text("# Search Refresh B\nv030_refresh_b\n", encoding="utf-8")
         refreshed = run_cli(self.tmp, "search", "query", "--text", "v030_refresh_b", "--limit", "5")
 
@@ -1191,12 +1303,12 @@ class CliTests(unittest.TestCase):
 
     def test_search_query_uses_stale_index_when_refresh_is_locked(self):
         run_cli(self.tmp, "init")
-        first_anchor = self.tmp / "plans" / "search_stale_a.md"
+        first_anchor = self.tmp / ".auto_iter" / "plans" / "search_stale_a.md"
         first_anchor.write_text("# Search Stale A\nv030_stale_a\n", encoding="utf-8")
         run_cli(self.tmp, "search", "query", "--text", "v030_stale_a", "--limit", "5")
-        second_anchor = self.tmp / "plans" / "search_stale_b.md"
+        second_anchor = self.tmp / ".auto_iter" / "plans" / "search_stale_b.md"
         second_anchor.write_text("# Search Stale B\nv030_stale_b\n", encoding="utf-8")
-        (self.tmp / "state" / "search_index.lock").mkdir()
+        (self.tmp / ".auto_iter" / "state" / "search_index.lock").mkdir()
 
         stale = run_cli(self.tmp, "search", "query", "--text", "v030_stale_a", "--limit", "5")
 
@@ -1256,7 +1368,7 @@ class CliTests(unittest.TestCase):
             "--claim",
             "topic 可以直接关联相关结论。",
         ).stdout.strip().split()[-1]
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             artifact_id = db.execute("select artifact_id from artifacts where run_id = ?", (run_id,)).fetchone()[0]
 
         linked = run_cli(
@@ -1278,7 +1390,7 @@ class CliTests(unittest.TestCase):
         current = run_cli(self.tmp, "topic", "current")
         index = run_cli(self.tmp, "context", "index")
         handoff = run_cli(self.tmp, "handoff", "generate")
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
 
         self.assertIn("linked topic evidence", linked.stdout)
         self.assertIn(run_id, evidence.stdout)
@@ -1348,17 +1460,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("precision", shown.stdout)
         self.assertIn(str(artifact.resolve()), shown.stdout)
 
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             metric = db.execute(
                 "select metric_value, unit, direction from metrics where run_id = ? and metric_name = ?",
                 (run_id, "precision"),
             ).fetchone()
         self.assertEqual(metric, (0.91, "ratio", "higher_is_better"))
-        self.assertTrue((self.tmp / "runs" / run_id / "summary.md").exists())
-        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "error_summary.md").exists())
-        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "stdout.log").exists())
-        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "stderr.log").exists())
-        self.assertTrue((self.tmp / "runs" / run_id / "logs" / "debug.jsonl").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "runs" / run_id / "summary.md").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "runs" / run_id / "logs" / "error_summary.md").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "runs" / run_id / "logs" / "stdout.log").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "runs" / run_id / "logs" / "stderr.log").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "runs" / run_id / "logs" / "debug.jsonl").exists())
 
     def test_run_exec_captures_logs_and_generates_summaries(self):
         run_cli(self.tmp, "init")
@@ -1401,7 +1513,7 @@ class CliTests(unittest.TestCase):
             str(artifact),
         )
         run_id = result.stdout.strip().split()[2]
-        run_dir = self.tmp / "runs" / run_id
+        run_dir = self.tmp / ".auto_iter" / "runs" / run_id
 
         self.assertIn("status=success", result.stdout)
         self.assertIn("stdout marker", (run_dir / "logs" / "stdout.log").read_text(encoding="utf-8"))
@@ -1428,13 +1540,13 @@ class CliTests(unittest.TestCase):
             check=False,
         )
         run_id = result.stdout.strip().split()[2]
-        run_dir = self.tmp / "runs" / run_id
+        run_dir = self.tmp / ".auto_iter" / "runs" / run_id
 
         self.assertEqual(result.returncode, 3)
         self.assertIn("status=failed", result.stdout)
         self.assertIn("fatal detail", (run_dir / "logs" / "stderr.log").read_text(encoding="utf-8"))
         self.assertIn("fatal detail", (run_dir / "logs" / "error_summary.md").read_text(encoding="utf-8"))
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             status = db.execute("select status from runs where run_id = ?", (run_id,)).fetchone()[0]
         self.assertEqual(status, "failed")
 
@@ -1515,10 +1627,10 @@ class CliTests(unittest.TestCase):
         )
         run_auto_iter("handoff", "generate")
 
-        handoff = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("global_plan", handoff)
         self.assertIn("v0.2 入口流程演示通过", handoff)
-        self.assertIn("entry flow complete", (self.tmp / "runs" / run_id / "logs" / "stdout.log").read_text(encoding="utf-8"))
+        self.assertIn("entry flow complete", (self.tmp / ".auto_iter" / "runs" / run_id / "logs" / "stdout.log").read_text(encoding="utf-8"))
 
     def test_rejected_decision_blocks_matching_route(self):
         run_cli(self.tmp, "init")
@@ -1648,7 +1760,7 @@ class CliTests(unittest.TestCase):
         validated = run_cli(self.tmp, "handoff", "validate")
         self.assertIn("VALID", validated.stdout)
 
-        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         text = handoff_path.read_text(encoding="utf-8").replace("## 读取顺序", "## Broken Read Order")
         handoff_path.write_text(text, encoding="utf-8")
         invalid = run_cli(self.tmp, "handoff", "validate", check=False)
@@ -1659,7 +1771,7 @@ class CliTests(unittest.TestCase):
 
     def test_context_index_and_handoff_validate_flag_orphan_decision_projections(self):
         run_cli(self.tmp, "init")
-        orphan = self.tmp / "decisions" / "active" / "D-orphan.md"
+        orphan = self.tmp / ".auto_iter" / "decisions" / "active" / "D-orphan.md"
         orphan.write_text(
             "# 演示测试结论\n\n"
             "- decision_id: D-orphan\n"
@@ -1695,7 +1807,7 @@ class CliTests(unittest.TestCase):
             "--claim",
             "这个结论存在于 SQLite，因此可以进入上下文索引。",
         ).stdout.strip().split()[-1]
-        stale = self.tmp / "decisions" / "rejected" / f"{decision_id}.md"
+        stale = self.tmp / ".auto_iter" / "decisions" / "rejected" / f"{decision_id}.md"
         stale.write_text(
             "# 状态错误的投影\n\n"
             f"- decision_id: {decision_id}\n"
@@ -1721,8 +1833,8 @@ class CliTests(unittest.TestCase):
 
     def test_context_index_and_show_exclude_raw_input_by_default(self):
         run_cli(self.tmp, "init")
-        raw_note = self.tmp / "raw_input" / "legacy.md"
-        raw_archive = self.tmp / "raw_input" / "legacy.mhtml"
+        raw_note = self.tmp / ".auto_iter" / "raw_input" / "legacy.md"
+        raw_archive = self.tmp / ".auto_iter" / "raw_input" / "legacy.mhtml"
         raw_note.write_text("# Legacy Raw Input\n\nlegacy-only detail\n", encoding="utf-8")
         raw_archive.write_text("<html><body>archived source detail</body></html>\n", encoding="utf-8")
 
@@ -1733,7 +1845,7 @@ class CliTests(unittest.TestCase):
             "context",
             "show",
             "--path",
-            str(self.tmp / "plans" / "global_plan.md"),
+            str(self.tmp / ".auto_iter" / "plans" / "global_plan.md"),
             "--heading",
             "Global Plan",
         )
@@ -1771,7 +1883,7 @@ class CliTests(unittest.TestCase):
 
     def test_search_index_and_query_find_decision_without_raw_input(self):
         run_cli(self.tmp, "init")
-        raw_note = self.tmp / "raw_input" / "legacy.md"
+        raw_note = self.tmp / ".auto_iter" / "raw_input" / "legacy.md"
         raw_note.write_text("# Legacy Raw Input\n\nraw-only-secret-phenomenon\n", encoding="utf-8")
         config = self.tmp / "config.json"
         metrics = self.tmp / "metrics.json"
@@ -1930,14 +2042,14 @@ class CliTests(unittest.TestCase):
 
         checkpoint = run_cli(self.tmp, "checkpoint", "save", "--text", "中途记录一下当前状态")
 
-        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         self.assertIn("CHECKPOINT SAVED", checkpoint.stdout)
         self.assertIn("handoff_valid: yes", checkpoint.stdout)
         self.assertIn("commit_push: not requested", checkpoint.stdout)
         self.assertIn(str(handoff_path.resolve()), checkpoint.stdout)
         self.assertTrue(handoff_path.exists())
         self.assertIn("## 当前快照", handoff_path.read_text(encoding="utf-8"))
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             count = db.execute("select count(*) from handoffs").fetchone()[0]
         self.assertEqual(count, 1)
 
@@ -1968,8 +2080,8 @@ class CliTests(unittest.TestCase):
 
         quiet = run_cli(self.tmp, "handoff", "generate", "--topic-id", topic_id)
 
-        topic_handoff_path = self.tmp / "topics" / topic_id / "latest_handoff.md"
-        global_handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        topic_handoff_path = self.tmp / ".auto_iter" / "topics" / topic_id / "latest_handoff.md"
+        global_handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         self.assertEqual(quiet.stdout, "")
         self.assertEqual(quiet.stderr, "")
         self.assertTrue(topic_handoff_path.exists())
@@ -1985,7 +2097,7 @@ class CliTests(unittest.TestCase):
         validated = run_cli(self.tmp, "handoff", "validate", "--topic-id", topic_id)
         self.assertIn("VALID", validated.stdout)
         self.assertIn(str(topic_handoff_path.resolve()), validated.stdout)
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             rows = db.execute("select path from handoffs").fetchall()
         self.assertEqual([row[0] for row in rows], [str(topic_handoff_path.resolve())])
 
@@ -2012,12 +2124,12 @@ class CliTests(unittest.TestCase):
             "中途记录一下 topic 状态",
         )
 
-        topic_handoff_path = self.tmp / "topics" / topic_id / "latest_handoff.md"
+        topic_handoff_path = self.tmp / ".auto_iter" / "topics" / topic_id / "latest_handoff.md"
         self.assertIn("CHECKPOINT SAVED", checkpoint.stdout)
         self.assertIn("handoff_valid: yes", checkpoint.stdout)
         self.assertIn(str(topic_handoff_path.resolve()), checkpoint.stdout)
         self.assertTrue(topic_handoff_path.exists())
-        self.assertFalse((self.tmp / "handoffs" / "latest_handoff.md").exists())
+        self.assertFalse((self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").exists())
         self.assertIn("保存 topic checkpoint", topic_handoff_path.read_text(encoding="utf-8"))
 
     def test_project_handoff_includes_topic_summary(self):
@@ -2047,7 +2159,7 @@ class CliTests(unittest.TestCase):
 
         run_cli(self.tmp, "handoff", "generate")
 
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("## Topic Summary", handoff_text)
         self.assertIn("### Default Topic", handoff_text)
         self.assertIn("### Open Topics", handoff_text)
@@ -2060,12 +2172,12 @@ class CliTests(unittest.TestCase):
 
         quiet = run_cli(self.tmp, "handoff", "generate")
 
-        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         self.assertEqual(quiet.stdout, "")
         self.assertEqual(quiet.stderr, "")
         self.assertTrue(handoff_path.exists())
         self.assertIn("## 当前快照", handoff_path.read_text(encoding="utf-8"))
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             count = db.execute("select count(*) from handoffs").fetchone()[0]
         self.assertEqual(count, 1)
 
@@ -2074,7 +2186,7 @@ class CliTests(unittest.TestCase):
 
         result = run_cli(self.tmp, "handoff", "generate", "--print-path")
 
-        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         self.assertIn(str(handoff_path.resolve()), result.stdout)
         self.assertIn("generated", result.stdout)
 
@@ -2083,10 +2195,10 @@ class CliTests(unittest.TestCase):
 
         run_cli(self.tmp, "handoff", "generate")
 
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("## 读取顺序", handoff_text)
         self.assertNotIn(str(self.tmp / "AGENTS.md"), handoff_text)
-        self.assertIn(f"1. {(self.tmp / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
+        self.assertIn(f"1. {(self.tmp / '.auto_iter' / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
 
     def test_handoff_read_order_includes_existing_project_agents_file(self):
         run_cli(self.tmp, "init")
@@ -2094,9 +2206,9 @@ class CliTests(unittest.TestCase):
 
         run_cli(self.tmp, "handoff", "generate")
 
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn(f"1. {(self.tmp / 'AGENTS.md').resolve()}", handoff_text)
-        self.assertIn(f"2. {(self.tmp / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
+        self.assertIn(f"2. {(self.tmp / '.auto_iter' / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
 
     def test_handoff_and_resume_include_absolute_evidence_paths(self):
         run_cli(self.tmp, "init")
@@ -2146,18 +2258,18 @@ class CliTests(unittest.TestCase):
         handoff = run_cli(self.tmp, "handoff", "generate")
         resume = run_cli(self.tmp, "resume")
 
-        handoff_path = self.tmp / "handoffs" / "latest_handoff.md"
+        handoff_path = self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md"
         text = handoff_path.read_text(encoding="utf-8")
         self.assertEqual(handoff.stdout, "")
         self.assertIn("## 当前目标", text)
         self.assertIn("project_plan", text)
-        self.assertIn(str((self.tmp / "plans" / "project_plan.md").resolve()), text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "project_plan.md").resolve()), text)
         self.assertIn("project_record_rules", text)
-        self.assertIn(str((self.tmp / "plans" / "project_record_rules.md").resolve()), text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "project_record_rules.md").resolve()), text)
         self.assertIn("global_plan_compat", text)
-        self.assertIn(str((self.tmp / "plans" / "global_plan.md").resolve()), text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "global_plan.md").resolve()), text)
         self.assertIn("version_task_tracking", text)
-        self.assertIn(str((self.tmp / "plans" / "version_iterations.md").resolve()), text)
+        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "version_iterations.md").resolve()), text)
         self.assertIn("## 当前有效结论", text)
         self.assertIn("雨天阈值使用 0.58", text)
         self.assertIn(str(artifact.resolve()), text)
@@ -2216,7 +2328,7 @@ class CliTests(unittest.TestCase):
             "--claim",
             "Use V8 as the accepted comparison start; keep FR split evaluation and do not treat Python-only output as C/SIL landing.",
         ).stdout.strip().split()[-1]
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             artifact_id = db.execute("select artifact_id from artifacts where run_id = ?", (run_id,)).fetchone()[0]
         run_cli(
             self.tmp,
@@ -2236,17 +2348,17 @@ class CliTests(unittest.TestCase):
 
         run_cli(self.tmp, "handoff", "generate")
 
-        handoff_text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("## Current Baseline", handoff_text)
         self.assertIn(f"accepted_start: decision {decision_id}: V8 remains the current SIL alignment reference", handoff_text)
         self.assertIn(f"accepted_result: run {run_id}: dataset=fr-split-demo status=success", handoff_text)
         self.assertIn("why_current: Use V8 as the accepted comparison start", handoff_text)
         self.assertIn(
-            f"evaluation_entry: {(self.tmp / 'decisions' / 'active' / (decision_id + '.md')).resolve()}",
+            f"evaluation_entry: {(self.tmp / '.auto_iter' / 'decisions' / 'active' / (decision_id + '.md')).resolve()}",
             handoff_text,
         )
         self.assertIn(
-            f"provenance_entry: {(self.tmp / 'runs' / run_id / 'config_resolved.json').resolve()}",
+            f"provenance_entry: {(self.tmp / '.auto_iter' / 'runs' / run_id / 'config_resolved.json').resolve()}",
             handoff_text,
         )
         self.assertIn(f"diagnostic_entry: {artifact.resolve()}", handoff_text)
@@ -2308,13 +2420,13 @@ class CliTests(unittest.TestCase):
             "--artifact",
             str(artifact),
         )
-        with closing(sqlite3.connect(self.tmp / "state" / "agent_state.db")) as db:
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             db.execute("update runs set ended_at = '2026-01-01T00:00:00+00:00'")
             db.commit()
 
         run_cli(self.tmp, "handoff", "generate")
 
-        text = (self.tmp / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn(f"latest_successful_run_id: {second_run}", text)
 
 

@@ -54,8 +54,10 @@ auto-iter uninstall
 ```
 
 `uninstall` removes the installed `auto-iter` wrapper and installed Codex skills
-only. It does not remove project directories such as `state/`, `plans/`,
-`topics/`, `raw_input/`, `decisions/`, `runs/`, or `handoffs/`.
+only. It does not remove project state. New projects keep all AIT state under
+`.auto_iter/`; older projects may still have legacy root-level directories such
+as `state/`, `plans/`, `topics/`, `raw_input/`, `decisions/`, `runs/`, or
+`handoffs/`.
 
 In an interactive terminal, uninstall asks whether to remove those project
 state directories too and prints a short description of what each directory
@@ -76,6 +78,34 @@ state. Use `--bin-dir` and `--skills-dir` to target the same custom locations
 accepted by `install` and `uninstall`. Use `--check-project` when you want an
 existing AIT project in the current directory checked after the refresh; if no
 project state exists, the check is skipped and `init` is not run.
+
+## Project state layout
+
+New `auto-iter init` projects store AIT-owned files under one directory:
+
+```text
+.auto_iter/
+  state/agent_state.db
+  plans/
+  topics/
+  handoffs/
+  decisions/
+  runs/
+  raw_input/
+```
+
+`auto-iter doctor` prints both the project root and `state_dir`, so agents can
+see where SQLite and projections live. The old root-level layout is still
+recognized for existing projects. To move an old project into the single
+directory layout, run:
+
+```bash
+auto-iter migrate --layout single-dir
+```
+
+The migration refuses to overwrite a non-empty `.auto_iter/` directory. It moves
+legacy state into `.auto_iter/`, refreshes topic projections, and writes a
+migration note under `.auto_iter/topics/`.
 
 ## Topic archive
 
@@ -523,11 +553,11 @@ auto-iter handoff generate
 auto-iter handoff validate
 ```
 
-For `.codex/hooks.json`, use the default `auto-iter handoff generate`. It keeps Stop hook stdout empty while still writing `handoffs/latest_handoff.md` and the SQLite handoff record.
+For `.codex/hooks.json`, use the default `auto-iter handoff generate`. It keeps Stop hook stdout empty while still writing `.auto_iter/handoffs/latest_handoff.md` and the SQLite handoff record.
 
 ## Raw Input
 
-`raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. During first setup, index it with `auto-iter context index --include-raw-input`; read only relevant sections with `--allow-raw-input`. Normal work should use `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db` first. If useful information is recovered from `raw_input/`, label it as `raw_input_source` and write it back into tracking information.
+`.auto_iter/raw_input/` stores original input materials or old project imports. It is only for first project setup or explicit missing-information lookup. During first setup, index it with `auto-iter context index --include-raw-input`; read only relevant sections with `--allow-raw-input`. Normal work should use `.auto_iter/plans/`, `.auto_iter/handoffs/`, `.auto_iter/decisions/`, run summaries, and `.auto_iter/state/agent_state.db` first. If useful information is recovered from raw input, label it as `raw_input_source` and write it back into tracking information.
 
 ## Context Loading
 
@@ -535,34 +565,34 @@ Use the context index before reading broad history:
 
 ```bash
 auto-iter context index
-auto-iter context show --path plans/global_plan.md --heading "Global Plan"
+auto-iter context show --path .auto_iter/plans/global_plan.md --heading "Global Plan"
 ```
 
 `raw_input/` is excluded by default. Use `--include-raw-input` or `--allow-raw-input` only for initial project setup or explicit missing-information lookup.
 
 ## Storage Rule
 
-- `state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
-- `decisions/`: readable decision projections. A projection is current context only when the same `decision_id` and status still exist in SQLite; orphan or stale projections are skipped by `context index` and reported by `handoff validate`.
-- `handoffs/latest_handoff.md`: fresh-session entry point. Its `Current Baseline` section is a Markdown projection（从已有记录摘出的可读视图，不是新的事实源）that points to the accepted start, accepted result, evaluation entry, provenance entry, and diagnostic entry.
-- `raw_input/`: original input materials and old project imports.
-- `plans/global_plan.md`: global plan for the full context-management system.
-- `plans/version_iterations.md`: version-level task tracker.
-- `plans/active_plan.md`: current engineering direction.
+- `.auto_iter/state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
+- `.auto_iter/decisions/`: readable decision projections. A projection is current context only when the same `decision_id` and status still exist in SQLite; orphan or stale projections are skipped by `context index` and reported by `handoff validate`.
+- `.auto_iter/handoffs/latest_handoff.md`: fresh-session entry point. Its `Current Baseline` section is a Markdown projection（从已有记录摘出的可读视图，不是新的事实源）that points to the accepted start, accepted result, evaluation entry, provenance entry, and diagnostic entry.
+- `.auto_iter/raw_input/`: original input materials and old project imports.
+- `.auto_iter/plans/global_plan.md`: compatibility entry in managed projects; in the AIT source repo, `plans/global_plan.md` can remain the tool-level global plan when that source repo is still on legacy layout.
+- `.auto_iter/plans/version_iterations.md`: version-level task tracker in single-directory projects.
+- `.auto_iter/plans/active_plan.md`: current engineering direction in single-directory projects.
 - project-root `AGENTS.md`: optional Codex process rules for the target project. It is included in handoff read order only when the file already exists.
 - `skills/auto-iteration-entry/SKILL.md`: Codex entry skill installed by `auto-iter install`.
 - `skills/auto-it-self-improve/SKILL.md`: explicit-trigger skill for generalizing solved workflow problems into reusable system improvements.
-- `runs/<run_id>/config_resolved.json`: resolved config snapshot.
-- `runs/<run_id>/summary.md`: per-run readable summary.
-- `runs/<run_id>/logs/stdout.log`: captured stdout.
-- `runs/<run_id>/logs/stderr.log`: captured stderr.
-- `runs/<run_id>/logs/debug.jsonl`: structured execution events.
-- `runs/<run_id>/logs/error_summary.md`: bounded stderr summary for default reading.
+- `.auto_iter/runs/<run_id>/config_resolved.json`: resolved config snapshot.
+- `.auto_iter/runs/<run_id>/summary.md`: per-run readable summary.
+- `.auto_iter/runs/<run_id>/logs/stdout.log`: captured stdout.
+- `.auto_iter/runs/<run_id>/logs/stderr.log`: captured stderr.
+- `.auto_iter/runs/<run_id>/logs/debug.jsonl`: structured execution events.
+- `.auto_iter/runs/<run_id>/logs/error_summary.md`: bounded stderr summary for default reading.
 
-AIT project root discovery is based on `state/agent_state.db`. Commands run
-inside an initialized project's subdirectories use the nearest parent state
-database as the project root; commands run outside any initialized tree operate
-on the current directory.
+AIT project root discovery is based on `.auto_iter/state/agent_state.db` or the
+legacy `state/agent_state.db`. Commands run inside an initialized project's
+subdirectories use the nearest parent project as the root; commands run outside
+any initialized tree operate on the current directory.
 
 Demo or test histories may be kept under `examples/` when they explain what AIT capability was verified. They must state the test purpose and data boundary, and their sample run or decision IDs must not be treated as current project conclusions unless the current SQLite state contains matching records.
 

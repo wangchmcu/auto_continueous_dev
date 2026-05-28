@@ -33,8 +33,9 @@ When the user says one of these plain-language requests, treat it as a request t
 
 Run these commands in the current project root. If the shell is already inside
 a subdirectory of an initialized AIT project, `auto-iter` finds the nearest
-parent directory with `state/agent_state.db` and uses that parent as the project
-root; do not rerun `init` merely because the current shell is nested.
+parent directory with `.auto_iter/state/agent_state.db` or legacy
+`state/agent_state.db` and uses that parent as the project root; do not rerun
+`init` merely because the current shell is nested.
 
 ```bash
 auto-iter doctor
@@ -43,12 +44,12 @@ auto-iter resume
 
 Then read:
 
-1. `handoffs/latest_handoff.md`, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
-2. `plans/project_plan.md` and `plans/project_record_rules.md` when they exist
-3. `plans/global_plan.md`
-4. `plans/version_iterations.md`
-5. `plans/active_plan.md`
-6. `topics/active_topic.md` if it exists
+1. `.auto_iter/handoffs/latest_handoff.md` or legacy `handoffs/latest_handoff.md`, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）
+2. `.auto_iter/plans/project_plan.md` and `.auto_iter/plans/project_record_rules.md` when they exist
+3. `.auto_iter/plans/global_plan.md` or legacy `plans/global_plan.md`
+4. `.auto_iter/plans/version_iterations.md` or legacy `plans/version_iterations.md`
+5. `.auto_iter/plans/active_plan.md` or legacy `plans/active_plan.md`
+6. `.auto_iter/topics/active_topic.md` or legacy `topics/active_topic.md` if it exists
 7. decision entries listed by `auto-iter context index`
 
 If the generated handoff read order includes a project-root `AGENTS.md`, read it
@@ -119,8 +120,9 @@ auto-iter uninstall
 ```
 
 This removes the installed `auto-iter` wrapper and installed skills only. It
-does not remove project state such as `state/`, `plans/`, `topics/`, `raw_input/`,
-`decisions/`, `runs/`, or `handoffs/`.
+does not remove project state. New projects keep project state under
+`.auto_iter/`; old projects may still use `state/`, `plans/`, `topics/`,
+`raw_input/`, `decisions/`, `runs/`, or `handoffs/`.
 
 When a terminal is interactive, uninstall asks whether to remove project state
 too and briefly explains what each directory stores. In non-interactive runs,
@@ -143,8 +145,8 @@ auto-iter update
 
 `auto-iter update` removes the command wrapper and installed skills owned by the
 current AIT checkout, then installs fresh copies. It does not run `init`, does
-not create `state/`, `plans/`, `topics/`, `raw_input/`, `decisions/`, `runs/`,
-or `handoffs/`, and it never prompts about deleting project state. It accepts
+not create `.auto_iter/` or legacy project state directories, and it never
+prompts about deleting project state. It accepts
 the same `--bin-dir` and `--skills-dir` options as install and uninstall. Use
 `auto-iter update --check-project` only when the current directory should be
 checked after refresh; if no AIT project state exists, the project check is
@@ -188,6 +190,7 @@ auto-iter handoff generate --topic-id <id>
 auto-iter handoff validate --topic-id <id>
 auto-iter checkpoint save --topic-id <id> --text "<用户原话>"
 auto-iter migrate
+auto-iter migrate --layout single-dir
 ```
 
 Rules:
@@ -199,7 +202,7 @@ Rules:
 - Multi-thread work should prefer explicit `--topic-id` or `AUTO_ITER_TOPIC_ID` instead of switching the default topic just to record one topic.
 - If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`.
 - If a new prompt only looks like a new topic semantically, ask “是不是已经切入新的 topic 了？” before running any topic switch command.
-- New sessions read `handoffs/latest_handoff.md` and `topics/active_topic.md`; archived topic files under `topics/archive/` are loaded only on demand.
+- New sessions read `.auto_iter/handoffs/latest_handoff.md` and `.auto_iter/topics/active_topic.md` in the single-directory layout; legacy projects may still use root-level `handoffs/` and `topics/`.
 - When a topic has clear supporting evidence, link the relevant run, decision, or artifact with `auto-iter topic link` so future sessions can use `auto-iter topic evidence` instead of manually searching all history.
 - When a topic starts to carry local planning work, use `auto-iter topic plan set/show/current`; keep topic tasks and acceptance checks in topic plan, while final claims still go through `decision add` with evidence.
 - If a handoff, checkpoint, or user instruction names future implementation work for the same topic, the topic plan and topic task list must carry that work before the session is closed. Handoff text is a projection; it must not be the only place where a changed next-session plan exists.
@@ -207,6 +210,7 @@ Rules:
 - Use `auto-iter topic board` for the cross-topic project view; keep per-topic detail in topic plan, topic handoff, and topic board instead of global plan.
 - Use topic-scoped handoff or checkpoint commands when separate Codex threads work on separate topics. They write `topics/<topic_id>/latest_handoff.md`.
 - Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed projections.
+- Use `auto-iter migrate --layout single-dir` to move old root-level AIT state directories under `.auto_iter/`.
 - The same `auto-iter migrate` also performs the project plan split for old projects: it creates `plans/project_plan.md`, creates `plans/project_record_rules.md`, preserves legacy `plans/global_plan.md` content, and writes a compatibility `plans/global_plan.md`.
 
 ## Before A New Experiment Route

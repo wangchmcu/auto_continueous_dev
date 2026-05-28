@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.37
+- current_version: v0.38
 - status: done
-- goal: 完成 project plan split and ownership-routing，让被接管项目的项目计划和 AIT 工具自身计划分离，并让迁移不覆盖现有 topic plan、坑点规避和检索增强能力。
+- goal: 完成 project state single-dir layout（项目状态单目录布局），让新项目默认把 AIT 状态集中到 `.auto_iter/`，并让旧项目可显式迁移且继续兼容。
 
 ## v0.1 任务清单
 
@@ -1092,6 +1092,16 @@ v0.25 之后仍未覆盖的全局能力：
 - done：handoff 和 resume 读取顺序优先列出 `plans/project_plan.md`、`plans/project_record_rules.md`，再列兼容 `plans/global_plan.md`，旧项目未迁移时仍能用旧入口恢复。
 - done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 project plan split、`project_record_rules` 与 ownership-routing。
 - evidence：新增 `test_project_plan_split_and_ait_ownership_routing_are_documented`、迁移测试、intent check 测试和 handoff snapshot 测试；完整验证命令记录在本次实现会话。
+
+### v0.38
+
+- done：project state single-dir layout（项目状态单目录布局）：新项目默认把 AIT 状态写入 `.auto_iter/`，包括 `state/agent_state.db`、`plans/`、`topics/`、`handoffs/`、`decisions/`、`runs/` 和 `raw_input/`。
+- done：旧布局兼容：`auto-iter doctor`、`resume`、`context index`、`search query`、`handoff`、`topic`、`run`、`decision` 和 `route` 仍能识别已有 root-level `state/agent_state.db`。
+- done：`auto-iter migrate --layout single-dir` 显式把旧 root-level AIT 状态目录移动到 `.auto_iter/`；如果 `.auto_iter/` 已存在且非空，迁移会停止，避免覆盖。
+- done：`auto-iter doctor` 输出 `state_dir` 和 `layout`，让 agent 能直接看到 SQLite 和 Markdown projection 的实际落点。
+- done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 `.auto_iter/`、旧布局兼容和单目录迁移命令。
+- global plan distance：本版本覆盖了状态落点收敛、子目录项目根发现的双布局兼容、旧项目显式迁移和恢复入口可见性；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
+- evidence：新增默认单目录初始化、旧布局初始化、旧到新迁移、防覆盖迁移测试；完整验证命令记录在本次实现会话。
 
 ### 后续可选
 

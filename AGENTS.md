@@ -10,10 +10,10 @@
 ## Before Any Coding Or Experiment
 
 1. Run `auto-iter doctor` and read the result. If `auto-iter` is unavailable, install from the AIT source checkout with the platform-appropriate Python command: Windows Codex app uses `py -m auto_iteration.cli install` or `python -m auto_iteration.cli install`; WSL/Linux Codex CLI and macOS Codex app use `python3 -m auto_iteration.cli install` or `python -m auto_iteration.cli install`.
-2. Run `auto-iter resume` if `handoffs/latest_handoff.md` exists.
-3. Read `plans/project_plan.md` and `plans/project_record_rules.md` when they exist, then read `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`. In a managed project, `plans/project_plan.md` is the project direction, `plans/project_record_rules.md` is project-specific AIT recording rules, and `plans/global_plan.md` is a compatibility entry. In the AIT source repository, `plans/global_plan.md` remains AIT's own tool-level global plan.
+2. Run `auto-iter resume` if `.auto_iter/handoffs/latest_handoff.md` or legacy `handoffs/latest_handoff.md` exists.
+3. Read `.auto_iter/plans/project_plan.md` and `.auto_iter/plans/project_record_rules.md` when they exist, then read `.auto_iter/plans/global_plan.md`, `.auto_iter/plans/version_iterations.md`, and `.auto_iter/plans/active_plan.md`. Legacy projects may still use root-level `plans/`. In a managed project, `project_plan.md` is the project direction, `project_record_rules.md` is project-specific AIT recording rules, and `global_plan.md` is a compatibility entry. In the AIT source repository, root-level `plans/global_plan.md` remains AIT's own tool-level global plan when the source repo itself is still on legacy layout.
 4. Read decisions through `auto-iter context index` and `auto-iter context show`; do not treat Markdown files under `decisions/` as current context if `context index` reports them as orphan or stale projections.
-5. If the shell is nested inside an initialized AIT project, `auto-iter` should resolve the nearest parent containing `state/agent_state.db` as the project root. Confirm the reported root from `auto-iter doctor` before recording runs from a nested shell.
+5. If the shell is nested inside an initialized AIT project, `auto-iter` should resolve the nearest parent containing `.auto_iter/state/agent_state.db` or legacy `state/agent_state.db` as the project root. Confirm both `root` and `state_dir` from `auto-iter doctor` before recording runs from a nested shell.
 6. Before proposing or running a new experiment route, run:
 
 ```bash
@@ -61,19 +61,19 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Treat the old `active topic` as the default topic for ordinary recovery, not as the only topic that can be worked on. Topic resolution order is explicit `--topic-id`, then `AUTO_ITER_TOPIC_ID`, then default topic. Use `auto-iter doctor` to confirm the resolved topic before writing records.
 - Use `auto-iter topic plan set/show/current` for topic-local goals, non-goals, acceptance checks, stop conditions, and escalation conditions. Topic plan is planning state only; claims still require `decision add` with run evidence.
 - Use `auto-iter topic task add/set/list` for topic-local todo, doing, done, blocked, and dropped items. Task state does not replace decisions or topic evidence links.
-- Use `auto-iter topic board` for the cross-topic project view. It writes `topics/board.md`; do not move per-topic task detail into `plans/global_plan.md`.
+- Use `auto-iter topic board` for the cross-topic project view. It writes `.auto_iter/topics/board.md` in single-directory projects; do not move per-topic task detail into `plans/global_plan.md`.
 - In multi-thread work, use `auto-iter handoff generate --topic-id <id>` and `auto-iter checkpoint save --topic-id <id> --text "<text>"` for topic-scoped state so one thread does not overwrite another thread's topic handoff.
 - If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`; do not silently rely on the default topic.
-- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans, refreshed topic projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, plus a compatibility `plans/global_plan.md`).
+- Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans, refreshed topic projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, plus a compatibility `plans/global_plan.md`). Use `auto-iter migrate --layout single-dir` when an old root-level AIT state layout should be moved under `.auto_iter/`.
 - If a topic has clear supporting evidence, link it explicitly with `auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"`; inspect linked evidence with `auto-iter topic evidence --topic-id <id>`.
 - If the user proposes new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 
 ## Raw Input
 
-- `raw_input/` stores original input materials or old project imports.
-- Read `raw_input/` only when starting a project for the first time or when later work explicitly needs missing information from the original input.
+- `.auto_iter/raw_input/` stores original input materials or old project imports; legacy projects may still use root-level `raw_input/`.
+- Read raw input only when starting a project for the first time or when later work explicitly needs missing information from the original input.
 - Initial project setup should index raw input, not ingest it wholesale.
-- Normal work should read tracking information first: `plans/`, `handoffs/`, `decisions/`, run summaries, and `state/agent_state.db`.
+- Normal work should read tracking information first: `.auto_iter/plans/`, `.auto_iter/handoffs/`, `.auto_iter/decisions/`, run summaries, and `.auto_iter/state/agent_state.db` when the project uses the single-directory layout; use the legacy root-level paths only for projects that `auto-iter doctor` reports as `layout: legacy`.
 - If `raw_input/` conflicts with tracking information, treat tracking information as newer unless the user explicitly asks to verify against the original input.
 - Any useful information found in `raw_input/` must be written back into tracking information so future sessions do not need to rediscover it.
 
@@ -84,7 +84,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Every conclusion must become a decision record with evidence run IDs.
 - For rejected parameter ranges, use `decision add --route-relation parameter-space --route-param name:min:max`.
 - `run exec` launches its command from the resolved AIT project root. If the real experiment must run in a subdirectory, include `cd path/to/workdir && ...` inside `--command`.
-- Raw logs stay under `runs/<run_id>/logs/`; do not paste full logs into context by default.
+- Raw logs stay under `.auto_iter/runs/<run_id>/logs/` in the single-directory layout; do not paste full logs into context by default.
 - Read summaries, metrics, artifacts, and decisions first; read raw logs only for a specific failure investigation.
 - At session end, generate a handoff with:
 
@@ -97,11 +97,11 @@ auto-iter handoff validate
 
 ## State Ownership
 
-- SQLite database `state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records.
-- Markdown files under `decisions/` and `handoffs/` are readable projections for humans and Codex. A decision projection is valid current context only if the matching record still exists in SQLite with the same status.
-- Markdown files under `topics/` are readable topic projections; `topics/active_topic.md` is the default-topic compatibility projection, and `topics/archive/` is loaded only on user request or confirmed topic switch.
+- SQLite database `.auto_iter/state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records in the single-directory layout.
+- Markdown files under `.auto_iter/decisions/` and `.auto_iter/handoffs/` are readable projections for humans and Codex. A decision projection is valid current context only if the matching record still exists in SQLite with the same status.
+- Markdown files under `.auto_iter/topics/` are readable topic projections; `.auto_iter/topics/active_topic.md` is the default-topic compatibility projection, and `.auto_iter/topics/archive/` is loaded only on user request or confirmed topic switch.
 - Topic evidence links live in SQLite and connect a topic to related run、decision、artifact records; Markdown topic projections and handoff only summarize those links.
-- Markdown files under `plans/` track version-level implementation work and current engineering direction.
+- Markdown files under `.auto_iter/plans/` track managed-project implementation work and current engineering direction. In the AIT source repository, root-level `plans/` continues to track AIT tool implementation work until that repository is migrated.
 - Demo or test histories may live under `examples/` when they document the test purpose and data boundary. Their sample IDs or parameters are not current project conclusions unless the current SQLite state contains matching records.
 - `AGENTS.md` stores stable process rules only. Do not put changing experiment history here.
 - In a target project, project-root `AGENTS.md` is optional. AIT includes it in generated handoff read order only when the file already exists; do not create it merely to satisfy AIT initialization.

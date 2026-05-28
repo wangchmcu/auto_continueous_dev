@@ -29,9 +29,9 @@ auto-iter doctor
 ```
 
 If the shell is inside a subdirectory of an initialized AIT project, `auto-iter`
-finds the nearest parent directory with `state/agent_state.db` and uses that
-parent as the project root. Do not rerun `init` just because the current shell
-is nested under an existing project.
+finds the nearest parent directory with `.auto_iter/state/agent_state.db` or
+legacy `state/agent_state.db` and uses that parent as the project root. Do not
+rerun `init` just because the current shell is nested under an existing project.
 
 2. Restore the latest handoff when present:
 
@@ -39,7 +39,7 @@ is nested under an existing project.
 auto-iter resume
 ```
 
-3. Read `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）, then read `plans/project_plan.md` and `plans/project_record_rules.md` when they exist, followed by `plans/global_plan.md`, `plans/version_iterations.md`, and `plans/active_plan.md`.
+3. Read `.auto_iter/handoffs/latest_handoff.md` or legacy `handoffs/latest_handoff.md` first, especially `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）, then read `.auto_iter/plans/project_plan.md` and `.auto_iter/plans/project_record_rules.md` when they exist, followed by `.auto_iter/plans/global_plan.md`, `.auto_iter/plans/version_iterations.md`, and `.auto_iter/plans/active_plan.md`. Legacy projects may still use root-level `plans/`.
 
 4. Run `auto-iter context index` before reading decisions. Read only decision projections listed by the index; if it reports orphan or stale projections, do not treat those Markdown files as current context.
 
@@ -77,8 +77,9 @@ tracking state, run:
 auto-iter uninstall
 ```
 
-The uninstall command does not remove `state/`, `plans/`, `topics/`, `raw_input/`,
-`decisions/`, `runs/`, or `handoffs/`.
+The uninstall command does not remove project state. New projects keep state
+under `.auto_iter/`; old projects may still use `state/`, `plans/`, `topics/`,
+`raw_input/`, `decisions/`, `runs/`, or `handoffs/`.
 
 In an interactive terminal, uninstall asks whether to remove those project state
 directories too and prints a short description of each directory. In
@@ -141,13 +142,14 @@ Rules:
 - Multi-thread work should prefer explicit `--topic-id` or `AUTO_ITER_TOPIC_ID` instead of switching the default topic just to record one topic.
 - If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`.
 - When a prompt only seems to change topic semantically, ask “是不是已经切入新的 topic 了？” before switching.
-- Read `topics/active_topic.md` by default; load `topics/archive/` only on user request or confirmed topic switch.
+- Read `.auto_iter/topics/active_topic.md` by default in single-directory projects; load `.auto_iter/topics/archive/` only on user request or confirmed topic switch.
 - Link clear supporting runs, decisions, and artifacts with `auto-iter topic link`; inspect the evidence chain later with `auto-iter topic evidence`.
 - Use `topic plan` for local topic goals, non-goals, acceptance checks, stop conditions, and escalation conditions. Do not use it as a substitute for decisions or run evidence.
 - Use `topic task` for topic-local todo, doing, done, blocked, and dropped items. Task status is planning state; completed claims still need decisions and evidence links.
 - Use `topic board` for cross-topic status; keep detailed topic tasks in topic plan, topic handoff, and board rather than global plan.
-- Use topic-scoped handoff or checkpoint commands for parallel Codex threads. They write `topics/<topic_id>/latest_handoff.md`.
+- Use topic-scoped handoff or checkpoint commands for parallel Codex threads. They write `.auto_iter/topics/<topic_id>/latest_handoff.md` in single-directory projects.
 - Use `auto-iter migrate` after upgrading old project state so legacy topics get empty topic plans, refreshed projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`).
+- Use `auto-iter migrate --layout single-dir` to move old root-level AIT state directories under `.auto_iter/`.
 
 ## Before A New Experiment
 
