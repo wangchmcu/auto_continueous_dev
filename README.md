@@ -79,6 +79,32 @@ accepted by `install` and `uninstall`. Use `--check-project` when you want an
 existing AIT project in the current directory checked after the refresh; if no
 project state exists, the check is skipped and `init` is not run.
 
+## Old project migration after AIT update
+
+After the AIT source checkout or installed command has been updated, an old
+managed project should be migrated from the project root. Do not run `init` for
+an already initialized project.
+
+```bash
+cd /path/to/old/project
+auto-iter update --check-project
+auto-iter doctor
+auto-iter migrate
+auto-iter migrate --layout single-dir
+auto-iter doctor
+auto-iter context index
+auto-iter handoff generate
+auto-iter handoff validate
+```
+
+`auto-iter migrate` refreshes old topic projections, creates missing topic
+plans, and performs the project plan split into `plans/project_plan.md`,
+`plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`.
+`auto-iter migrate --layout single-dir` moves old root-level AIT state
+directories under `.auto_iter/`; skip it when `auto-iter doctor` already reports
+`layout: single-dir`. The layout migration refuses to overwrite a non-empty
+`.auto_iter/` directory.
+
 ## Project state layout
 
 New `auto-iter init` projects store AIT-owned files under one directory:
@@ -130,6 +156,9 @@ auto-iter topic task add --topic-id <id> --title "任务" --description "说明"
 auto-iter topic task set --item-id <item-id> --status doing
 auto-iter topic task list --topic-id <id>
 auto-iter topic board
+auto-iter project link-topic --project-heading "项目计划标题" --topic-id <id> --relation implements --summary "关联说明"
+auto-iter project topic-links --project-heading "项目计划标题"
+auto-iter topic project-links --topic-id <id>
 auto-iter handoff generate --topic-id <id>
 auto-iter handoff validate --topic-id <id>
 auto-iter checkpoint save --topic-id <id> --text "中途记录一下"
@@ -162,6 +191,15 @@ evidence links.
 Use `topic board` for the cross-topic project view. It writes
 `topics/board.md` and summarizes open topics, doing tasks, blocked tasks,
 recent done tasks, and topics that look ready to satisfy.
+Use `project link-topic` when a topic explicitly serves a project-level heading
+in `project_plan.md`. This records a bidirectional tracking link: project
+heading to topic, and topic to project heading. It does not copy topic plan
+detail into `project_plan.md`, and it does not rewrite a topic plan from the
+project plan. Link relation values are `implements`（该 topic 正在实现该项目目标）,
+`explores`（该 topic 正在探索该项目方向）, `blocks`（该 topic 阻塞该项目目标）,
+and `related`（只有一般相关性）. The projection is
+`plans/project_topic_links.md`, and topic plan plus topic board projections also
+show the links.
 Use topic-scoped handoff commands when two Codex threads work on different
 topics under the same project. They write `topics/<topic_id>/latest_handoff.md`
 and do not overwrite the project-level `handoffs/latest_handoff.md`.
@@ -378,6 +416,19 @@ auto-iter topic plan show --topic-id <topic-id>
 Only generate checkpoint or handoff after `topic plan show` contains the
 adopted direction. This keeps the next session from resuming an old topic plan
 while a new direction exists only in chat, a loose checkpoint, or handoff prose.
+
+If the topic exists to execute or explore a project-level goal, add an explicit
+project-topic link:
+
+```bash
+auto-iter project link-topic --project-heading "<project_plan heading>" --topic-id <topic-id> --relation implements --summary "<why this topic belongs to that project goal>"
+auto-iter project topic-links --project-heading "<project_plan heading>"
+auto-iter topic project-links --topic-id <topic-id>
+```
+
+This is bidirectional tracking, not automatic content synchronization.
+Project direction remains in `project_plan.md`; local execution details remain
+in topic plan and topic task.
 
 ## Codex Entry
 
@@ -622,6 +673,7 @@ auto-iter context show --path .auto_iter/plans/global_plan.md --heading "Global 
 - `.auto_iter/handoffs/latest_handoff.md`: fresh-session entry point. Its `Current Baseline` section is a Markdown projection（从已有记录摘出的可读视图，不是新的事实源）that points to the accepted start, accepted result, evaluation entry, provenance entry, and diagnostic entry.
 - `.auto_iter/raw_input/`: original input materials and old project imports.
 - `.auto_iter/plans/global_plan.md`: compatibility entry in managed projects; in the AIT source repo, `plans/global_plan.md` can remain the tool-level global plan when that source repo is still on legacy layout.
+- `.auto_iter/plans/project_topic_links.md`: readable projection for project plan heading to topic links. It is a tracking projection, not a replacement for `project_plan.md` or topic plan.
 - `.auto_iter/plans/version_iterations.md`: version-level task tracker in single-directory projects.
 - `.auto_iter/plans/active_plan.md`: current engineering direction in single-directory projects.
 - project-root `AGENTS.md`: optional Codex process rules for the target project. It is included in handoff read order only when the file already exists.

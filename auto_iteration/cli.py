@@ -34,6 +34,7 @@ RULE_SOURCE_KINDS = {"user_stated", "derived", "implemented"}
 RULE_KINDS = {"entry", "exit", "add", "protection", "execution", "acceptance", "recording"}
 RULE_SCOPE_KINDS = {"global", "project", "topic"}
 RULE_STATUSES = {"active", "superseded", "deprecated", "draft"}
+PROJECT_TOPIC_RELATIONS = {"implements", "explores", "blocks", "related"}
 SEARCH_FUSION_K = 60
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
 TOPIC_ID_ENV_VAR = "AUTO_ITER_TOPIC_ID"
@@ -1142,6 +1143,16 @@ def init_schema(db: sqlite3.Connection) -> None:
             updated_at text not null
         );
 
+        create table if not exists project_topic_links (
+            project_heading text not null,
+            topic_id text not null,
+            relation text not null,
+            summary text not null default '',
+            created_at text not null,
+            updated_at text not null,
+            primary key (project_heading, topic_id, relation)
+        );
+
         create table if not exists search_documents (
             doc_id text primary key,
             source_type text not null,
@@ -1612,6 +1623,10 @@ def topic_board_path() -> Path:
     return topics_dir() / "board.md"
 
 
+def project_topic_links_path() -> Path:
+    return state_path("plans", "project_topic_links.md")
+
+
 def active_topic_path() -> Path:
     return topics_dir() / "active_topic.md"
 
@@ -1729,6 +1744,97 @@ def topic_evidence_detail(db: sqlite3.Connection, evidence_type: str, evidence_i
     return "unknown evidence type"
 
 
+def project_heading_exists(project_heading: str) -> bool:
+    path = state_path("plans", "project_plan.md")
+    if not path.exists():
+        return False
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        marker, _, title = stripped.partition(" ")
+        if marker and set(marker) == {"#"} and title.strip() == project_heading:
+            return True
+    return False
+
+
+def project_topic_link_rows(
+    db: sqlite3.Connection,
+    topic_id: str | None = None,
+    project_heading: str | None = None,
+) -> list[sqlite3.Row]:
+    conditions: list[str] = []
+    params: list[str] = []
+    if topic_id:
+        conditions.append("project_topic_links.topic_id = ?")
+        params.append(topic_id)
+    if project_heading:
+        conditions.append("project_topic_links.project_heading = ?")
+        params.append(project_heading)
+    where = " where " + " and ".join(conditions) if conditions else ""
+    return db.execute(
+        f"""
+        select project_topic_links.*, topics.title as topic_title, topics.status as topic_status
+        from project_topic_links
+        join topics on topics.topic_id = project_topic_links.topic_id
+        {where}
+        order by project_topic_links.project_heading,
+                 project_topic_links.updated_at desc,
+                 project_topic_links.created_at desc
+        """,
+        params,
+    ).fetchall()
+
+
+def project_topic_link_lines(
+    db: sqlite3.Connection,
+    topic_id: str | None = None,
+    project_heading: str | None = None,
+) -> list[str]:
+    rows = project_topic_link_rows(db, topic_id=topic_id, project_heading=project_heading)
+    if not rows:
+        return ["- none"]
+    lines: list[str] = []
+    for row in rows:
+        summary = f" summary={row['summary']}" if row["summary"] else ""
+        lines.append(
+            f"- project_heading={row['project_heading']} topic_id={row['topic_id']} "
+            f"relation={row['relation']} topic_title={row['topic_title']} topic_status={row['topic_status']}{summary}"
+        )
+    return lines
+
+
+def render_project_topic_links(db: sqlite3.Connection) -> str:
+    rows = project_topic_link_rows(db)
+    lines = ["# Project Topic Links", ""]
+    if not rows:
+        lines += ["## None", "", "- none", ""]
+        return "\n".join(lines)
+    current_heading: str | None = None
+    for row in rows:
+        if row["project_heading"] != current_heading:
+            current_heading = row["project_heading"]
+            lines += [f"## {current_heading}", ""]
+        summary = f" summary={row['summary']}" if row["summary"] else ""
+        lines.append(
+            f"- topic_id={row['topic_id']} relation={row['relation']} "
+            f"topic_title={row['topic_title']} topic_status={row['topic_status']}{summary}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_project_topic_links_projection(db: sqlite3.Connection) -> None:
+    rows = project_topic_link_rows(db)
+    path = project_topic_links_path()
+    if not rows:
+        if path.exists():
+            path.unlink()
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_project_topic_links(db), encoding="utf-8")
+
+
 def get_topic_plan(db: sqlite3.Connection, topic_id: str) -> sqlite3.Row:
     row = db.execute("select * from topic_plans where topic_id = ?", (topic_id,)).fetchone()
     if not row:
@@ -1806,6 +1912,9 @@ def render_topic_plan(db: sqlite3.Connection, topic_id: str) -> str:
         "",
         "## Escalation Conditions",
         *markdown_list(plan["escalation_conditions_json"]),
+        "",
+        "## Project Links",
+        *project_topic_link_lines(db, topic_id=topic_id),
         "",
         "## Todo",
         *topic_task_lines(db, topic_id, "todo"),
@@ -1904,6 +2013,9 @@ def render_topic_board(db: sqlite3.Connection) -> str:
         lines.append("- none")
     lines += [
         "",
+        "## Project Links",
+        *project_topic_link_lines(db),
+        "",
         "## Doing Tasks",
         *topic_board_task_lines(db, "doing"),
         "",
@@ -1943,6 +2055,7 @@ def write_topic_plan_projections(db: sqlite3.Connection) -> None:
     elif default_path.exists():
         default_path.unlink()
     write_topic_board_projection(db)
+    write_project_topic_links_projection(db)
 
 
 def render_topic_projection(db: sqlite3.Connection, topic: sqlite3.Row, active_projection: bool = False) -> str:
@@ -2361,6 +2474,60 @@ def command_topic_task_list(args: argparse.Namespace) -> int:
             print(f"  description: {row['description']}")
         if row["acceptance"]:
             print(f"  acceptance: {row['acceptance']}")
+    return 0
+
+
+def command_project_link_topic(args: argparse.Namespace) -> int:
+    if not project_heading_exists(args.project_heading):
+        raise UserError(f"project heading not found in project_plan.md: {args.project_heading}")
+    with database() as db:
+        get_topic(db, args.topic_id)
+        timestamp = now_iso()
+        db.execute(
+            """
+            insert into project_topic_links (
+                project_heading, topic_id, relation, summary, created_at, updated_at
+            )
+            values (?, ?, ?, ?, ?, ?)
+            on conflict(project_heading, topic_id, relation) do update set
+                summary = excluded.summary,
+                updated_at = excluded.updated_at
+            """,
+            (args.project_heading, args.topic_id, args.relation, args.summary or "", timestamp, timestamp),
+        )
+        add_topic_event(
+            db,
+            args.topic_id,
+            "project-link",
+            f"{args.relation} project heading {args.project_heading}",
+        )
+        write_topic_projections(db)
+    print(f"linked project topic {args.topic_id}")
+    print(f"project_heading: {args.project_heading}")
+    print(f"relation: {args.relation}")
+    return 0
+
+
+def command_project_topic_links(args: argparse.Namespace) -> int:
+    with database() as db:
+        lines = project_topic_link_lines(db, project_heading=args.project_heading)
+    print("# Project Topic Links")
+    print()
+    print(f"## {args.project_heading}")
+    for line in lines:
+        print(line)
+    return 0
+
+
+def command_topic_project_links(args: argparse.Namespace) -> int:
+    with database() as db:
+        get_topic(db, args.topic_id)
+        lines = project_topic_link_lines(db, topic_id=args.topic_id)
+    print("# Topic Project Links")
+    print()
+    print(f"## {args.topic_id}")
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -3263,10 +3430,13 @@ def handoff_read_order_lines() -> list[str]:
     entries.append(str(state_path("handoffs", "latest_handoff.md")))
     project_plan = state_path("plans", "project_plan.md")
     project_record_rules = state_path("plans", "project_record_rules.md")
+    project_links = project_topic_links_path()
     if project_plan.exists():
         entries.append(str(project_plan))
     if project_record_rules.exists():
         entries.append(str(project_record_rules))
+    if project_links.exists():
+        entries.append(str(project_links))
     entries += [
         str(state_path("plans", "global_plan.md")),
         str(state_path("plans", "version_iterations.md")),
@@ -3336,10 +3506,13 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     ]
     project_plan = state_path("plans", "project_plan.md")
     project_record_rules = state_path("plans", "project_record_rules.md")
+    project_links = project_topic_links_path()
     if project_plan.exists():
         lines.append(f"- project_plan: {project_plan}")
     if project_record_rules.exists():
         lines.append(f"- project_record_rules: {project_record_rules}")
+    if project_links.exists():
+        lines.append(f"- project_topic_links: {project_links}")
     global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     lines += [
         f"- {global_key}: {state_path('plans', 'global_plan.md')}",
@@ -3365,6 +3538,14 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         "",
         "## Topic Summary",
         *topic_summary_lines(db),
+        "",
+        "## Project Topic Links",
+    ]
+    if current_topic:
+        lines += project_topic_link_lines(db, topic_id=current_topic["topic_id"])
+    else:
+        lines.append("- none")
+    lines += [
         "",
         "## Current Baseline",
         *current_baseline_lines(db, success, active, current_topic),
@@ -3515,6 +3696,7 @@ def validate_handoff_text(text: str) -> list[str]:
             errors.append(f"missing section: {section}")
     project_plan = state_path("plans", "project_plan.md")
     project_record_rules = state_path("plans", "project_record_rules.md")
+    project_links = project_topic_links_path()
     global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     required_paths = {
         global_key: state_path("plans", "global_plan.md"),
@@ -3528,6 +3710,8 @@ def validate_handoff_text(text: str) -> list[str]:
         required_paths["project_plan"] = project_plan
     if project_record_rules.exists():
         required_paths["project_record_rules"] = project_record_rules
+    if project_links.exists():
+        required_paths["project_topic_links"] = project_links
     for key, path in required_paths.items():
         expected = f"- {key}: {path}"
         if expected not in text:
@@ -3538,6 +3722,8 @@ def validate_handoff_text(text: str) -> list[str]:
         errors.append("read order missing project plan")
     if project_record_rules.exists() and str(project_record_rules) not in text:
         errors.append("read order missing project record rules")
+    if project_links.exists() and str(project_links) not in text:
+        errors.append("read order missing project topic links")
     if str(state_path("plans", "global_plan.md")) not in text:
         errors.append("read order missing global plan")
     return errors
@@ -4585,6 +4771,17 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--skills-dir", default=str(default_skills_dir()))
     update.add_argument("--check-project", action="store_true")
     update.set_defaults(func=command_update)
+    project = subparsers.add_parser("project")
+    project_sub = project.add_subparsers(dest="project_command", required=True)
+    project_link_topic = project_sub.add_parser("link-topic")
+    project_link_topic.add_argument("--project-heading", required=True)
+    project_link_topic.add_argument("--topic-id", required=True)
+    project_link_topic.add_argument("--relation", choices=sorted(PROJECT_TOPIC_RELATIONS), default="related")
+    project_link_topic.add_argument("--summary", default="")
+    project_link_topic.set_defaults(func=command_project_link_topic)
+    project_topic_links = project_sub.add_parser("topic-links")
+    project_topic_links.add_argument("--project-heading", required=True)
+    project_topic_links.set_defaults(func=command_project_topic_links)
     topic = subparsers.add_parser("topic")
     topic_sub = topic.add_subparsers(dest="topic_command", required=True)
     topic_current = topic_sub.add_parser("current")
@@ -4606,6 +4803,9 @@ def build_parser() -> argparse.ArgumentParser:
     topic_evidence.add_argument("--topic-id", required=True)
     topic_evidence.add_argument("--latest", type=int, default=20)
     topic_evidence.set_defaults(func=command_topic_evidence)
+    topic_project_links = topic_sub.add_parser("project-links")
+    topic_project_links.add_argument("--topic-id", required=True)
+    topic_project_links.set_defaults(func=command_topic_project_links)
     topic_start = topic_sub.add_parser("start")
     topic_start.add_argument("--title", required=True)
     topic_start.add_argument("--summary", default="")

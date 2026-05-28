@@ -147,9 +147,11 @@ Rules:
 - Use `topic plan` for local topic goals, non-goals, acceptance checks, stop conditions, and escalation conditions. Do not use it as a substitute for decisions or run evidence.
 - Use `topic task` for topic-local todo, doing, done, blocked, and dropped items. Task status is planning state; completed claims still need decisions and evidence links.
 - Use `topic board` for cross-topic status; keep detailed topic tasks in topic plan, topic handoff, and board rather than global plan.
+- Use `auto-iter project link-topic --project-heading <heading> --topic-id <id> --relation <relation> --summary <summary>` when a topic explicitly serves a project plan heading. This is bidirectional tracking, not automatic content synchronization.
 - Use topic-scoped handoff or checkpoint commands for parallel Codex threads. They write `.auto_iter/topics/<topic_id>/latest_handoff.md` in single-directory projects.
 - Use `auto-iter migrate` after upgrading old project state so legacy topics get empty topic plans, refreshed projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`).
 - Use `auto-iter migrate --layout single-dir` to move old root-level AIT state directories under `.auto_iter/`.
+- After AIT update in an old managed project, run `auto-iter update --check-project`, `auto-iter doctor`, `auto-iter migrate`, `auto-iter migrate --layout single-dir`, `auto-iter doctor`, `auto-iter context index`, `auto-iter handoff generate`, and `auto-iter handoff validate`. Do not run `init` for an already initialized old project.
 
 ## Before A New Experiment
 

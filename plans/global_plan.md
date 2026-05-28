@@ -162,6 +162,13 @@
 - `auto-iter migrate --layout single-dir` 显式执行旧布局到 `.auto_iter/` 的迁移；如果 `.auto_iter/` 已存在且非空，必须停止，不能覆盖已有状态。
 - `.codex/` 不属于 AIT 项目状态目录；它是 Codex hook 或本地配置入口，不随 `.auto_iter/` 迁移。
 
+### 18. project-topic explicit tracking
+
+- project-topic explicit tracking（项目计划和 topic 显式跟踪）：当某个 topic 明确服务于 `project_plan.md` 的某个标题时，用 SQLite 记录项目标题、topic_id、关系类型和说明。
+- 这是双向跟踪，不是双向内容同步：`project_plan.md` 不自动吸收 topic plan 细节，topic plan 也不自动继承 project plan 文本。
+- `auto-iter project link-topic` 建立关联；`auto-iter project topic-links` 从项目标题查 topic；`auto-iter topic project-links` 从 topic 查项目标题。
+- `plans/project_topic_links.md`、topic plan projection 和 topic board projection 都显示该关联，并进入 context index/search 的按需读取范围。
+
 ## 后续 Backlog
 
 这些条目是 `global plan backlog`（全局计划待办）。当用户以后提出上下文管理、历史检索、topic 管理或证据关联相关的新能力时，agent 必须先检查这里和 `plans/version_iterations.md` 的未覆盖能力，再决定是否延续已有路线；如果匹配，不要另开独立 plan 分支。
@@ -656,6 +663,19 @@
 - `auto-iter doctor` 输出 `root`、`state_dir` 和 `layout`。
 - `auto-iter migrate --layout single-dir` 把旧 root-level 状态目录移动到 `.auto_iter/`，并拒绝覆盖非空 `.auto_iter/`。
 - context、search、handoff、topic、run 和 decision 命令都通过状态目录抽象读写。
+
+### v0.39：项目计划和 topic 显式跟踪
+
+状态：done。
+
+目标：让 `project_plan.md` 标题与 topic plan 可以双向查询，同时避免自动互相改写内容。
+
+任务：
+
+- 新增 `project_topic_links` SQLite 表。
+- 新增 `auto-iter project link-topic`、`auto-iter project topic-links` 和 `auto-iter topic project-links`。
+- topic plan、topic board 和 `plans/project_topic_links.md` 投影显示 project-topic link。
+- README、AGENTS、entry skill、workflow skill 和 active/version plan 明确该能力是双向跟踪，不是自动同步。
 
 ### 后续可选：更重的语义检索
 

@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.39。
+- 当前版本：v0.40。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -48,6 +48,7 @@
 - v0.37 已完成：project plan split and ownership-routing（项目计划拆分和需求归属判断）：被接管项目改用 `plans/project_plan.md` 和 `plans/project_record_rules.md`，`plans/global_plan.md` 作为兼容入口；AIT 工具自身迭代必须切回 AIT 源仓计划，不能污染被接管项目的项目计划或 topic plan。
 - v0.38 已完成：project state single-dir layout（项目状态单目录布局）：新项目默认把 AIT 状态放到 `.auto_iter/`，旧项目继续兼容 root-level 状态目录，并可用 `auto-iter migrate --layout single-dir` 显式迁移。
 - v0.39 已完成：迁移指导补强，明确 `init vs migrate` 的边界，并让 `migrate` 输出迁移后检查清单和 rule 回填提示；与既有 rule tracking 和 `.auto_iter/rules/current_effective.md` 恢复入口保持一致。
+- v0.40 已完成：project-topic explicit tracking（项目计划和 topic 显式跟踪）：用 `auto-iter project link-topic` 记录 `project_plan.md` 标题与 topic 的双向可查询关联；这是跟踪关系，不是 project plan 与 topic plan 的自动内容同步。
 
 ## 下一步
 
@@ -85,3 +86,4 @@
 32. 讨论项目交易规则、执行红线、补仓保护或验收门槛时，优先写入通用 `rule` 事实源，再由 `rules/` projection、`rules/current_effective.md` 和 search 暴露给 handoff、context 和项目文档。
 33. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
 34. 新接管项目默认使用 `.auto_iter/` 保存 AIT 状态；旧项目如需收拢散落目录，先运行 `auto-iter doctor` 确认 `layout: legacy`，再运行 `auto-iter migrate --layout single-dir`，最后运行 `auto-iter doctor`、`auto-iter context index` 和 `auto-iter handoff validate`。
+35. 当某个 topic 明确服务于 `project_plan.md` 的某个标题时，使用 `auto-iter project link-topic --project-heading "<heading>" --topic-id <id> --relation implements --summary "<说明>"` 建立双向跟踪；这不会自动改写 `project_plan.md` 或 topic plan。

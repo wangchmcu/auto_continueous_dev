@@ -16,9 +16,11 @@
 
 ## 当前版本
 
-- current_version: v0.39
+- current_version: v0.40
 - status: done
 - goal: 明确已有项目接管/升级时的 `init vs migrate` 边界，并让 `migrate` 在结构迁移后给出最小后续检查和 rule 回填提示。
+- previous_goal: v0.39 明确已有项目接管/升级时的 `init vs migrate` 边界，并让 `migrate` 在结构迁移后给出最小后续检查和 rule 回填提示。
+- goal: 完成 project-topic explicit tracking（项目计划和 topic 显式跟踪），让 `project_plan.md` 标题与 topic plan 可以双向查询，但不自动互相改写内容。
 
 ## v0.1 任务清单
 
@@ -1110,6 +1112,15 @@ v0.25 之后仍未覆盖的全局能力：
 - done：AIT global plan、active plan 和 version tracking 同步记录这次迁移指导补强，保持工具本体记录闭环。
 - evidence：新增 `test_migrate_prints_follow_up_checklist_and_rule_backfill_hint`；验证命令为 `python3 -m unittest tests.test_cli.CliTests.test_migrate_prints_follow_up_checklist_and_rule_backfill_hint -v`。
 - acceptance：用户能从 README/AGENTS 看懂何时 `init`、何时 `migrate`；`migrate` 输出能直接指导迁移后的下一步。
+
+### v0.40
+
+- done：project-topic explicit tracking（项目计划和 topic 显式跟踪）：新增 `project_topic_links` SQLite 表，记录 `project_plan.md` 标题、topic_id、关系类型和中文说明。
+- done：新增 `auto-iter project link-topic`、`auto-iter project topic-links` 和 `auto-iter topic project-links`，支持从项目计划标题和 topic 两侧查询同一条关联。
+- done：topic plan、topic board 和 `plans/project_topic_links.md` 投影显示 project-topic link；`context index` 和 search 能按需发现该投影。
+- done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 明确这是双向跟踪，不是 project plan 与 topic plan 的自动内容同步。
+- global plan distance：本版本覆盖了 project plan 与 topic plan 的显式关联；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
+- evidence：新增 `test_project_topic_links_are_queryable_from_both_sides_and_indexed`；完整验证命令记录在本次实现会话。
 
 ### 后续可选
 

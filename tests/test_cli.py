@@ -428,6 +428,45 @@ class CliTests(unittest.TestCase):
         self.assertIn("rule tracking", active_plan)
         self.assertIn("rules/current_effective.md", active_plan)
 
+    def test_project_topic_explicit_tracking_is_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (REPO_ROOT / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("project link-topic", text, str(path))
+            self.assertIn("bidirectional tracking", text, str(path))
+            self.assertIn("not automatic", text, str(path))
+        for text in [version_tracking, global_plan, active_plan]:
+            self.assertIn("v0.39", text)
+            self.assertIn("project-topic explicit tracking", text)
+            self.assertIn("not", text)
+
+    def test_old_project_migration_after_update_is_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Old project migration after AIT update", readme)
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("auto-iter update --check-project", text, str(path))
+            self.assertIn("auto-iter migrate", text, str(path))
+            self.assertIn("auto-iter migrate --layout single-dir", text, str(path))
+            self.assertIn("auto-iter handoff validate", text, str(path))
+            self.assertIn("Do not run `init`", text, str(path))
+
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
         windows = cli.command_wrapper_spec(PureWindowsPath("C:/repo/tools/auto_iter.py"), platform_name="windows")
@@ -821,6 +860,51 @@ class CliTests(unittest.TestCase):
         self.assertIn("影响多个 topic 时升级到 active_plan", current.stdout)
         self.assertIn(f"topics/{topic_id}/plan.md", index.stdout)
         self.assertIn("topics/default_topic_plan.md", index.stdout)
+
+    def test_project_topic_links_are_queryable_from_both_sides_and_indexed(self):
+        run_cli(self.tmp, "init")
+        project_plan = self.tmp / ".auto_iter" / "plans" / "project_plan.md"
+        project_plan.write_text("# Project Plan\n\n## ALN Landing\n\n长期项目方向\n", encoding="utf-8")
+        topic_id = run_cli(
+            self.tmp,
+            "topic",
+            "start",
+            "--title",
+            "ALN FR optimize",
+            "--summary",
+            "当前执行 topic",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "topic", "plan", "set", "--topic-id", topic_id, "--goal", "验证 ALN 落地边界")
+
+        linked = run_cli(
+            self.tmp,
+            "project",
+            "link-topic",
+            "--project-heading",
+            "ALN Landing",
+            "--topic-id",
+            topic_id,
+            "--relation",
+            "implements",
+            "--summary",
+            "该 topic 执行 ALN Landing 的落地验证",
+        )
+        project_links = run_cli(self.tmp, "project", "topic-links", "--project-heading", "ALN Landing")
+        topic_links = run_cli(self.tmp, "topic", "project-links", "--topic-id", topic_id)
+        index = run_cli(self.tmp, "context", "index")
+        run_cli(self.tmp, "handoff", "generate")
+        handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+        plan_text = (self.tmp / ".auto_iter" / "topics" / topic_id / "plan.md").read_text(encoding="utf-8")
+        board_text = (self.tmp / ".auto_iter" / "topics" / "board.md").read_text(encoding="utf-8")
+        links_text = (self.tmp / ".auto_iter" / "plans" / "project_topic_links.md").read_text(encoding="utf-8")
+
+        self.assertIn("linked project topic", linked.stdout)
+        for text in [project_links.stdout, topic_links.stdout, handoff_text, plan_text, board_text, links_text]:
+            self.assertIn("ALN Landing", text)
+            self.assertIn(topic_id, text)
+            self.assertIn("implements", text)
+            self.assertIn("该 topic 执行 ALN Landing 的落地验证", text)
+        self.assertIn("plans/project_topic_links.md", index.stdout)
 
     def test_topic_write_uses_environment_topic_id_and_reports_resolution(self):
         run_cli(self.tmp, "init")

@@ -152,6 +152,20 @@ the same `--bin-dir` and `--skills-dir` options as install and uninstall. Use
 checked after refresh; if no AIT project state exists, the project check is
 skipped and `init` is not run.
 
+For an old managed project after AIT update, run this migration sequence from
+the old project root. Do not run `init` for an already initialized old project.
+
+```bash
+auto-iter update --check-project
+auto-iter doctor
+auto-iter migrate
+auto-iter migrate --layout single-dir
+auto-iter doctor
+auto-iter context index
+auto-iter handoff generate
+auto-iter handoff validate
+```
+
 To reinstall after uninstall, use the same platform-appropriate install command
 from the AIT source checkout:
 
@@ -208,6 +222,7 @@ Rules:
 - If a handoff, checkpoint, or user instruction names future implementation work for the same topic, the topic plan and topic task list must carry that work before the session is closed. Handoff text is a projection; it must not be the only place where a changed next-session plan exists.
 - Use `auto-iter topic task add/set/list` for topic-local task status. Marking a task done does not replace `decision add` or `topic link`.
 - Use `auto-iter topic board` for the cross-topic project view; keep per-topic detail in topic plan, topic handoff, and topic board instead of global plan.
+- Use `auto-iter project link-topic --project-heading <heading> --topic-id <id> --relation <relation> --summary <summary>` when a topic explicitly serves a project plan heading. This is bidirectional tracking, not automatic content synchronization.
 - Use topic-scoped handoff or checkpoint commands when separate Codex threads work on separate topics. They write `topics/<topic_id>/latest_handoff.md`.
 - Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans and refreshed projections.
 - Use `auto-iter migrate --layout single-dir` to move old root-level AIT state directories under `.auto_iter/`.
