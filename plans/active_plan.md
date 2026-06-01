@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.40。
+- 当前版本：v0.41。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -49,6 +49,7 @@
 - v0.38 已完成：project state single-dir layout（项目状态单目录布局）：新项目默认把 AIT 状态放到 `.auto_iter/`，旧项目继续兼容 root-level 状态目录，并可用 `auto-iter migrate --layout single-dir` 显式迁移。
 - v0.39 已完成：迁移指导补强，明确 `init vs migrate` 的边界，并让 `migrate` 输出迁移后检查清单和 rule 回填提示；与既有 rule tracking 和 `.auto_iter/rules/current_effective.md` 恢复入口保持一致。
 - v0.40 已完成：project-topic explicit tracking（项目计划和 topic 显式跟踪）：用 `auto-iter project link-topic` 记录 `project_plan.md` 标题与 topic 的双向可查询关联；这是跟踪关系，不是 project plan 与 topic plan 的自动内容同步。
+- v0.41 已完成：rejected experiment recording（被拒绝实验记录）：用 `auto-iter run import` 接住外部或历史失败实验，再用 rejected decision、`route-keyword` 和 `reopen-condition` 防止后续重复路线。
 
 ## 下一步
 
@@ -87,3 +88,4 @@
 33. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
 34. 新接管项目默认使用 `.auto_iter/` 保存 AIT 状态；旧项目如需收拢散落目录，先运行 `auto-iter doctor` 确认 `layout: legacy`，再运行 `auto-iter migrate --layout single-dir`，最后运行 `auto-iter doctor`、`auto-iter context index` 和 `auto-iter handoff validate`。
 35. 当某个 topic 明确服务于 `project_plan.md` 的某个标题时，使用 `auto-iter project link-topic --project-heading "<heading>" --topic-id <id> --relation implements --summary "<说明>"` 建立双向跟踪；这不会自动改写 `project_plan.md` 或 topic plan。
+36. 当用户报告 rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）且没有现成 `run_id` 时，使用 `auto-iter run import` 导入外部结果，再用 `decision add --status rejected` 记录结论、`route-keyword` 和 `reopen-condition`。

@@ -362,6 +362,7 @@ Typical use:
 - The agent or user creates, accepts, or changes a concrete plan for the current topic: update `topic plan` and `topic task` immediately. This is not limited to session end; checkpoint and handoff must project the topic plan instead of carrying the only copy of the plan.
 - User says “执行吧”, “实施吧”, or “确定执行”：the agent checks whether `route check` is needed and whether config, dataset, command, metrics, and artifacts are clear enough for `run exec`.
 - User says “拿到结果了”, “跑完数据了”, or “测试结束了”：the agent checks metrics, artifacts, and evidence `run_id` before writing a decision.
+- User reports a rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）：the agent checks whether a `run_id` exists. If the result came from an external tool or old Codex session, import it with `auto-iter run import` before writing the rejected decision.
 - User says “中途记录一下”, “先保存当前状态”, or “做个阶段记录”：the agent saves the current handoff checkpoint without ending the session and without committing or pushing unless explicitly requested.
 - User says “结束当前 session” or “做 handoff”：the agent generates and validates handoff, then commits and pushes if requested.
 - User says the current session should end and the next session should implement a named direction: before generating handoff, the agent updates the current topic plan and adds a concrete topic task for the next-session implementation work.
@@ -384,11 +385,22 @@ Record a run by letting `auto_iteration` execute the command and capture logs:
 auto-iter run exec --config config.json --dataset demo --command "python experiment.py" --metrics metrics.json --artifact report.md
 ```
 
+Import an already completed external or historical result when no `run_id` was
+created at execution time:
+
+```bash
+auto-iter run import --config config.json --dataset external-sil --status failed --summary "<why this rejected experiment failed>" --command "<external command or session>" --metrics metrics.json --artifact report.md
+```
+
 Record a rejected route with evidence from the completed run:
 
 ```bash
 auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-keyword "<关键词>"
 ```
+
+For a rejected experiment, include `route-keyword` values that future
+`route check` can match and a `reopen-condition` that states exactly when the
+route may be tried again.
 
 Block a rejected numeric parameter range:
 

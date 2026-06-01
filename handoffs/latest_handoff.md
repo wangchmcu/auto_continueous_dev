@@ -6,7 +6,7 @@
 ## 当前快照
 - root: /home/ryan/auto_iteration
 - branch: search_enhance
-- commit: 356b53877f2644dfd7ac63628632b0e6660886aa
+- commit: 41251f917f1a0b3f522b087d83619eca3cccf5d1
 - latest_successful_run_id: R-9723365f8f
 - latest_failed_run_id: none
 - global_plan: /home/ryan/auto_iteration/plans/global_plan.md

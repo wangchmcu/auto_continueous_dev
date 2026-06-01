@@ -24,6 +24,7 @@ When the user says one of these plain-language requests, treat it as a request t
 - If the prompt only seems semantically different from the current topic, do not guess or switch automatically. Ask the user: “是不是已经切入新的 topic 了？” Only after the user confirms, run `auto-iter topic start` or `auto-iter topic switch`.
 - If the user asks for new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
 - Planning, execution, result, or session-end phrases such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”：first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- Rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）phrases such as “不等价”, “不能合入”, “不可接受”, or “failed”：first run `auto-iter intent check --text "<用户原话>"`. If no `run_id` exists, use `auto-iter run import`, then record `auto-iter decision add --status rejected` with `route-keyword` and `reopen-condition`.
 - If `intent check` prints `ownership-routing`, treat it as 需求归属判断：before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself. In managed projects, project direction belongs in `plans/project_plan.md` and project-specific AIT recording rules belong in `plans/project_record_rules.md`. If the request is about AIT, `auto-iter`, update, migrate, search, handoff, or skills, switch to the AIT source repository and update AIT's own plan files. Do not write AIT tool work into the managed project's project plan or topic plan.
 - If the agent or user creates, accepts, or changes a concrete plan for the current topic, persist it in the topic plan immediately. Topic plan is the current topic's execution plan, not a session-end note. Update `auto-iter topic plan set --topic-id <id> ...` for goal/non-goal/acceptance changes, add concrete work with `auto-iter topic task add --topic-id <id> ...`, and run `auto-iter topic plan show --topic-id <id>` before checkpoint, handoff, or continuing from that plan.
 - “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request：treat this as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
@@ -294,6 +295,12 @@ the command itself, for example:
 
 Use `run start` and `run finish` only when the experiment cannot be launched from one command.
 
+Use `run import` when the result already exists outside AIT, for example from an old Codex session or an external SIL command, and no `run_id` was created:
+
+```bash
+auto-iter run import --config <config.json> --dataset <dataset-id> --status failed --summary "<why this rejected experiment failed>" --command "<external command or session>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
 ## After Results
 
 If the user says “拿到结果了”, “跑完数据了”, “测试结束了”, or a similar result-complete phrase, first run:
@@ -310,7 +317,7 @@ Record conclusions with evidence:
 auto-iter decision add --status <active|rejected|open> --evidence <run_id> --title "<中文标题>" --claim "<中文结论>"
 ```
 
-Use `--route-keyword` and `--reopen-condition` for rejected routes.
+Use `--route-keyword` and `--reopen-condition` for rejected routes. A rejected experiment from an imported run still needs this rejected decision, otherwise future sessions may repeat the same route.
 
 ## Mid-Session Record
 

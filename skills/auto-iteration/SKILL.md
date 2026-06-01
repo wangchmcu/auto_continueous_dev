@@ -17,6 +17,7 @@ Use this skill to keep long-running algorithm iteration recoverable across sessi
 - If the user says “auto it self improve”, use the `auto-it-self-improve` skill to generalize the solved concrete problem into a reusable auto_iteration system improvement.
 - If the user asks to update or refresh installed AIT, run `auto-iter update`. Use `auto-iter update --check-project` only when the current directory should be checked after the refresh.
 - If the user says a planning, execution, result, or session-end phrase such as “做个计划”, “更新计划”, “执行吧”, “实施吧”, “确定执行”, “拿到结果了”, “跑完数据了”, or “测试结束了”, first run `auto-iter intent check --text "<用户原话>"`. This is an intent checkpoint（意图检查点）：it prints the next checks the agent should do, but it does not directly write state or run experiments.
+- If the user reports a rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）, first run `auto-iter intent check --text "<用户原话>"`. If no `run_id` exists because the result came from an external command or old Codex session, use `auto-iter run import`, then record `auto-iter decision add --status rejected` with `route-keyword` and `reopen-condition`.
 - If `intent check` prints `ownership-routing`, treat it as 需求归属判断：before writing any plan, decide whether the request belongs to the managed project or to the AIT tool itself. Managed-project direction belongs in `plans/project_plan.md`, and project-specific AIT recording rules belong in `plans/project_record_rules.md`. If the request is AIT tool work, switch to the AIT source repository and update AIT's own plan files. Do not write AIT tool work into the managed project's project plan or topic plan.
 - If the user says “中途记录一下”, “先保存当前状态”, “做个阶段记录”, or a similar mid-session record request, treat it as a black-box save request. Run `auto-iter checkpoint save --text "<用户原话>"`. Use the same state-save scope as session end, but do not end the session, commit, or push unless the user explicitly asks.
 
@@ -235,6 +236,12 @@ auto-iter run finish <run_id> --status success --metrics <metrics.json> --artifa
 
 Use `failed` or `aborted` instead of `success` when the run did not complete.
 
+Use `run import` when the result already exists outside AIT and no `run_id` was created, including a rejected experiment from an old Codex session:
+
+```bash
+auto-iter run import --config <config.json> --dataset <dataset-id> --status failed --summary "<why this rejected experiment failed>" --command "<external command or session>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
 ## Recording A Decision
 
 If the user says “拿到结果了”, “跑完数据了”, “测试结束了”, or a similar result-complete phrase, first run:
@@ -250,6 +257,8 @@ Every conclusion needs a decision with evidence:
 ```bash
 auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-keyword "<关键词>"
 ```
+
+For a rejected experiment, add `route-keyword` values that match the route and a `reopen-condition` that states when the route may be tried again.
 
 Decision status meanings:
 

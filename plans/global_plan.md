@@ -169,6 +169,13 @@
 - `auto-iter project link-topic` 建立关联；`auto-iter project topic-links` 从项目标题查 topic；`auto-iter topic project-links` 从 topic 查项目标题。
 - `plans/project_topic_links.md`、topic plan projection 和 topic board projection 都显示该关联，并进入 context index/search 的按需读取范围。
 
+### 19. rejected experiment recording
+
+- rejected experiment recording（被拒绝实验记录）：当用户说明某个实验已经失败、不等价、不能合入或不可接受时，这个事实必须进入 run 和 rejected decision，而不是只留在 Codex 对话历史里。
+- 如果实验执行时没有 AIT `run_id`，使用 `auto-iter run import` 把外部工具、旧 Codex session 或手工 SIL 结果导入为普通 run summary。
+- `auto-iter intent check` 对明显的拒绝实验表述输出 `rejected-result-recording` 检查项，提醒 agent 先导入 run，再写 `decision add --status rejected`。
+- `checkpoint save` 遇到拒绝实验表述时输出 `recording_debt_warning`，说明 checkpoint 不会自动创建 run 或 decision，agent 仍要补上 evidence、`route-keyword` 和 `reopen-condition`。
+
 ## 后续 Backlog
 
 这些条目是 `global plan backlog`（全局计划待办）。当用户以后提出上下文管理、历史检索、topic 管理或证据关联相关的新能力时，agent 必须先检查这里和 `plans/version_iterations.md` 的未覆盖能力，再决定是否延续已有路线；如果匹配，不要另开独立 plan 分支。
@@ -664,7 +671,7 @@
 - `auto-iter migrate --layout single-dir` 把旧 root-level 状态目录移动到 `.auto_iter/`，并拒绝覆盖非空 `.auto_iter/`。
 - context、search、handoff、topic、run 和 decision 命令都通过状态目录抽象读写。
 
-### v0.39：项目计划和 topic 显式跟踪
+### v0.40：项目计划和 topic 显式跟踪
 
 状态：done。
 
@@ -676,6 +683,19 @@
 - 新增 `auto-iter project link-topic`、`auto-iter project topic-links` 和 `auto-iter topic project-links`。
 - topic plan、topic board 和 `plans/project_topic_links.md` 投影显示 project-topic link。
 - README、AGENTS、entry skill、workflow skill 和 active/version plan 明确该能力是双向跟踪，不是自动同步。
+
+### v0.41：拒绝实验结构化记录
+
+状态：done。
+
+目标：让 rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）进入 AIT 的 run 和 decision 事实源，避免只散落在 Codex session 历史里。
+
+任务：
+
+- 新增 `auto-iter run import`，把外部或历史实验结果导入为 run summary。
+- `intent check` 对拒绝实验表述提示 `auto-iter run import` 和 `decision add --status rejected`。
+- `checkpoint save` 对拒绝实验表述提示记录债务，要求补 evidence、`route-keyword` 和 `reopen-condition`。
+- README、AGENTS、entry skill、workflow skill 和 active/version plan 同步记录该规则。
 
 ### 后续可选：更重的语义检索
 

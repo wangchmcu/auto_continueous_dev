@@ -2694,6 +2694,10 @@ def write_run_summary(db: sqlite3.Connection, run_id: str) -> None:
         f"- config_hash: {run['config_hash']}",
         f"- command: {run['command']}",
         "",
+        "## Summary",
+        "",
+        run["summary"] or "- none",
+        "",
         "## Metrics",
     ]
     if metrics:
@@ -2728,6 +2732,7 @@ def finish_run_record(
     metrics: dict[str, Any],
     artifact_paths: list[str],
     returncode: int | None = None,
+    summary_text: str | None = None,
 ) -> None:
     if status not in RUN_STATUSES:
         raise UserError(f"invalid status: {status}")
@@ -2745,7 +2750,7 @@ def finish_run_record(
         )
     for path in artifact_paths:
         add_artifact(db, run_id, path)
-    summary = f"status={status}; metrics={', '.join(sorted(metrics))}"
+    summary = summary_text.strip() if summary_text and summary_text.strip() else f"status={status}; metrics={', '.join(sorted(metrics))}"
     db.execute(
         "update runs set status = ?, ended_at = ?, summary = ? where run_id = ?",
         (status, now_iso(), summary, run_id),
@@ -2759,6 +2764,17 @@ def command_run_finish(args: argparse.Namespace) -> int:
     with database() as db:
         finish_run_record(db, args.run_id, args.status, metrics, args.artifact)
     print(f"finished run {args.run_id}")
+    return 0
+
+
+def command_run_import(args: argparse.Namespace) -> int:
+    config = read_json(args.config)
+    metrics = read_json(args.metrics) if args.metrics else {}
+    with database() as db:
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
+        write_debug_event(run_id, "imported", {"status": args.status, "summary": args.summary})
+        finish_run_record(db, run_id, args.status, metrics, args.artifact, summary_text=args.summary)
+    print(f"imported run {run_id}")
     return 0
 
 
@@ -3832,6 +3848,10 @@ def command_checkpoint_save(args: argparse.Namespace) -> int:
     print("- This is a mid-session record; continue the current Codex session unless the user says to end it.")
     print("- Use the same state-save scope as session end before or during this checkpoint.")
     print("- Do not commit or push unless the user explicitly asks.")
+    if text_mentions_rejected_result(args.text):
+        print("recording_debt_warning: text looks like a rejected or failed experiment result; checkpoint does not create run or decision records.")
+        for action in REJECTED_RESULT_ACTIONS:
+            print(f"- {action}")
     if errors:
         for error in errors:
             print(f"- {error}")
@@ -4690,6 +4710,54 @@ INTENT_RULES: list[tuple[str, list[str], list[str]]] = [
 ]
 
 
+REJECTED_RESULT_ACTIONS = [
+    "If no run_id exists for the experiment, run auto-iter run import --config <file> --dataset <name> --status failed --summary \"<why rejected>\" --command \"<external command or session>\".",
+    "Record the conclusion with auto-iter decision add --status rejected --evidence <run_id> --title \"<rejected route>\" --claim \"<observed failure>\".",
+    "Add route-keyword values that future route check can match, and add reopen-condition explaining when the route may be tried again.",
+    "If a topic exists, link the evidence with auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --summary \"<why this matters>\".",
+]
+
+
+REJECTED_RESULT_MARKERS = [
+    "不等价",
+    "不能合入",
+    "不允许",
+    "不可接受",
+    "失败",
+    "中止试验",
+    "偏差较大",
+    "rejected",
+    "failed",
+    "failure",
+    "regression",
+    "cannot merge",
+]
+
+
+EXPERIMENT_RESULT_MARKERS = [
+    "实验",
+    "结果",
+    "测试",
+    "路线",
+    "数据",
+    "sil",
+    "kpi",
+    "bucket",
+    "分桶",
+    "valid",
+    "lsq",
+    "deg",
+    "m/s",
+]
+
+
+def text_mentions_rejected_result(text: str) -> bool:
+    normalized = text.lower()
+    has_rejection = any(marker.lower() in normalized for marker in REJECTED_RESULT_MARKERS)
+    has_result_context = any(marker.lower() in normalized for marker in EXPERIMENT_RESULT_MARKERS)
+    return has_rejection and has_result_context
+
+
 def command_intent_check(args: argparse.Namespace) -> int:
     text = args.text
     normalized = text.lower()
@@ -4697,6 +4765,8 @@ def command_intent_check(args: argparse.Namespace) -> int:
     for intent, keywords, actions in INTENT_RULES:
         if any(keyword.lower() in normalized for keyword in keywords):
             matched.append((intent, actions))
+    if text_mentions_rejected_result(text) and not any(intent == "rejected-result-recording" for intent, _actions in matched):
+        matched.append(("rejected-result-recording", REJECTED_RESULT_ACTIONS))
     print("INTENT CHECKPOINT")
     print(f"text: {text}")
     if not matched:
@@ -4720,6 +4790,17 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     start.add_argument("--seed")
     start.add_argument("--session")
     start.set_defaults(func=command_run_start)
+    import_cmd = run_sub.add_parser("import")
+    import_cmd.add_argument("--config", required=True)
+    import_cmd.add_argument("--dataset", required=True)
+    import_cmd.add_argument("--status", choices=sorted(RUN_STATUSES), required=True)
+    import_cmd.add_argument("--summary", required=True)
+    import_cmd.add_argument("--command", required=True)
+    import_cmd.add_argument("--metrics")
+    import_cmd.add_argument("--artifact", action="append", default=[])
+    import_cmd.add_argument("--seed")
+    import_cmd.add_argument("--session")
+    import_cmd.set_defaults(func=command_run_import)
     exec_cmd = run_sub.add_parser("exec")
     exec_cmd.add_argument("--config", required=True)
     exec_cmd.add_argument("--dataset", required=True)

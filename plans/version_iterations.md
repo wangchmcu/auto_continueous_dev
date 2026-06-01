@@ -16,11 +16,10 @@
 
 ## 当前版本
 
-- current_version: v0.40
+- current_version: v0.41
 - status: done
-- goal: 明确已有项目接管/升级时的 `init vs migrate` 边界，并让 `migrate` 在结构迁移后给出最小后续检查和 rule 回填提示。
-- previous_goal: v0.39 明确已有项目接管/升级时的 `init vs migrate` 边界，并让 `migrate` 在结构迁移后给出最小后续检查和 rule 回填提示。
-- goal: 完成 project-topic explicit tracking（项目计划和 topic 显式跟踪），让 `project_plan.md` 标题与 topic plan 可以双向查询，但不自动互相改写内容。
+- previous_goal: v0.40 完成 project-topic explicit tracking（项目计划和 topic 显式跟踪），让 `project_plan.md` 标题与 topic plan 可以双向查询，但不自动互相改写内容。
+- goal: 完成 rejected experiment recording（被拒绝实验记录），让外部或历史失败实验能用 `run import` 进入 run summary，再用 rejected decision 阻断重复路线。
 
 ## v0.1 任务清单
 
@@ -1121,6 +1120,15 @@ v0.25 之后仍未覆盖的全局能力：
 - done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 明确这是双向跟踪，不是 project plan 与 topic plan 的自动内容同步。
 - global plan distance：本版本覆盖了 project plan 与 topic plan 的显式关联；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
 - evidence：新增 `test_project_topic_links_are_queryable_from_both_sides_and_indexed`；完整验证命令记录在本次实现会话。
+
+### v0.41
+
+- done：新增 `auto-iter run import`，把外部工具、旧 Codex session 或手工 SIL 结果导入为普通 run，写入 `runs/<run_id>/summary.md` 并保留 metrics、artifacts、command 和 session。
+- done：`auto-iter intent check` 识别 rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）表述，提示先 `run import`，再写 `decision add --status rejected`。
+- done：`auto-iter checkpoint save` 对拒绝实验表述输出 `recording_debt_warning`，明确 checkpoint 不会自动创建 run 或 decision。
+- done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 `auto-iter run import`、`route-keyword` 和 `reopen-condition` 的使用边界。
+- global plan distance：本版本覆盖了外部/历史失败实验进入证据链的最小闭环；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
+- evidence：新增 `test_run_import_records_external_rejected_experiment_summary_for_decision_evidence`、`test_intent_check_flags_rejected_experiment_result_recording`、`test_checkpoint_save_warns_about_rejected_result_recording_debt` 和 `test_rejected_experiment_recording_is_documented`。
 
 ### 后续可选
 

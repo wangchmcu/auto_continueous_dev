@@ -445,7 +445,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("bidirectional tracking", text, str(path))
             self.assertIn("not automatic", text, str(path))
         for text in [version_tracking, global_plan, active_plan]:
-            self.assertIn("v0.39", text)
+            self.assertIn("v0.40", text)
             self.assertIn("project-topic explicit tracking", text)
             self.assertIn("not", text)
 
@@ -466,6 +466,27 @@ class CliTests(unittest.TestCase):
             self.assertIn("auto-iter migrate --layout single-dir", text, str(path))
             self.assertIn("auto-iter handoff validate", text, str(path))
             self.assertIn("Do not run `init`", text, str(path))
+
+    def test_rejected_experiment_recording_is_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        global_plan = (REPO_ROOT / "plans" / "global_plan.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("auto-iter run import", text, str(path))
+            self.assertIn("rejected experiment", text, str(path))
+            self.assertIn("reopen-condition", text, str(path))
+        for text in [version_tracking, global_plan, active_plan]:
+            self.assertIn("v0.41", text)
+            self.assertIn("rejected experiment", text)
+            self.assertIn("run import", text)
 
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
@@ -2101,6 +2122,107 @@ class CliTests(unittest.TestCase):
         self.assertIn(run_id, queried.stdout)
         self.assertIn("graph", queried.stdout)
         self.assertIn("source=run", queried.stdout)
+
+    def test_run_import_records_external_rejected_experiment_summary_for_decision_evidence(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "bucket_config.json"
+        metrics = self.tmp / "bucket_metrics.json"
+        artifact = self.tmp / "bucket_report.md"
+        write_json(config, {"bucket_size_mps": 0.005, "case": "aln-residual-bucket"})
+        write_json(metrics, {"fc_valid_flips": 97, "fr_valid_delta": 18})
+        artifact.write_text("final LSQ point list changed\n", encoding="utf-8")
+
+        imported = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(config),
+            "--dataset",
+            "external-sil",
+            "--status",
+            "failed",
+            "--summary",
+            "0.005m/s 分桶不等价，final LSQ 点列表变化，不能继续按该路线优化。",
+            "--command",
+            "external Codex session 019e6926-af2c-77e0-8666-f7d1f7dd5093",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+            "--session",
+            "019e6926-af2c-77e0-8666-f7d1f7dd5093",
+        )
+        run_id = imported.stdout.strip().split()[-1]
+
+        self.assertRegex(imported.stdout, r"imported run R-[0-9a-f]+")
+        summary_text = (self.tmp / ".auto_iter" / "runs" / run_id / "summary.md").read_text(encoding="utf-8")
+        self.assertIn("## Summary", summary_text)
+        self.assertIn("0.005m/s 分桶不等价", summary_text)
+        self.assertIn("external Codex session 019e6926-af2c-77e0-8666-f7d1f7dd5093", summary_text)
+        shown = run_cli(self.tmp, "run", "show", run_id)
+        shown_json = json.loads(shown.stdout)
+        self.assertEqual(shown_json["status"], "failed")
+        self.assertIn("final LSQ 点列表变化", shown_json["summary"])
+
+        decision = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "拒绝 0.005m/s 分桶残差路线",
+            "--claim",
+            "0.005m/s 分桶导致 final LSQ 点列表变化，FC valid 翻转数量不可接受。",
+            "--route-keyword",
+            "分桶",
+            "--route-keyword",
+            "0.005m/s",
+            "--reopen-condition",
+            "只有 SIL KPI 证明 final LSQ 点列表变化被消除且 yaw 差异低于 0.1deg 时才允许重开。",
+        )
+        decision_id = decision.stdout.strip().split()[-1]
+        decision_text = (
+            self.tmp / ".auto_iter" / "decisions" / "rejected" / f"{decision_id}.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(run_id, decision_text)
+        self.assertIn("0.005m/s", decision_text)
+
+    def test_intent_check_flags_rejected_experiment_result_recording(self):
+        run_cli(self.tmp, "init")
+
+        result = run_cli(
+            self.tmp,
+            "intent",
+            "check",
+            "--text",
+            "0.005m/s 分桶实验不等价，FC valid 翻转，不能合入。",
+        )
+
+        self.assertIn("intent: rejected-result-recording", result.stdout)
+        self.assertIn("auto-iter run import", result.stdout)
+        self.assertIn("auto-iter decision add --status rejected", result.stdout)
+        self.assertIn("route-keyword", result.stdout)
+        self.assertIn("reopen-condition", result.stdout)
+        self.assertIn("auto-iter topic link", result.stdout)
+
+    def test_checkpoint_save_warns_about_rejected_result_recording_debt(self):
+        run_cli(self.tmp, "init")
+
+        result = run_cli(
+            self.tmp,
+            "checkpoint",
+            "save",
+            "--text",
+            "0.005m/s 分桶实验不等价，不能合入。",
+        )
+
+        self.assertIn("recording_debt_warning", result.stdout)
+        self.assertIn("auto-iter run import", result.stdout)
+        self.assertIn("auto-iter decision add --status rejected", result.stdout)
 
     def test_intent_check_suggests_safe_checkpoints_without_writing_state(self):
         run_cli(self.tmp, "init")
