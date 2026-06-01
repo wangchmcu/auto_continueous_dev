@@ -152,6 +152,7 @@
 - `ownership-routing`（需求归属判断）：写任何计划前先判断需求属于被接管项目，还是属于 AIT 工具自身。AIT、auto-iter、update、migrate、search、handoff、skill 等工具迭代应切回 AIT 源仓。
 - Do not write AIT tool work into the managed project's project plan or topic plan.
 - `auto-iter migrate` 对旧项目执行 project plan split：归档旧 `plans/global_plan.md`，创建 `plans/project_plan.md` 和 `plans/project_record_rules.md`，再写入兼容 `plans/global_plan.md`，同时保留已有 topic plan、topic evidence 和最近更新的坑点规避规则。
+- 迁移指导必须明确区分 `init` 和 `migrate`：从未被 AIT 接管过的仓库先 `init`，只有旧版 AIT 项目升级时才 `migrate`；迁移后应提示 `doctor`、项目记录规则检查、有效规则快照检查，以及必要的 `rule add` 回填。
 
 ### 17. project state single-dir layout
 
@@ -204,6 +205,17 @@
 
 - 若用户在被接管项目里提出 AIT 功能修改，先通过 `ownership-routing` 判断归属，再切回 AIT 源仓执行；不能把 AIT 功能开发写入该项目的 `plans/project_plan.md`、`plans/project_record_rules.md` 或当前 topic plan。
 - 后续如果发现 migration 会覆盖 topic evidence carryover check、topic plan carryover enforcement 或 search freshness（检索新鲜度：索引输入变化时重建，未变化时复用）的能力，按功能 bug 处理，而不是另开项目计划。
+
+### rule tracking and effective rule snapshot
+
+- 目标：把“用户明确规则、派生规则、代码已实现规则”从零散的 decision、handoff、结果文档和人工摘要中拉回统一事实源。
+- 规则需要最少支持：
+  - `source_kind`：`user_stated`、`derived`、`implemented`
+  - `rule_kind`：`entry`、`exit`、`add`、`protection`、`execution`、`acceptance`、`recording`
+  - `scope_kind`：`project`、`topic`、`global`
+  - `status`：`active`、`superseded`、`deprecated`、`draft`
+- 规则应支持 `supersedes` 链和证据引用，便于恢复“当前有效红线”和“历史为什么改过”。
+- 检索、context 和 handoff 应能把规则当成明确入口，但规则检索不能替代 run、decision、artifact 和 topic evidence 的证据链。
 
 ## 版本路线
 

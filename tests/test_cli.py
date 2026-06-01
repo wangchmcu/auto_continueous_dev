@@ -54,6 +54,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue((state_root / "runs").is_dir())
         self.assertTrue((state_root / "raw_input").is_dir())
         self.assertTrue((state_root / "decisions" / "rejected").is_dir())
+        self.assertTrue((state_root / "rules" / "active").is_dir())
         self.assertTrue((state_root / "handoffs" / "archive").is_dir())
         self.assertTrue((state_root / "plans" / "global_plan.md").exists())
         self.assertTrue((state_root / "plans" / "project_plan.md").exists())
@@ -407,6 +408,25 @@ class CliTests(unittest.TestCase):
             self.assertIn("v0.38", text)
             self.assertIn(".auto_iter", text)
             self.assertIn("project state single-dir layout", text)
+
+    def test_rule_tracking_is_documented(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        version_tracking = (REPO_ROOT / "plans" / "version_iterations.md").read_text(encoding="utf-8")
+        active_plan = (REPO_ROOT / "plans" / "active_plan.md").read_text(encoding="utf-8")
+
+        self.assertIn("## Rule tracking", readme)
+        self.assertIn("auto-iter rule add", readme)
+        self.assertIn("rules/current_effective.md", readme)
+        self.assertIn("context index", readme)
+        self.assertIn("search query", readme)
+        self.assertIn("auto-iter rule add", agents)
+        self.assertIn("rules/current_effective.md", agents)
+        self.assertIn("v0.38", version_tracking)
+        self.assertIn("rule add/list/show", version_tracking)
+        self.assertIn("rules/current_effective.md", version_tracking)
+        self.assertIn("rule tracking", active_plan)
+        self.assertIn("rules/current_effective.md", active_plan)
 
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")
@@ -1040,6 +1060,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(".auto_iter already exists and is not empty", result.stderr)
         self.assertTrue((self.tmp / "state" / "agent_state.db").exists())
+
+    def test_migrate_prints_follow_up_checklist_and_rule_backfill_hint(self):
+        run_cli(self.tmp, "init")
+
+        migrated = run_cli(self.tmp, "migrate")
+
+        self.assertIn("rules_snapshot:", migrated.stdout)
+        self.assertIn("rule_count: 0", migrated.stdout)
+        self.assertIn("next_step_1: run `auto-iter doctor`", migrated.stdout)
+        self.assertIn("next_step_2: review", migrated.stdout)
+        self.assertIn("next_step_3: inspect", migrated.stdout)
+        self.assertIn("rule_migration_hint:", migrated.stdout)
+        self.assertIn("auto-iter rule add", migrated.stdout)
 
     def test_handoff_validate_warns_about_topic_without_plan_without_failing(self):
         run_cli(self.tmp, "init")
@@ -2428,6 +2461,192 @@ class CliTests(unittest.TestCase):
 
         text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn(f"latest_successful_run_id: {second_run}", text)
+
+    def test_rule_add_list_show_and_projection(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        artifact = self.tmp / "report.md"
+        write_json(config, {"phase": "entry"})
+        write_json(metrics, {"score": 1.0})
+        artifact.write_text("# report\n", encoding="utf-8")
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(config),
+            "--dataset",
+            "rule-demo",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "run",
+            "finish",
+            run_id,
+            "--status",
+            "success",
+            "--metrics",
+            str(metrics),
+            "--artifact",
+            str(artifact),
+        )
+
+        added = run_cli(
+            self.tmp,
+            "rule",
+            "add",
+            "--title",
+            "进入执行前必须先做 route check",
+            "--claim",
+            "任何实验执行前都先运行 route check，避免重复路线直接落库。",
+            "--source-kind",
+            "user_stated",
+            "--rule-kind",
+            "entry",
+            "--scope-kind",
+            "project",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--evidence",
+            f"path:{artifact}",
+            "--note",
+            "来自用户明确要求",
+            "--note",
+            "当前先用于通用 AIT 项目",
+        )
+        rule_id = added.stdout.strip().split()[-1]
+
+        listed = run_cli(self.tmp, "rule", "list")
+        shown = run_cli(self.tmp, "rule", "show", rule_id)
+
+        projection = self.tmp / ".auto_iter" / "rules" / "active" / f"{rule_id}.md"
+        snapshot = self.tmp / ".auto_iter" / "rules" / "current_effective.md"
+        self.assertTrue(projection.exists())
+        self.assertTrue(snapshot.exists())
+        self.assertIn(rule_id, listed.stdout)
+        self.assertIn("进入执行前必须先做 route check", listed.stdout)
+        self.assertIn("source_kind=user_stated", listed.stdout)
+        self.assertIn("scope_kind=project", listed.stdout)
+        self.assertIn(f'"rule_id": "{rule_id}"', shown.stdout)
+        self.assertIn("任何实验执行前都先运行 route check", shown.stdout)
+        self.assertIn("来自用户明确要求", shown.stdout)
+        self.assertIn(run_id, shown.stdout)
+        self.assertIn("path", shown.stdout)
+        self.assertIn("进入执行前必须先做 route check", projection.read_text(encoding="utf-8"))
+        self.assertIn(rule_id, snapshot.read_text(encoding="utf-8"))
+
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
+            row = db.execute(
+                "select source_kind, rule_kind, scope_kind, status, evidence_json from rules where rule_id = ?",
+                (rule_id,),
+            ).fetchone()
+        self.assertEqual("user_stated", row[0])
+        self.assertEqual("entry", row[1])
+        self.assertEqual("project", row[2])
+        self.assertEqual("active", row[3])
+        evidence_json = json.loads(row[4])
+        self.assertEqual("run", evidence_json["items"][0]["kind"])
+        self.assertEqual(run_id, evidence_json["items"][0]["value"])
+        self.assertIn("来自用户明确要求", evidence_json["notes"])
+
+    def test_rule_supersede_updates_context_index_and_effective_snapshot(self):
+        run_cli(self.tmp, "init")
+        first = run_cli(
+            self.tmp,
+            "rule",
+            "add",
+            "--title",
+            "阶段记录默认不提交",
+            "--claim",
+            "中途 checkpoint 默认只记录当前状态，不提交不推送。",
+            "--source-kind",
+            "derived",
+            "--rule-kind",
+            "recording",
+            "--scope-kind",
+            "global",
+            "--status",
+            "active",
+            "--note",
+            "来自现有流程约束",
+        ).stdout.strip().split()[-1]
+        second = run_cli(
+            self.tmp,
+            "rule",
+            "add",
+            "--title",
+            "阶段记录默认不提交也不推送",
+            "--claim",
+            "checkpoint 与 session end 共享保存范围，但中途记录默认不提交也不推送。",
+            "--source-kind",
+            "implemented",
+            "--rule-kind",
+            "recording",
+            "--scope-kind",
+            "global",
+            "--status",
+            "active",
+            "--supersedes-rule-id",
+            first,
+            "--note",
+            "实现后确认的新口径",
+        ).stdout.strip().split()[-1]
+
+        index = run_cli(self.tmp, "context", "index")
+        snapshot_text = (self.tmp / ".auto_iter" / "rules" / "current_effective.md").read_text(encoding="utf-8")
+
+        self.assertTrue((self.tmp / ".auto_iter" / "rules" / "superseded" / f"{first}.md").exists())
+        self.assertTrue((self.tmp / ".auto_iter" / "rules" / "active" / f"{second}.md").exists())
+        self.assertIn("- path: .auto_iter/rules/current_effective.md", index.stdout)
+        self.assertIn(f"- path: .auto_iter/rules/active/{second}.md", index.stdout)
+        self.assertIn(f"- path: .auto_iter/rules/superseded/{first}.md", index.stdout)
+        self.assertIn(second, snapshot_text)
+        self.assertIn("阶段记录默认不提交也不推送", snapshot_text)
+        self.assertNotIn("## 阶段记录默认不提交\n", snapshot_text)
+
+    def test_search_query_finds_rule_projection(self):
+        run_cli(self.tmp, "init")
+        rule_id = run_cli(
+            self.tmp,
+            "rule",
+            "add",
+            "--title",
+            "结束 session 前必须生成 handoff",
+            "--claim",
+            "用户要求结束当前 session 或做 handoff 时，先生成并校验 handoff。",
+            "--source-kind",
+            "user_stated",
+            "--rule-kind",
+            "exit",
+            "--scope-kind",
+            "global",
+            "--status",
+            "active",
+            "--note",
+            "session end workflow",
+        ).stdout.strip().split()[-1]
+
+        queried = run_cli(
+            self.tmp,
+            "search",
+            "query",
+            "--text",
+            "session end handoff rule",
+            "--limit",
+            "5",
+            "--explain",
+        )
+
+        self.assertIn("source=rule", queried.stdout)
+        self.assertIn(f"id={rule_id}", queried.stdout)
+        self.assertIn(f"path: .auto_iter/rules/active/{rule_id}.md", queried.stdout)
+        self.assertIn("next: auto-iter context show", queried.stdout)
+        self.assertIn("结束 session 前必须生成 handoff", queried.stdout)
 
 
 if __name__ == "__main__":

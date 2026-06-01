@@ -16,9 +16,9 @@
 
 ## 当前版本
 
-- current_version: v0.38
+- current_version: v0.39
 - status: done
-- goal: 完成 project state single-dir layout（项目状态单目录布局），让新项目默认把 AIT 状态集中到 `.auto_iter/`，并让旧项目可显式迁移且继续兼容。
+- goal: 明确已有项目接管/升级时的 `init vs migrate` 边界，并让 `migrate` 在结构迁移后给出最小后续检查和 rule 回填提示。
 
 ## v0.1 任务清单
 
@@ -1102,6 +1102,14 @@ v0.25 之后仍未覆盖的全局能力：
 - done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 `.auto_iter/`、旧布局兼容和单目录迁移命令。
 - global plan distance：本版本覆盖了状态落点收敛、子目录项目根发现的双布局兼容、旧项目显式迁移和恢复入口可见性；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
 - evidence：新增默认单目录初始化、旧布局初始化、旧到新迁移、防覆盖迁移测试；完整验证命令记录在本次实现会话。
+
+### v0.39
+
+- done：README 和 AGENTS 明确区分“从未被 AIT 接管过的仓库先 `init`”与“旧版 AIT 项目升级才 `migrate`”，避免把结构迁移命令误用成首次接管入口。
+- done：`auto-iter migrate` 在结构迁移完成后输出最小 follow-up checklist，覆盖 `doctor`、`project_record_rules`、`.auto_iter/rules/current_effective.md` 和空规则项目的 `rule add` 回填提示；既有 `rule add/list/show` 入口继续保留。
+- done：AIT global plan、active plan 和 version tracking 同步记录这次迁移指导补强，保持工具本体记录闭环。
+- evidence：新增 `test_migrate_prints_follow_up_checklist_and_rule_backfill_hint`；验证命令为 `python3 -m unittest tests.test_cli.CliTests.test_migrate_prints_follow_up_checklist_and_rule_backfill_hint -v`。
+- acceptance：用户能从 README/AGENTS 看懂何时 `init`、何时 `migrate`；`migrate` 输出能直接指导迁移后的下一步。
 
 ### 后续可选
 

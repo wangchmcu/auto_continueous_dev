@@ -170,6 +170,42 @@ for legacy topics, refreshes topic projections, and performs the project plan
 split. The project plan split means preserving any old `plans/global_plan.md`
 content as a legacy readable file, then creating `plans/project_plan.md`,
 `plans/project_record_rules.md`, and a compatibility `plans/global_plan.md`.
+After migrate, run `auto-iter doctor`, review `plans/project_record_rules.md`,
+inspect `rules/current_effective.md`, and if the project already had stable
+workflow rules but no explicit rule facts yet, backfill them with
+`auto-iter rule add`.
+
+## Rule tracking
+
+Rule tracking keeps explicit workflow rules in the same local fact system as
+runs, decisions, and handoffs. Use it for user-stated constraints, derived
+operational rules, and rules that are now implemented in code.
+
+```bash
+auto-iter rule add --title "执行前先 route check" \
+  --claim "任何实验执行前都先 route check。" \
+  --source-kind user_stated \
+  --rule-kind entry \
+  --scope-kind project \
+  --status active \
+  --evidence R-1234567890 \
+  --evidence path:doc/route-example.md \
+  --note "来自用户明确要求"
+auto-iter rule list
+auto-iter rule show <rule_id>
+```
+
+`rule add` accepts repeated `--evidence`. A bare structured id such as
+`R-...`, `D-...`, `A-...`, or `T-...` is stored with an inferred evidence kind.
+Explicit `kind:value` forms such as `path:...`, `url:...`, `note:...`, or
+`text:...` are also allowed. Repeated `--note` values are stored in the same
+JSON evidence payload.
+
+Rules are projected under `rules/` with status directories such as
+`rules/active/` and `rules/superseded/`. The current effective snapshot is
+`rules/current_effective.md`. `context index` and `search query` index those
+rule projections, so search results can return a concrete `rule_id`, path, and
+`context show` command.
 
 Then start Codex from the target algorithm project:
 
@@ -220,6 +256,14 @@ If `raw_input/` has files, the agent reads only relevant sections with
 useful information back into tracking. If it is empty, initialization simply
 continues with the empty directory. `auto-iter init` itself does not ingest raw
 input automatically.
+
+For an existing repository, first decide which case it is:
+
+- never managed by AIT before: run `auto-iter init`
+- already managed by an older AIT version: run `auto-iter migrate`
+
+`migrate` is for upgrading an existing AIT-managed project. It is not the first
+step for a repository that has never had `state/agent_state.db`.
 
 For an existing project, the agent starts with:
 
@@ -574,6 +618,7 @@ auto-iter context show --path .auto_iter/plans/global_plan.md --heading "Global 
 
 - `.auto_iter/state/agent_state.db`: factual source for runs, metrics, artifacts, decisions, route checks, and handoffs.
 - `.auto_iter/decisions/`: readable decision projections. A projection is current context only when the same `decision_id` and status still exist in SQLite; orphan or stale projections are skipped by `context index` and reported by `handoff validate`.
+- `.auto_iter/rules/`: readable rule projections plus `.auto_iter/rules/current_effective.md` for the current effective rule snapshot. SQLite remains the fact source.
 - `.auto_iter/handoffs/latest_handoff.md`: fresh-session entry point. Its `Current Baseline` section is a Markdown projection（从已有记录摘出的可读视图，不是新的事实源）that points to the accepted start, accepted result, evaluation entry, provenance entry, and diagnostic entry.
 - `.auto_iter/raw_input/`: original input materials and old project imports.
 - `.auto_iter/plans/global_plan.md`: compatibility entry in managed projects; in the AIT source repo, `plans/global_plan.md` can remain the tool-level global plan when that source repo is still on legacy layout.

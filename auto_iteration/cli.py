@@ -30,6 +30,10 @@ RUN_STATUSES = {"running", "success", "failed", "aborted"}
 TOPIC_STATUSES = {"active", "archived_open", "archived_satisfied"}
 TOPIC_EVIDENCE_TYPES = {"run", "decision", "artifact"}
 TOPIC_TASK_STATUSES = {"todo", "doing", "done", "blocked", "dropped"}
+RULE_SOURCE_KINDS = {"user_stated", "derived", "implemented"}
+RULE_KINDS = {"entry", "exit", "add", "protection", "execution", "acceptance", "recording"}
+RULE_SCOPE_KINDS = {"global", "project", "topic"}
+RULE_STATUSES = {"active", "superseded", "deprecated", "draft"}
 SEARCH_FUSION_K = 60
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
 TOPIC_ID_ENV_VAR = "AUTO_ITER_TOPIC_ID"
@@ -39,6 +43,7 @@ PROJECT_STATE_DIRS = [
     ("topics", "active and archived topic projections for on-demand context loading"),
     ("raw_input", "original input materials and imported old project notes"),
     ("decisions", "readable decision projections validated against the SQLite state database"),
+    ("rules", "readable rule projections and current effective rule snapshot"),
     ("runs", "experiment run summaries, logs, metrics, and artifacts"),
     ("handoffs", "session handoff documents for context recovery"),
 ]
@@ -881,6 +886,10 @@ def ensure_dirs(prefer_legacy: bool = False) -> None:
         "decisions/rejected",
         "decisions/superseded",
         "decisions/open",
+        "rules/active",
+        "rules/superseded",
+        "rules/deprecated",
+        "rules/draft",
         "plans",
     ]:
         state_path(path, prefer_legacy=prefer_legacy).mkdir(parents=True, exist_ok=True)
@@ -1051,6 +1060,20 @@ def init_schema(db: sqlite3.Connection) -> None:
             created_at text not null
         );
 
+        create table if not exists rules (
+            rule_id text primary key,
+            title text not null,
+            claim text not null,
+            source_kind text not null,
+            rule_kind text not null,
+            scope_kind text not null,
+            status text not null,
+            supersedes_rule_id text,
+            evidence_json text not null default '{"items":[],"notes":[]}',
+            created_at text not null,
+            updated_at text not null
+        );
+
         create table if not exists handoffs (
             handoff_id text primary key,
             created_at text not null,
@@ -1173,6 +1196,7 @@ def command_init(args: argparse.Namespace) -> int:
             (project_id, str(root())),
         )
         write_topic_projections(db)
+        write_rule_projections(db)
     print(f"initialized {root()}")
     return 0
 
@@ -1282,7 +1306,10 @@ def command_migrate(args: argparse.Namespace) -> int:
     with database() as db:
         created_topic_plans = create_missing_topic_plans(db)
         write_topic_projections(db)
+        write_rule_projections(db)
         current = active_topic(db)
+        rule_count = db.execute("select count(*) from rules").fetchone()[0]
+    rules_snapshot = current_rules_snapshot_path().resolve()
     print("migration complete")
     print(f"project_plan: {plan_migration['project_plan']}")
     print(f"project_record_rules: {plan_migration['project_record_rules']}")
@@ -1292,6 +1319,16 @@ def command_migrate(args: argparse.Namespace) -> int:
     print(f"created_topic_plans: {created_topic_plans}")
     print(f"default_topic_id: {current['topic_id'] if current else 'none'}")
     print(f"topic_board: {topic_board_path().resolve()}")
+    print(f"rules_snapshot: {rules_snapshot}")
+    print(f"rule_count: {rule_count}")
+    print("next_step_1: run `auto-iter doctor`")
+    print(f"next_step_2: review {plan_migration['project_record_rules']}")
+    print(f"next_step_3: inspect {rules_snapshot}")
+    if rule_count == 0:
+        print(
+            "rule_migration_hint: no explicit rules recorded yet; if the project already has stable workflow "
+            "rules, backfill them with `auto-iter rule add`."
+        )
     return 0
 
 
@@ -1529,6 +1566,18 @@ def remove_project_state_dirs() -> None:
 
 def topics_dir() -> Path:
     return state_path("topics")
+
+
+def rules_dir() -> Path:
+    return state_path("rules")
+
+
+def rule_status_dir(status: str) -> Path:
+    return rules_dir() / status
+
+
+def current_rules_snapshot_path() -> Path:
+    return rules_dir() / "current_effective.md"
 
 
 def topic_archive_dir() -> Path:
@@ -2674,6 +2723,243 @@ def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
     return bool(keywords) and keywords_match
 
 
+def normalize_rule_evidence(spec: str) -> dict[str, str]:
+    if ":" in spec:
+        kind, value = spec.split(":", 1)
+        kind = kind.strip().lower()
+        value = value.strip()
+        if not kind or not value:
+            raise UserError(f"invalid --evidence {spec!r}; expected kind:value")
+        return {"kind": kind, "value": value}
+    if re.fullmatch(r"R-[A-Za-z0-9]+", spec):
+        return {"kind": "run", "value": spec}
+    if re.fullmatch(r"D-[A-Za-z0-9]+", spec):
+        return {"kind": "decision", "value": spec}
+    if re.fullmatch(r"T-[A-Za-z0-9]+", spec):
+        return {"kind": "topic", "value": spec}
+    if re.fullmatch(r"A-[0-9a-fA-F]{10,}", spec):
+        return {"kind": "artifact", "value": spec}
+    return {"kind": "text", "value": spec}
+
+
+def encode_rule_evidence(items: list[str], notes: list[str]) -> str:
+    return json.dumps(
+        {
+            "items": [normalize_rule_evidence(item) for item in items],
+            "notes": [note for note in notes if note],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def decode_rule_evidence(raw: str) -> dict[str, Any]:
+    data = json.loads(raw or "{}")
+    if not isinstance(data, dict):
+        return {"items": [], "notes": []}
+    items = data.get("items") or []
+    notes = data.get("notes") or []
+    normalized_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip()
+        value = str(item.get("value") or "").strip()
+        if kind and value:
+            normalized_items.append({"kind": kind, "value": value})
+    return {"items": normalized_items, "notes": [str(note) for note in notes if str(note)]}
+
+
+def validate_rule_evidence(db: sqlite3.Connection, evidence_json: str) -> None:
+    payload = decode_rule_evidence(evidence_json)
+    validators = {
+        "run": ("runs", "run_id"),
+        "decision": ("decisions", "decision_id"),
+        "artifact": ("artifacts", "artifact_id"),
+        "topic": ("topics", "topic_id"),
+    }
+    for item in payload["items"]:
+        validator = validators.get(item["kind"])
+        if not validator:
+            continue
+        table, column = validator
+        row = db.execute(f"select 1 from {table} where {column} = ?", (item["value"],)).fetchone()
+        if not row:
+            raise UserError(f"unknown {item['kind']} evidence id: {item['value']}")
+
+
+def rule_path(status: str, rule_id: str) -> Path:
+    return rule_status_dir(status) / f"{rule_id}.md"
+
+
+def rule_evidence_lines(payload: dict[str, Any]) -> list[str]:
+    items = payload.get("items") or []
+    notes = payload.get("notes") or []
+    lines: list[str] = []
+    if items:
+        for item in items:
+            lines.append(f"- {item['kind']}: {item['value']}")
+    else:
+        lines.append("- none")
+    if notes:
+        lines.append("")
+        lines.append("## Notes")
+        lines.append("")
+        lines.extend(f"- {note}" for note in notes)
+    return lines
+
+
+def write_rule_projection(row: sqlite3.Row) -> None:
+    payload = decode_rule_evidence(row["evidence_json"])
+    path = rule_path(row["status"], row["rule_id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# {row['title']}",
+        "",
+        f"- rule_id: {row['rule_id']}",
+        f"- source_kind: {row['source_kind']}",
+        f"- rule_kind: {row['rule_kind']}",
+        f"- scope_kind: {row['scope_kind']}",
+        f"- status: {row['status']}",
+    ]
+    if row["supersedes_rule_id"]:
+        lines.append(f"- supersedes_rule_id: {row['supersedes_rule_id']}")
+    lines += [
+        f"- created_at: {row['created_at']}",
+        f"- updated_at: {row['updated_at']}",
+        "",
+        "## Claim",
+        "",
+        row["claim"],
+        "",
+        "## Evidence",
+        "",
+        *rule_evidence_lines(payload),
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def render_current_rules_snapshot(rows: list[sqlite3.Row]) -> str:
+    lines = ["# Current Effective Rules", ""]
+    if not rows:
+        lines += ["- none", ""]
+        return "\n".join(lines)
+    for row in rows:
+        lines += [
+            f"## {row['title']}",
+            "",
+            f"- rule_id: {row['rule_id']}",
+            f"- source_kind: {row['source_kind']}",
+            f"- rule_kind: {row['rule_kind']}",
+            f"- scope_kind: {row['scope_kind']}",
+        ]
+        if row["supersedes_rule_id"]:
+            lines.append(f"- supersedes_rule_id: {row['supersedes_rule_id']}")
+        lines += [
+            "",
+            row["claim"],
+            "",
+        ]
+    return "\n".join(lines)
+
+
+def write_rule_projections(db: sqlite3.Connection) -> None:
+    rules_dir().mkdir(parents=True, exist_ok=True)
+    for status in RULE_STATUSES:
+        status_dir = rule_status_dir(status)
+        status_dir.mkdir(parents=True, exist_ok=True)
+        for path in status_dir.glob("*.md"):
+            path.unlink()
+    rows = db.execute("select * from rules order by updated_at desc, created_at desc").fetchall()
+    for row in rows:
+        write_rule_projection(row)
+    active_rows = db.execute(
+        "select * from rules where status = 'active' order by updated_at desc, created_at desc"
+    ).fetchall()
+    current_rules_snapshot_path().write_text(render_current_rules_snapshot(active_rows), encoding="utf-8")
+
+
+def command_rule_add(args: argparse.Namespace) -> int:
+    if args.source_kind not in RULE_SOURCE_KINDS:
+        raise UserError(f"invalid rule source_kind: {args.source_kind}")
+    if args.rule_kind not in RULE_KINDS:
+        raise UserError(f"invalid rule rule_kind: {args.rule_kind}")
+    if args.scope_kind not in RULE_SCOPE_KINDS:
+        raise UserError(f"invalid rule scope_kind: {args.scope_kind}")
+    if args.status not in RULE_STATUSES:
+        raise UserError(f"invalid rule status: {args.status}")
+    rule_id = new_id("RL")
+    timestamp = now_iso()
+    evidence_json = encode_rule_evidence(args.evidence or [], args.note or [])
+    with database() as db:
+        validate_rule_evidence(db, evidence_json)
+        if args.supersedes_rule_id:
+            old = db.execute("select * from rules where rule_id = ?", (args.supersedes_rule_id,)).fetchone()
+            if not old:
+                raise UserError(f"unknown supersedes_rule_id: {args.supersedes_rule_id}")
+        db.execute(
+            """
+            insert into rules (
+                rule_id, title, claim, source_kind, rule_kind, scope_kind, status,
+                supersedes_rule_id, evidence_json, created_at, updated_at
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                rule_id,
+                args.title,
+                args.claim,
+                args.source_kind,
+                args.rule_kind,
+                args.scope_kind,
+                args.status,
+                args.supersedes_rule_id,
+                evidence_json,
+                timestamp,
+                timestamp,
+            ),
+        )
+        if args.supersedes_rule_id:
+            db.execute(
+                "update rules set status = 'superseded', updated_at = ? where rule_id = ?",
+                (timestamp, args.supersedes_rule_id),
+            )
+        write_rule_projections(db)
+    print(f"added rule {rule_id}")
+    return 0
+
+
+def command_rule_list(_args: argparse.Namespace) -> int:
+    with database() as db:
+        rows = db.execute(
+            """
+            select rule_id, title, source_kind, rule_kind, scope_kind, status, updated_at
+            from rules
+            order by updated_at desc, created_at desc
+            """
+        ).fetchall()
+    for row in rows:
+        print(
+            f"{row['rule_id']} {row['title']} "
+            f"source_kind={row['source_kind']} rule_kind={row['rule_kind']} "
+            f"scope_kind={row['scope_kind']} status={row['status']} updated_at={row['updated_at']}"
+        )
+    return 0
+
+
+def command_rule_show(args: argparse.Namespace) -> int:
+    with database() as db:
+        row = db.execute("select * from rules where rule_id = ?", (args.rule_id,)).fetchone()
+        if not row:
+            raise UserError(f"unknown rule_id: {args.rule_id}")
+    payload = decode_rule_evidence(row["evidence_json"])
+    data = dict(row)
+    data["evidence_json"] = payload
+    print(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
 def decision_path(status: str, decision_id: str) -> Path:
     return state_path("decisions", status, f"{decision_id}.md")
 
@@ -3444,6 +3730,8 @@ def context_files(include_raw_input: bool) -> list[Path]:
     patterns = [
         "plans/*.md",
         "handoffs/latest_handoff.md",
+        "rules/current_effective.md",
+        "rules/*/*.md",
         "topics/*.md",
         "topics/*/plan.md",
         "topics/*/latest_handoff.md",
@@ -3593,6 +3881,10 @@ def infer_source_type_and_id(path: Path, body: str) -> tuple[str, str]:
         return "plan", path.stem
     if rel == "handoffs/latest_handoff.md":
         return "handoff", "latest_handoff"
+    if rel == "rules/current_effective.md":
+        return "rule_snapshot", "current_effective"
+    if parts[:1] == ["rules"] and len(parts) >= 3:
+        return "rule", path.stem
     if parts[:1] == ["decisions"] and len(parts) >= 3:
         return "decision", path.stem
     if parts[:1] == ["runs"] and len(parts) >= 3:
@@ -3618,13 +3910,13 @@ def infer_source_type_and_id(path: Path, body: str) -> tuple[str, str]:
 
 
 def extract_related_ids(text: str) -> list[str]:
-    ids = re.findall(r"\b(?:R|D|T|H)-[A-Za-z0-9]+\b", text)
+    ids = re.findall(r"\b(?:RL|R|D|T|H)-[A-Za-z0-9]+\b", text)
     ids.extend(re.findall(r"\bA-[0-9a-fA-F]{10,}\b", text))
     return sorted(set(ids))
 
 
 def is_structured_search_id(value: str) -> bool:
-    return bool(re.fullmatch(r"(?:R|D|T|H)-[A-Za-z0-9]+|A-[0-9a-fA-F]{10,}", value))
+    return bool(re.fullmatch(r"(?:RL|R|D|T|H)-[A-Za-z0-9]+|A-[0-9a-fA-F]{10,}", value))
 
 
 def document_id(path: Path, heading: str, section_index: int) -> str:
@@ -3743,6 +4035,7 @@ def search_source_signature(db: sqlite3.Connection, include_raw_input: bool) -> 
         ("decisions", "select count(*), max(created_at) from decisions"),
         ("handoffs", "select count(*), max(created_at) from handoffs"),
         ("route_checks", "select count(*), max(created_at) from route_checks"),
+        ("rules", "select count(*), max(updated_at) from rules"),
         ("topics", "select count(*), max(updated_at) from topics"),
         ("topic_events", "select count(*), max(created_at) from topic_events"),
         ("topic_evidence_links", "select count(*), max(created_at) from topic_evidence_links"),
@@ -4365,6 +4658,24 @@ def build_parser() -> argparse.ArgumentParser:
     topic_task_list.add_argument("--topic-id", required=True)
     topic_task_list.set_defaults(func=command_topic_task_list)
     add_common_run_subcommands(subparsers)
+    rule = subparsers.add_parser("rule")
+    rule_sub = rule.add_subparsers(dest="rule_command", required=True)
+    rule_add = rule_sub.add_parser("add")
+    rule_add.add_argument("--title", required=True)
+    rule_add.add_argument("--claim", required=True)
+    rule_add.add_argument("--source-kind", choices=sorted(RULE_SOURCE_KINDS), required=True)
+    rule_add.add_argument("--rule-kind", choices=sorted(RULE_KINDS), required=True)
+    rule_add.add_argument("--scope-kind", choices=sorted(RULE_SCOPE_KINDS), required=True)
+    rule_add.add_argument("--status", choices=sorted(RULE_STATUSES), required=True)
+    rule_add.add_argument("--supersedes-rule-id")
+    rule_add.add_argument("--evidence", action="append", default=[])
+    rule_add.add_argument("--note", action="append", default=[])
+    rule_add.set_defaults(func=command_rule_add)
+    rule_list = rule_sub.add_parser("list")
+    rule_list.set_defaults(func=command_rule_list)
+    rule_show = rule_sub.add_parser("show")
+    rule_show.add_argument("rule_id")
+    rule_show.set_defaults(func=command_rule_show)
     decision = subparsers.add_parser("decision")
     decision_sub = decision.add_subparsers(dest="decision_command", required=True)
     add = decision_sub.add_parser("add")

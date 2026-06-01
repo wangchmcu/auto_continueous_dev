@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.38。
+- 当前版本：v0.39。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -47,6 +47,7 @@
 - v0.36 已完成：self improve scope triage（自进化 scope 判定）：自进化修补前必须先查历史承诺，判断是功能 bug 还是功能缺失，并基于第一性原则抽象成通用能力，避免头疼医头式补丁。
 - v0.37 已完成：project plan split and ownership-routing（项目计划拆分和需求归属判断）：被接管项目改用 `plans/project_plan.md` 和 `plans/project_record_rules.md`，`plans/global_plan.md` 作为兼容入口；AIT 工具自身迭代必须切回 AIT 源仓计划，不能污染被接管项目的项目计划或 topic plan。
 - v0.38 已完成：project state single-dir layout（项目状态单目录布局）：新项目默认把 AIT 状态放到 `.auto_iter/`，旧项目继续兼容 root-level 状态目录，并可用 `auto-iter migrate --layout single-dir` 显式迁移。
+- v0.39 已完成：迁移指导补强，明确 `init vs migrate` 的边界，并让 `migrate` 输出迁移后检查清单和 rule 回填提示；与既有 rule tracking 和 `.auto_iter/rules/current_effective.md` 恢复入口保持一致。
 
 ## 下一步
 
@@ -81,5 +82,6 @@
 29. 执行 `auto it self improve` 时，先回查 `plans/version_iterations.md`、`plans/global_plan.md`、README、skills 和测试，判定 bug/功能缺失/不确定；再写通用规则和验证，不直接按表面症状打补丁。
 30. 旧被接管项目升级后运行 `auto-iter migrate`，完成 project plan split：创建 `plans/project_plan.md`、创建 `plans/project_record_rules.md`、归档旧 `plans/global_plan.md` 并写入兼容入口。
 31. 写计划前执行 `ownership-routing`（需求归属判断）：若需求属于 AIT、auto-iter、update、migrate、search、handoff 或 skill，切回 AIT 源仓更新 AIT 自己的 global plan、version tracking 或 topic plan。
-32. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
-33. 新接管项目默认使用 `.auto_iter/` 保存 AIT 状态；旧项目如需收拢散落目录，先运行 `auto-iter doctor` 确认 `layout: legacy`，再运行 `auto-iter migrate --layout single-dir`，最后运行 `auto-iter doctor`、`auto-iter context index` 和 `auto-iter handoff validate`。
+32. 讨论项目交易规则、执行红线、补仓保护或验收门槛时，优先写入通用 `rule` 事实源，再由 `rules/` projection、`rules/current_effective.md` 和 search 暴露给 handoff、context 和项目文档。
+33. 若轻量模糊检索的主观收益不足，再评估是否引入更重的本地 embedding（把文本变成稠密数值向量的模型）或外部服务。
+34. 新接管项目默认使用 `.auto_iter/` 保存 AIT 状态；旧项目如需收拢散落目录，先运行 `auto-iter doctor` 确认 `layout: legacy`，再运行 `auto-iter migrate --layout single-dir`，最后运行 `auto-iter doctor`、`auto-iter context index` 和 `auto-iter handoff validate`。

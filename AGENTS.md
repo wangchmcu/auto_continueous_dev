@@ -64,9 +64,11 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Use `auto-iter topic board` for the cross-topic project view. It writes `.auto_iter/topics/board.md` in single-directory projects; do not move per-topic task detail into `plans/global_plan.md`.
 - In multi-thread work, use `auto-iter handoff generate --topic-id <id>` and `auto-iter checkpoint save --topic-id <id> --text "<text>"` for topic-scoped state so one thread does not overwrite another thread's topic handoff.
 - If more than one topic is open, topic-scoped write commands must use explicit `--topic-id`, `AUTO_ITER_TOPIC_ID`, or `--allow-default-topic`; do not silently rely on the default topic.
+- Use `auto-iter init` for a repository that has never been managed by AIT; reserve `auto-iter migrate` for upgrading an older AIT-managed project.
 - Use `auto-iter migrate` after upgrading an old project so legacy topics get empty topic plans, refreshed topic projections, and the project plan split (`plans/project_plan.md`, `plans/project_record_rules.md`, plus a compatibility `plans/global_plan.md`). Use `auto-iter migrate --layout single-dir` when an old root-level AIT state layout should be moved under `.auto_iter/`.
 - If a topic has clear supporting evidence, link it explicitly with `auto-iter topic link --topic-id <id> --run-id <run_id> --decision-id <decision_id> --artifact-id <artifact_id> --summary "<中文证据摘要>"`; inspect linked evidence with `auto-iter topic evidence --topic-id <id>`.
 - If the user proposes new context-management, history-retrieval, topic-management, or evidence-linking capabilities, first inspect `plans/version_iterations.md` sections for current-version remaining gaps and future-version direction. If the request matches an existing `global plan backlog` item, continue that route and do not start a separate plan branch.
+- If the user states, tightens, loosens, or deprecates an explicit workflow rule that should survive the current session, record it with `auto-iter rule add`, and use `--supersedes-rule-id <RL-...>` when replacing an older rule. Use `auto-iter rule list` and `rules/current_effective.md` to inspect the current effective rule set.
 
 ## Raw Input
 
@@ -100,6 +102,7 @@ auto-iter handoff validate
 - SQLite database `.auto_iter/state/agent_state.db` is the factual source for runs, metrics, artifacts, decisions, route checks, and handoff records in the single-directory layout.
 - Markdown files under `.auto_iter/decisions/` and `.auto_iter/handoffs/` are readable projections for humans and Codex. A decision projection is valid current context only if the matching record still exists in SQLite with the same status.
 - Markdown files under `.auto_iter/topics/` are readable topic projections; `.auto_iter/topics/active_topic.md` is the default-topic compatibility projection, and `.auto_iter/topics/archive/` is loaded only on user request or confirmed topic switch.
+- Markdown files under `.auto_iter/rules/` are readable rule projections; `.auto_iter/rules/current_effective.md` is the current effective rule snapshot, while SQLite remains the fact source for rule metadata and supersede chains.
 - Topic evidence links live in SQLite and connect a topic to related run、decision、artifact records; Markdown topic projections and handoff only summarize those links.
 - Markdown files under `.auto_iter/plans/` track managed-project implementation work and current engineering direction. In the AIT source repository, root-level `plans/` continues to track AIT tool implementation work until that repository is migrated.
 - Demo or test histories may live under `examples/` when they document the test purpose and data boundary. Their sample IDs or parameters are not current project conclusions unless the current SQLite state contains matching records.
