@@ -154,9 +154,180 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertIn("status=success", executed.stdout)
-        self.assertEqual(str(self.tmp), cwd_marker.read_text(encoding="utf-8"))
+        self.assertEqual(str(subdir), cwd_marker.read_text(encoding="utf-8"))
         self.assertEqual(1, len(list((self.tmp / ".auto_iter" / "runs").glob("R-*"))))
         self.assertFalse((subdir / "runs").exists())
+
+    def test_auto_iter_project_root_env_overrides_cwd(self):
+        run_cli(self.tmp, "init")
+        sibling = self.tmp.parent / f"{self.tmp.name}_sibling"
+        sibling.mkdir()
+
+        doctor = run_cli(
+            sibling,
+            "doctor",
+            env_extra={"AUTO_ITER_PROJECT_ROOT": str(self.tmp)},
+        )
+
+        self.assertIn(f"root: {self.tmp}", doctor.stdout)
+        self.assertIn(f"state_dir: {self.tmp / '.auto_iter'}", doctor.stdout)
+
+    def test_project_root_cli_arg_overrides_cwd(self):
+        run_cli(self.tmp, "init")
+        sibling = self.tmp.parent / f"{self.tmp.name}_project_root_cli"
+        sibling.mkdir()
+
+        doctor = run_cli(sibling, "--project-root", str(self.tmp), "doctor")
+
+        self.assertIn(f"root: {self.tmp}", doctor.stdout)
+        self.assertIn(f"state_dir: {self.tmp / '.auto_iter'}", doctor.stdout)
+
+    def test_run_exec_uses_explicit_workdir_and_shared_state(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "exp-a"
+        workdir.mkdir(parents=True)
+        config = self.tmp / "config.json"
+        config.write_text('{"route": "workdir-explicit"}\n', encoding="utf-8")
+        output = workdir / "pwd.txt"
+
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--workdir",
+            str(workdir),
+            "--config",
+            str(config),
+            "--dataset",
+            "workdir-explicit",
+            "--command",
+            "pwd > pwd.txt",
+            "--artifact",
+            str(output),
+        )
+
+        self.assertIn("status=success", result.stdout)
+        self.assertEqual(output.read_text(encoding="utf-8").strip(), str(workdir))
+        run_id = result.stdout.split()[2]
+        summary = (self.tmp / ".auto_iter" / "runs" / run_id / "summary.md").read_text(encoding="utf-8")
+        self.assertIn(f"workdir: {workdir}", summary)
+
+    def test_run_exec_uses_auto_iter_workdir_env(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "exp-env"
+        workdir.mkdir(parents=True)
+        config = self.tmp / "config.json"
+        config.write_text('{"route": "workdir-env"}\n', encoding="utf-8")
+        output = workdir / "pwd-env.txt"
+
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "workdir-env",
+            "--command",
+            "pwd > pwd-env.txt",
+            "--artifact",
+            str(output),
+            env_extra={"AUTO_ITER_WORKDIR": str(workdir)},
+        )
+
+        self.assertIn("status=success", result.stdout)
+        self.assertEqual(output.read_text(encoding="utf-8").strip(), str(workdir))
+
+    def test_run_records_git_state_from_workdir(self):
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, text=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+        (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", "base"], cwd=repo, check=True, text=True, capture_output=True)
+        subprocess.run(["git", "branch", "exp"], cwd=repo, check=True)
+        workdir = self.tmp / "worktrees" / "exp"
+        subprocess.run(["git", "-C", str(repo), "worktree", "add", str(workdir), "exp"], check=True, text=True, capture_output=True)
+
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        config.write_text('{"route": "git-workdir"}\n', encoding="utf-8")
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--workdir",
+            str(workdir),
+            "--config",
+            str(config),
+            "--dataset",
+            "git-workdir",
+            "--command",
+            "true",
+        )
+
+        run_id = result.stdout.split()[2]
+        summary = (self.tmp / ".auto_iter" / "runs" / run_id / "summary.md").read_text(encoding="utf-8")
+        head = subprocess.run(
+            ["git", "-C", str(workdir), "rev-parse", "HEAD"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+        self.assertIn(f"git_commit: {head}", summary)
+        self.assertIn("git_branch: exp", summary)
+        self.assertIn("git_dirty_count: 0", summary)
+        self.assertIn(f"workdir: {workdir}", summary)
+
+    def test_doctor_prints_project_root_and_workdir(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "exp-doctor"
+        workdir.mkdir(parents=True)
+
+        doctor = run_cli(
+            self.tmp,
+            "doctor",
+            env_extra={"AUTO_ITER_WORKDIR": str(workdir)},
+        )
+
+        self.assertIn(f"root: {self.tmp}", doctor.stdout)
+        self.assertIn(f"state_dir: {self.tmp / '.auto_iter'}", doctor.stdout)
+        self.assertIn(f"workdir: {workdir}", doctor.stdout)
+
+    def test_global_workdir_arg_controls_doctor_context(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "global-doctor"
+        workdir.mkdir(parents=True)
+
+        doctor = run_cli(self.tmp, "--workdir", str(workdir), "doctor")
+
+        self.assertIn(f"root: {self.tmp}", doctor.stdout)
+        self.assertIn(f"workdir: {workdir}", doctor.stdout)
+        self.assertIn("workdir_source: cli", doctor.stdout)
+
+    def test_handoff_snapshot_includes_workdir(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "handoff-workdir"
+        workdir.mkdir(parents=True)
+
+        run_cli(self.tmp, "handoff", "generate", env_extra={"AUTO_ITER_WORKDIR": str(workdir)})
+        text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+
+        self.assertIn(f"- root: {self.tmp}", text)
+        self.assertIn(f"- workdir: {workdir}", text)
+
+    def test_global_workdir_arg_controls_handoff_context(self):
+        run_cli(self.tmp, "init")
+        workdir = self.tmp / "worktrees" / "handoff-global-workdir"
+        workdir.mkdir(parents=True)
+
+        run_cli(self.tmp, "--workdir", str(workdir), "handoff", "generate")
+        text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
+
+        self.assertIn(f"- root: {self.tmp}", text)
+        self.assertIn(f"- workdir: {workdir}", text)
 
     def test_doctor_reports_no_resolved_topic_without_default(self):
         run_cli(self.tmp, "init")
@@ -487,6 +658,34 @@ class CliTests(unittest.TestCase):
             self.assertIn("v0.41", text)
             self.assertIn("rejected experiment", text)
             self.assertIn("run import", text)
+
+    def test_worktree_execution_context_is_documented(self):
+        stable_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "skills" / "auto-iteration-entry" / "SKILL.md",
+            REPO_ROOT / "skills" / "auto-iteration" / "SKILL.md",
+        ]
+        plan_files = [
+            REPO_ROOT / "plans" / "version_iterations.md",
+            REPO_ROOT / "plans" / "global_plan.md",
+            REPO_ROOT / "plans" / "active_plan.md",
+        ]
+
+        for path in stable_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("AUTO_ITER_PROJECT_ROOT", text, str(path))
+            self.assertIn("AUTO_ITER_WORKDIR", text, str(path))
+            self.assertIn("--project-root", text, str(path))
+            self.assertIn("--workdir", text, str(path))
+            self.assertIn("shared AIT project root", text, str(path))
+            self.assertIn("run summary", text, str(path))
+        for path in plan_files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("v0.42", text, str(path))
+            self.assertIn("AUTO_ITER_PROJECT_ROOT", text, str(path))
+            self.assertIn("AUTO_ITER_WORKDIR", text, str(path))
+            self.assertIn("workdir", text, str(path))
 
     def test_command_wrappers_are_platform_aware(self):
         posix = cli.command_wrapper_spec(Path("/repo/tools/auto_iter.py"), platform_name="posix")

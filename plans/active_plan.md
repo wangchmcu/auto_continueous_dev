@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.41。
+- 当前版本：v0.42。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -30,7 +30,7 @@
 - v0.19 已完成：本地模糊检索增强，使用 BM25（按关键词出现频率和稀有度排序的文本检索算法）、light vector（本地轻量文本向量，不调用额外 LLM（大语言模型）服务）和 graph（由 topic、run、decision、artifact 已有关系组成的结构关系图）帮助找回“之前好像说过某个现象”的候选历史。
 - v0.20 已完成：handoff 增加 `Current Baseline`（当前基线：当前被承认为继续开发起点的版本、方法、结果和证据入口）Markdown projection（从已有记录摘出的可读视图，不是新的事实源），只保留主线入口和证据入口。
 - v0.21 已完成：项目根目录 `AGENTS.md` 只在已经存在时进入 handoff 读取顺序；`auto-iter init` 不创建它，AIT 也不把它当状态源。
-- v0.22 已完成：AIT 命令在已初始化项目子目录中运行时，自动使用最近父级 `state/agent_state.db` 所在目录作为项目根；`run exec` 仍从项目根启动命令；并合入 `auto-iter update` 安装产物更新入口，默认保留项目状态、不运行 `init`，支持显式 `--check-project`。
+- v0.22 已完成：AIT 命令在已初始化项目子目录中运行时，自动使用最近父级 `state/agent_state.db` 所在目录作为项目根；当时的 `run exec` 从项目根启动命令，这条执行目录规则已由 v0.42 取代；并合入 `auto-iter update` 安装产物更新入口，默认保留项目状态、不运行 `init`，支持显式 `--check-project`。
 - v0.23 已完成：topic_id 解析和 default topic 兼容层，保留旧 active topic 恢复入口，同时为多 Codex thread 并行写入打基础。
 - v0.24 已完成：topic plan 基础结构，新增 topic plan 事实源、投影和 `topic plan set/show/current`。
 - v0.25 已完成：topic 内任务状态，新增 `topic task add/set/list` 和 todo、doing、done、blocked、dropped projection。
@@ -50,6 +50,7 @@
 - v0.39 已完成：迁移指导补强，明确 `init vs migrate` 的边界，并让 `migrate` 输出迁移后检查清单和 rule 回填提示；与既有 rule tracking 和 `.auto_iter/rules/current_effective.md` 恢复入口保持一致。
 - v0.40 已完成：project-topic explicit tracking（项目计划和 topic 显式跟踪）：用 `auto-iter project link-topic` 记录 `project_plan.md` 标题与 topic 的双向可查询关联；这是跟踪关系，不是 project plan 与 topic plan 的自动内容同步。
 - v0.41 已完成：rejected experiment recording（被拒绝实验记录）：用 `auto-iter run import` 接住外部或历史失败实验，再用 rejected decision、`route-keyword` 和 `reopen-condition` 防止后续重复路线。
+- v0.42 已完成：worktree execution context（worktree 执行现场）：用 `AUTO_ITER_PROJECT_ROOT` 或 `--project-root` 绑定共享 AIT 项目根，用 `AUTO_ITER_WORKDIR` 或 `--workdir` 绑定当前窗口或当前 run 的实际执行目录，并把项目根、workdir、Git 分支、Git 提交和未提交改动数量写入 run summary。
 
 ## 下一步
 
@@ -71,7 +72,7 @@
 16. 用户问“之前是不是说过某个现象”这类模糊历史问题时，agent 先运行 `auto-iter search query --text "<用户原话>" --limit 10 --explain`，再用结果中的 path、heading、`run_id`、`decision_id` 或 topic evidence 回到明确证据链。
 17. 新 session 恢复时先看 handoff 的 `Current Baseline` 段；该段只作为当前主线入口，细节仍回到 decision、run、artifact、topic evidence 和 plans。
 18. 项目根目录 `AGENTS.md` 是可选项目规则文件；handoff 只在该文件已经存在时列入读取顺序，缺失时不创建、不报缺失。
-19. 在已初始化 AIT 项目的子目录中运行命令时，先用 `auto-iter doctor` 确认解析出的项目根；`run exec` 的命令从项目根执行，实验需要子目录时把 `cd path/to/workdir && ...` 写入 `--command`。
+19. 在 Git worktree 或多窗口工作时，使用 `AUTO_ITER_PROJECT_ROOT` 或 `--project-root` 绑定共享 AIT 项目根；使用 `AUTO_ITER_WORKDIR` 或 `--workdir` 绑定当前窗口或当前 run 的实际 workdir（实际执行目录）。`run exec` 的命令从 workdir 执行，旧版 AIT 不支持 `--workdir` 时才把 `cd path/to/workdir && ...` 写入 `--command` 作为兼容回退。
 20. 用户要求“更新 AIT”或“update AIT”时，使用 `auto-iter update` 刷新安装产物；默认不运行 `init`，需要检查当前项目状态时显式使用 `--check-project`。
 21. 保留旧 active topic 兼容入口，但文档和输出都改用 default topic 口径；topic_id 解析按 `--topic-id`、`AUTO_ITER_TOPIC_ID`、default topic 的顺序进行。
 22. topic plan 已覆盖目标、非目标、验收、停止条件、升级条件和 topic 内任务状态；topic handoff、project board、context/search 和 migrate 已对齐 topic_id 长期方案。

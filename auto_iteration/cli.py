@@ -38,6 +38,9 @@ PROJECT_TOPIC_RELATIONS = {"implements", "explores", "blocks", "related"}
 SEARCH_FUSION_K = 60
 INSTALLED_SKILLS = ["auto-iteration-entry", "auto-it-self-improve"]
 TOPIC_ID_ENV_VAR = "AUTO_ITER_TOPIC_ID"
+PROJECT_ROOT_ENV_VAR = "AUTO_ITER_PROJECT_ROOT"
+WORKDIR_ENV_VAR = "AUTO_ITER_WORKDIR"
+PROJECT_ROOT_OVERRIDE: Path | None = None
 PROJECT_STATE_DIRS = [
     ("state", "SQLite state database for runs, decisions, route checks, and handoffs"),
     ("plans", "planning documents such as global, active, and version plans"),
@@ -756,7 +759,23 @@ def state_root_for_project(project_root: Path, prefer_legacy: bool = False) -> P
     return project_root if prefer_legacy else project_root / AIT_STATE_DIR
 
 
+def configured_project_root() -> Path | None:
+    if PROJECT_ROOT_OVERRIDE is not None:
+        return PROJECT_ROOT_OVERRIDE
+    raw = os.environ.get(PROJECT_ROOT_ENV_VAR)
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
 def root() -> Path:
+    configured = configured_project_root()
+    if configured is not None:
+        if not configured.exists():
+            raise UserError(f"project root does not exist: {configured}")
+        if not configured.is_dir():
+            raise UserError(f"project root is not a directory: {configured}")
+        return configured
     cwd = Path.cwd().resolve()
     for candidate in (cwd, *cwd.parents):
         if candidate.name == AIT_STATE_DIR and (candidate / DB_PATH).exists():
@@ -766,6 +785,31 @@ def root() -> Path:
         if (candidate / DB_PATH).exists():
             return candidate
     return cwd
+
+
+def resolve_workdir(raw_workdir: str | None = None) -> Path:
+    raw = raw_workdir or os.environ.get(WORKDIR_ENV_VAR)
+    if raw:
+        path = Path(raw).expanduser().resolve()
+    else:
+        path = Path.cwd().resolve()
+    if not path.exists():
+        raise UserError(f"workdir does not exist: {path}")
+    if not path.is_dir():
+        raise UserError(f"workdir is not a directory: {path}")
+    return path
+
+
+def resolve_workdir_with_source(raw_workdir: str | None = None) -> tuple[Path, str]:
+    if raw_workdir:
+        return resolve_workdir(raw_workdir), "cli"
+    if os.environ.get(WORKDIR_ENV_VAR):
+        return resolve_workdir(None), "env"
+    return resolve_workdir(None), "cwd"
+
+
+def command_workdir_arg(args: argparse.Namespace) -> str | None:
+    return getattr(args, "workdir", None) or getattr(args, "global_workdir", None)
 
 
 def state_root(prefer_legacy: bool = False) -> Path:
@@ -854,11 +898,11 @@ def logs_dir(run_id: str) -> Path:
     return run_dir(run_id) / "logs"
 
 
-def git_value(args: list[str]) -> str:
+def git_value(args: list[str], cwd: Path | None = None) -> str:
     try:
         result = subprocess.run(
             ["git", *args],
-            cwd=root(),
+            cwd=cwd or root(),
             text=True,
             capture_output=True,
             check=True,
@@ -868,12 +912,23 @@ def git_value(args: list[str]) -> str:
     return result.stdout.strip() or "unknown"
 
 
-def git_commit() -> str:
-    return git_value(["rev-parse", "HEAD"])
+def git_commit(cwd: Path | None = None) -> str:
+    return git_value(["rev-parse", "HEAD"], cwd=cwd)
 
 
-def git_branch() -> str:
-    return git_value(["branch", "--show-current"])
+def git_branch(cwd: Path | None = None) -> str:
+    return git_value(["branch", "--show-current"], cwd=cwd)
+
+
+def git_status_short(cwd: Path | None = None) -> str:
+    return git_value(["status", "--short"], cwd=cwd)
+
+
+def git_dirty_count(cwd: Path | None = None) -> int:
+    status = git_status_short(cwd)
+    if status == "unknown":
+        return 0
+    return len([line for line in status.splitlines() if line.strip()])
 
 
 def ensure_dirs(prefer_legacy: bool = False) -> None:
@@ -1018,8 +1073,12 @@ def init_schema(db: sqlite3.Connection) -> None:
             run_id text primary key,
             project_id text not null,
             session_id text,
+            project_root text not null default '',
+            workdir text not null default '',
             git_commit text not null,
             git_branch text not null,
+            git_dirty_count integer not null default 0,
+            git_status_short text not null default '',
             dataset_id text not null,
             seed text,
             command text not null,
@@ -1189,6 +1248,23 @@ def init_schema(db: sqlite3.Connection) -> None:
         );
         """
     )
+    ensure_table_columns(
+        db,
+        "runs",
+        {
+            "project_root": "text not null default ''",
+            "workdir": "text not null default ''",
+            "git_dirty_count": "integer not null default 0",
+            "git_status_short": "text not null default ''",
+        },
+    )
+
+
+def ensure_table_columns(db: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    existing = {row["name"] for row in db.execute(f"pragma table_info({table})").fetchall()}
+    for name, definition in columns.items():
+        if name not in existing:
+            db.execute(f"alter table {table} add column {name} {definition}")
 
 
 def command_init(args: argparse.Namespace) -> int:
@@ -1213,6 +1289,7 @@ def command_init(args: argparse.Namespace) -> int:
 
 
 def command_doctor(args: argparse.Namespace) -> int:
+    workdir, workdir_source = resolve_workdir_with_source(command_workdir_arg(args))
     missing = [
         name
         for name in ["state", "runs", "handoffs", "raw_input", "decisions", "plans"]
@@ -1237,6 +1314,8 @@ def command_doctor(args: argparse.Namespace) -> int:
         raise UserError("database schema is incomplete")
     print("database: ok")
     print(f"root: {root()}")
+    print(f"workdir: {workdir}")
+    print(f"workdir_source: {workdir_source}")
     print(f"state_dir: {state_root()}")
     print(f"layout: {project_layout()}")
     if not state_path("plans", "project_plan.md").exists() and state_path("plans", "global_plan.md").exists():
@@ -2569,8 +2648,9 @@ def new_id(prefix: str) -> str:
 
 def command_run_start(args: argparse.Namespace) -> int:
     config = read_json(args.config)
+    workdir = resolve_workdir(command_workdir_arg(args))
     with database() as db:
-        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session, workdir=workdir)
     print(f"started run {run_id}")
     return 0
 
@@ -2582,8 +2662,10 @@ def create_run_record(
     command: str,
     seed: str | None = None,
     session: str | None = None,
+    workdir: Path | None = None,
 ) -> str:
     run_id = new_id("R")
+    resolved_workdir = workdir or resolve_workdir()
     current_run_dir = run_dir(run_id)
     logs_dir(run_id).mkdir(parents=True, exist_ok=True)
     (current_run_dir / "artifacts").mkdir(parents=True, exist_ok=True)
@@ -2597,17 +2679,22 @@ def create_run_record(
     db.execute(
         """
         insert into runs (
-            run_id, project_id, session_id, git_commit, git_branch, dataset_id,
+            run_id, project_id, session_id, project_root, workdir, git_commit, git_branch,
+            git_dirty_count, git_status_short, dataset_id,
             seed, command, config_json, config_hash, status, started_at
         )
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
         """,
         (
             run_id,
             project_id,
             session,
-            git_commit(),
-            git_branch(),
+            str(root()),
+            str(resolved_workdir),
+            git_commit(resolved_workdir),
+            git_branch(resolved_workdir),
+            git_dirty_count(resolved_workdir),
+            git_status_short(resolved_workdir),
             dataset,
             seed,
             command,
@@ -2689,8 +2776,11 @@ def write_run_summary(db: sqlite3.Connection, run_id: str) -> None:
         f"- run_id: {run['run_id']}",
         f"- status: {run['status']}",
         f"- dataset_id: {run['dataset_id']}",
+        f"- project_root: {run['project_root']}",
+        f"- workdir: {run['workdir']}",
         f"- git_commit: {run['git_commit']}",
         f"- git_branch: {run['git_branch']}",
+        f"- git_dirty_count: {run['git_dirty_count']}",
         f"- config_hash: {run['config_hash']}",
         f"- command: {run['command']}",
         "",
@@ -2770,8 +2860,9 @@ def command_run_finish(args: argparse.Namespace) -> int:
 def command_run_import(args: argparse.Namespace) -> int:
     config = read_json(args.config)
     metrics = read_json(args.metrics) if args.metrics else {}
+    workdir = resolve_workdir(command_workdir_arg(args))
     with database() as db:
-        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session, workdir=workdir)
         write_debug_event(run_id, "imported", {"status": args.status, "summary": args.summary})
         finish_run_record(db, run_id, args.status, metrics, args.artifact, summary_text=args.summary)
     print(f"imported run {run_id}")
@@ -2780,10 +2871,11 @@ def command_run_import(args: argparse.Namespace) -> int:
 
 def command_run_exec(args: argparse.Namespace) -> int:
     config = read_json(args.config)
+    workdir = resolve_workdir(command_workdir_arg(args))
     with database() as db:
-        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session)
-        write_debug_event(run_id, "started", {"command": args.command})
-        result = subprocess.run(args.command, cwd=root(), text=True, capture_output=True, shell=True)
+        run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session, workdir=workdir)
+        write_debug_event(run_id, "started", {"command": args.command, "workdir": str(workdir)})
+        result = subprocess.run(args.command, cwd=workdir, text=True, capture_output=True, shell=True)
         (logs_dir(run_id) / "stdout.log").write_text(result.stdout, encoding="utf-8")
         (logs_dir(run_id) / "stderr.log").write_text(result.stderr, encoding="utf-8")
         status = "success" if result.returncode == 0 else "failed"
@@ -3498,8 +3590,9 @@ def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
     return [f"{index}. {entry}" for index, entry in enumerate(entries, start=1)]
 
 
-def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
+def build_handoff(db: sqlite3.Connection, workdir: Path | None = None) -> tuple[str, str | None]:
     write_topic_projections(db)
+    resolved_workdir = workdir or resolve_workdir()
     success, failed = latest_runs(db)
     active = db.execute("select * from decisions where status = 'active' order by created_at desc").fetchall()
     rejected = db.execute("select * from decisions where status = 'rejected' order by created_at desc").fetchall()
@@ -3515,8 +3608,9 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
         "",
         "## 当前快照",
         f"- root: {root()}",
-        f"- branch: {git_branch()}",
-        f"- commit: {git_commit()}",
+        f"- workdir: {resolved_workdir}",
+        f"- branch: {git_branch(resolved_workdir)}",
+        f"- commit: {git_commit(resolved_workdir)}",
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
     ]
@@ -3621,8 +3715,9 @@ def build_handoff(db: sqlite3.Connection) -> tuple[str, str | None]:
     return "\n".join(lines), success["run_id"] if success else None
 
 
-def build_topic_handoff(db: sqlite3.Connection, topic_id: str) -> tuple[str, str | None]:
+def build_topic_handoff(db: sqlite3.Connection, topic_id: str, workdir: Path | None = None) -> tuple[str, str | None]:
     write_topic_projections(db)
+    resolved_workdir = workdir or resolve_workdir()
     topic = get_topic(db, topic_id)
     success, failed = latest_runs(db)
     active = db.execute("select * from decisions where status = 'active' order by created_at desc").fetchall()
@@ -3634,8 +3729,9 @@ def build_topic_handoff(db: sqlite3.Connection, topic_id: str) -> tuple[str, str
         "",
         "## Topic Snapshot",
         f"- root: {root()}",
-        f"- branch: {git_branch()}",
-        f"- commit: {git_commit()}",
+        f"- workdir: {resolved_workdir}",
+        f"- branch: {git_branch(resolved_workdir)}",
+        f"- commit: {git_commit(resolved_workdir)}",
         f"- topic_handoff: {handoff_path}",
         f"- topic_id: {topic['topic_id']}",
         f"- title: {topic['title']}",
@@ -3773,22 +3869,22 @@ def validate_topic_handoff_text(text: str, topic_id: str, path: Path) -> list[st
 
 
 def command_handoff_generate(args: argparse.Namespace) -> int:
-    path, _based_on_run_id = save_handoff(args.topic_id)
+    path, _based_on_run_id = save_handoff(args.topic_id, resolve_workdir(command_workdir_arg(args)))
     if args.print_path:
         print(f"generated {path.resolve()}")
     return 0
 
 
-def save_handoff(topic_id: str | None = None) -> tuple[Path, str | None]:
+def save_handoff(topic_id: str | None = None, workdir: Path | None = None) -> tuple[Path, str | None]:
     with database() as db:
         if topic_id:
             get_topic(db, topic_id)
             path = topic_handoff_path(topic_id)
-            handoff_md, based_on_run_id = build_topic_handoff(db, topic_id)
+            handoff_md, based_on_run_id = build_topic_handoff(db, topic_id, workdir)
             archive = topic_handoff_archive_dir(topic_id) / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
         else:
             path = state_path("handoffs", "latest_handoff.md")
-            handoff_md, based_on_run_id = build_handoff(db)
+            handoff_md, based_on_run_id = build_handoff(db, workdir)
             archive = state_path("handoffs", "archive", f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.md")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(handoff_md, encoding="utf-8")
@@ -4787,6 +4883,7 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     start.add_argument("--config", required=True)
     start.add_argument("--dataset", required=True)
     start.add_argument("--command", required=True)
+    start.add_argument("--workdir")
     start.add_argument("--seed")
     start.add_argument("--session")
     start.set_defaults(func=command_run_start)
@@ -4796,6 +4893,7 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     import_cmd.add_argument("--status", choices=sorted(RUN_STATUSES), required=True)
     import_cmd.add_argument("--summary", required=True)
     import_cmd.add_argument("--command", required=True)
+    import_cmd.add_argument("--workdir")
     import_cmd.add_argument("--metrics")
     import_cmd.add_argument("--artifact", action="append", default=[])
     import_cmd.add_argument("--seed")
@@ -4805,6 +4903,7 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     exec_cmd.add_argument("--config", required=True)
     exec_cmd.add_argument("--dataset", required=True)
     exec_cmd.add_argument("--command", required=True)
+    exec_cmd.add_argument("--workdir")
     exec_cmd.add_argument("--metrics")
     exec_cmd.add_argument("--artifact", action="append", default=[])
     exec_cmd.add_argument("--seed")
@@ -4826,6 +4925,8 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auto-iteration")
+    parser.add_argument("--project-root", help="AIT project root whose .auto_iter state should be used")
+    parser.add_argument("--workdir", dest="global_workdir", help="workdir used for this auto-iter command")
     subparsers = parser.add_subparsers(dest="command", required=True)
     init = subparsers.add_parser("init")
     init.add_argument("--legacy-layout", action="store_true", help="create project state in the pre-.auto_iter layout")
@@ -5031,8 +5132,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global PROJECT_ROOT_OVERRIDE
     parser = build_parser()
     args = parser.parse_args(argv)
+    PROJECT_ROOT_OVERRIDE = Path(args.project_root).expanduser().resolve() if getattr(args, "project_root", None) else None
     try:
         return args.func(args)
     except UserError as exc:

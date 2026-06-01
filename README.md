@@ -336,10 +336,37 @@ a subdirectory. The CLI finds the nearest parent directory that contains
 `state/agent_state.db` and treats that parent as the project root. If no parent
 state database exists, `auto-iter init` still initializes the current directory.
 
-`run exec` records and launches its `--command` from the resolved project root.
-When the experiment itself must run inside a nested working directory, include
-that directory change inside `--command`, for example
-`--command "cd path/to/workdir && python experiment.py"`.
+For Git worktrees or multiple Codex windows, keep one shared AIT project root
+and set one workdir（working directory: the directory where the experiment
+command actually runs）per window or per run.
+
+- `AUTO_ITER_PROJECT_ROOT` or global `--project-root` selects the shared AIT
+  project root whose `.auto_iter/` directory is read and written.
+- `AUTO_ITER_WORKDIR` or `--workdir` selects the command execution directory.
+- Each run summary records the AIT project root, workdir, Git branch, Git
+  commit, and uncommitted change count captured from the workdir.
+
+Per-window environment variables:
+
+```bash
+export AUTO_ITER_PROJECT_ROOT=/path/to/project
+export AUTO_ITER_WORKDIR=/path/to/project/worktrees/experiment-a
+auto-iter run exec --config config.json --dataset demo --command "python experiment.py"
+```
+
+Per-command arguments:
+
+```bash
+auto-iter --project-root /path/to/project run exec \
+  --workdir /path/to/project/worktrees/experiment-a \
+  --config config.json \
+  --dataset demo \
+  --command "python experiment.py"
+```
+
+For older installed AIT versions that do not support `--workdir`, use
+`--command "cd path/to/workdir && python experiment.py"` only as a compatibility
+fallback.
 
 If `auto-iter` is not installed yet, run the wrapper once:
 
@@ -383,6 +410,19 @@ Record a run by letting `auto_iteration` execute the command and capture logs:
 
 ```bash
 auto-iter run exec --config config.json --dataset demo --command "python experiment.py" --metrics metrics.json --artifact report.md
+```
+
+When the experiment is in a Git worktree, bind the shared AIT project root and
+the command workdir explicitly:
+
+```bash
+auto-iter --project-root /path/to/project run exec \
+  --workdir /path/to/project/worktrees/experiment-a \
+  --config config.json \
+  --dataset demo \
+  --command "python experiment.py" \
+  --metrics metrics.json \
+  --artifact /path/to/project/worktrees/experiment-a/report.md
 ```
 
 Import an already completed external or historical result when no `run_id` was

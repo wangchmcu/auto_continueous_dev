@@ -33,6 +33,10 @@ If the shell is inside a subdirectory of an initialized AIT project, `auto-iter`
 finds the nearest parent directory with `.auto_iter/state/agent_state.db` or
 legacy `state/agent_state.db` and uses that parent as the project root. Do not
 rerun `init` just because the current shell is nested under an existing project.
+If the shell is inside a Git worktree or another window should share the same
+project state, set `AUTO_ITER_PROJECT_ROOT` to the shared AIT project root and
+`AUTO_ITER_WORKDIR` to the current workdir（working directory: the directory
+where commands actually run）before `doctor`.
 
 2. Restore the latest handoff when present:
 
@@ -212,9 +216,23 @@ Prefer `run exec` when the experiment can be launched from one shell command. It
 auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
 ```
 
-`run exec` launches `<exact command>` from the resolved AIT project root. If the
-actual experiment must execute in a nested working directory, include that
-directory change inside the command, for example:
+In Git worktree or multi-window work, keep one shared AIT project root and one
+workdir（working directory: the directory where the experiment command actually
+runs）per window or per run:
+
+```bash
+AUTO_ITER_PROJECT_ROOT=/path/to/project \
+AUTO_ITER_WORKDIR=/path/to/project/worktrees/experiment-a \
+auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
+`AUTO_ITER_PROJECT_ROOT` or global `--project-root` selects the shared AIT
+project root whose `.auto_iter/` state is read and written. `AUTO_ITER_WORKDIR`
+or `--workdir` selects where `run exec` launches `<exact command>`. The run summary
+records the shared AIT project root, workdir, Git branch, Git commit, and
+uncommitted change count from the workdir. Use a directory-changing command
+inside `--command` only as a compatibility fallback for older installed AIT
+versions that do not support `--workdir`, for example:
 
 ```bash
 --command "cd path/to/workdir && python experiment.py"

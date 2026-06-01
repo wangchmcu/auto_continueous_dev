@@ -56,7 +56,8 @@
 ### 6. Codex 入口能力
 
 - 提供 Codex 入口 skill：告诉 agent 什么时候调用 `auto-iter doctor`、`auto-iter resume`、`auto-iter route check`、`auto-iter run exec`、`auto-iter decision add`、`auto-iter handoff generate`。
-- AIT 命令在已初始化项目子目录中运行时，按最近的父级 `state/agent_state.db` 定位项目根目录；`run exec` 的命令从该项目根目录启动，实验需要子目录时由 `--command` 内部显式 `cd`。
+- AIT 命令在已初始化项目子目录中运行时，按最近的父级 `.auto_iter/state/agent_state.db` 或旧布局 `state/agent_state.db` 定位项目根目录；在 Git worktree 或多窗口工作时，也可用 `AUTO_ITER_PROJECT_ROOT` 或 `--project-root` 显式绑定共享 AIT 项目根。
+- `run exec` 写入共享 AIT 项目根的 `.auto_iter/` 状态目录，但命令从 `AUTO_ITER_WORKDIR`、全局 `--workdir`、run 级 `--workdir` 或当前 shell 目录解析出的 workdir（实验命令实际运行目录）启动，并把 workdir 的 Git 分支、Git 提交和未提交改动数量写入 run summary。
 - 提供短命令入口 `auto-iter`，避免每次手写源码 checkout 里的工具脚本路径。
 - 安装和运行入口必须覆盖 Windows Codex app、WSL/Linux Codex CLI、macOS Codex app 三类环境；wrapper、Python 命令和文档不能写死某一个用户或系统路径。
 - 安装器应优先使用当前操作系统和 shell 已认可的命令目录；如果没有合适目录，回落到用户目录并提示路径，不默认修改用户 shell 配置。
@@ -531,7 +532,7 @@
 
 - CLI 根目录解析从当前目录向上查找最近的 `state/agent_state.db`。
 - 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
-- `run exec` 从解析后的项目根目录记录和执行命令；需要实际进入子目录时，由 `--command` 显式 `cd`。
+- 当时的 `run exec` 从解析后的项目根目录记录和执行命令；这条执行目录规则已由 v0.42 的 workdir 规则取代。
 - README、AGENTS、entry skill、workflow skill 和测试覆盖该边界。
 
 同版本补充：安装产物 update 入口。
@@ -696,6 +697,21 @@
 - `intent check` 对拒绝实验表述提示 `auto-iter run import` 和 `decision add --status rejected`。
 - `checkpoint save` 对拒绝实验表述提示记录债务，要求补 evidence、`route-keyword` 和 `reopen-condition`。
 - README、AGENTS、entry skill、workflow skill 和 active/version plan 同步记录该规则。
+
+### v0.42：worktree 执行现场固化
+
+状态：done。
+
+目标：让多个 Git worktree 和多个 Codex 窗口共享同一个 AIT 项目状态，同时每个 run 都记录真实执行现场。
+
+任务：
+
+- 新增 `AUTO_ITER_PROJECT_ROOT` 和全局 `--project-root`，显式指定共享 AIT 项目根，也就是 `.auto_iter/` 状态读写位置。
+- 新增 `AUTO_ITER_WORKDIR`、全局 `--workdir` 和 run 级 `--workdir`，显式指定 workdir（实验命令实际运行目录）。
+- `run start`、`run import` 和 `run exec` 记录 AIT 项目根、workdir、Git 分支、Git 提交、未提交改动数量和 Git 状态摘要。
+- `run exec` 从 workdir 启动命令；旧版 AIT 不支持 `--workdir` 时，`cd path/to/workdir && ...` 只作为兼容回退。
+- `doctor`、项目级 handoff 和 topic 级 handoff 展示 workdir，并从 workdir 采集 branch/commit。
+- README、AGENTS、entry skill、workflow skill 和 active/version plan 同步多窗口使用规则。
 
 ### 后续可选：更重的语义检索
 

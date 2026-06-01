@@ -14,13 +14,14 @@
 3. Read `.auto_iter/plans/project_plan.md` and `.auto_iter/plans/project_record_rules.md` when they exist, then read `.auto_iter/plans/global_plan.md`, `.auto_iter/plans/version_iterations.md`, and `.auto_iter/plans/active_plan.md`. Legacy projects may still use root-level `plans/`. In a managed project, `project_plan.md` is the project direction, `project_record_rules.md` is project-specific AIT recording rules, and `global_plan.md` is a compatibility entry. In the AIT source repository, root-level `plans/global_plan.md` remains AIT's own tool-level global plan when the source repo itself is still on legacy layout.
 4. Read decisions through `auto-iter context index` and `auto-iter context show`; do not treat Markdown files under `decisions/` as current context if `context index` reports them as orphan or stale projections.
 5. If the shell is nested inside an initialized AIT project, `auto-iter` should resolve the nearest parent containing `.auto_iter/state/agent_state.db` or legacy `state/agent_state.db` as the project root. Confirm both `root` and `state_dir` from `auto-iter doctor` before recording runs from a nested shell.
-6. Before proposing or running a new experiment route, run:
+6. In Git worktree or multi-window work, set `AUTO_ITER_PROJECT_ROOT` or global `--project-root` to the shared AIT project root, and set `AUTO_ITER_WORKDIR` or `--workdir` to the current workdir（working directory: the directory where experiment commands actually run）. Confirm `root`, `state_dir`, `workdir`, and `workdir_source` from `auto-iter doctor`.
+7. Before proposing or running a new experiment route, run:
 
 ```bash
 auto-iter route check --config <config.json> --summary "<中文路线说明>"
 ```
 
-7. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
+8. Do not retry routes marked `rejected` or `superseded` unless the user explicitly reopens them.
 
 ## Version Task Tracking
 
@@ -89,7 +90,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 - Every conclusion must become a decision record with evidence run IDs.
 - A rejected experiment from an external session still needs a `run_id`: use `auto-iter run import --config <file> --dataset <name> --status failed --summary "<why rejected>" --command "<external command or session>"`, then use that `run_id` as evidence for `decision add --status rejected`.
 - For rejected parameter ranges, use `decision add --route-relation parameter-space --route-param name:min:max`.
-- `run exec` launches its command from the resolved AIT project root. If the real experiment must run in a subdirectory, include `cd path/to/workdir && ...` inside `--command`.
+- `run exec` writes run state to the resolved AIT project root, then launches its command from `--workdir`, `AUTO_ITER_WORKDIR`, or the current shell directory. The run summary records the shared AIT project root, workdir, Git branch, Git commit, and uncommitted change count from that workdir. Use `cd path/to/workdir && ...` inside `--command` only as a compatibility fallback for older installed AIT versions that do not support `--workdir`.
 - Raw logs stay under `.auto_iter/runs/<run_id>/logs/` in the single-directory layout; do not paste full logs into context by default.
 - Read summaries, metrics, artifacts, and decisions first; read raw logs only for a specific failure investigation.
 - At session end, generate a handoff with:

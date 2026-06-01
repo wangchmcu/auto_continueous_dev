@@ -16,10 +16,10 @@
 
 ## 当前版本
 
-- current_version: v0.41
+- current_version: v0.42
 - status: done
-- previous_goal: v0.40 完成 project-topic explicit tracking（项目计划和 topic 显式跟踪），让 `project_plan.md` 标题与 topic plan 可以双向查询，但不自动互相改写内容。
-- goal: 完成 rejected experiment recording（被拒绝实验记录），让外部或历史失败实验能用 `run import` 进入 run summary，再用 rejected decision 阻断重复路线。
+- previous_goal: v0.41 完成 rejected experiment recording（被拒绝实验记录），让外部或历史失败实验能用 `run import` 进入 run summary，再用 rejected decision 阻断重复路线。
+- goal: 完成 worktree execution context（worktree 执行现场）：共享 AIT 项目根负责 `.auto_iter/` 状态写入，每个窗口或 run 的 workdir 负责实验命令实际执行和 Git 状态采集。
 
 ## v0.1 任务清单
 
@@ -685,7 +685,7 @@ v0.21 之后仍未覆盖的全局能力：
 - [x] CLI 根目录解析从当前目录向上查找最近的 `state/agent_state.db`。
 - [x] 未找到父级状态库时保留原行为，`init` 仍初始化当前目录。
 - [x] `doctor` 从子目录运行时报告父级项目根目录。
-- [x] `run exec` 从解析后的项目根目录记录和执行命令，不在子目录新建 `runs/`。
+- [x] 当时的 `run exec` 从解析后的项目根目录记录和执行命令，不在子目录新建 `runs/`；执行目录规则已由 v0.42 取代。
 - [x] README、AGENTS、entry skill、workflow skill 和 global plan 说明子目录运行边界。
 - [x] 测试覆盖子目录运行 `doctor` 和 `run exec`。
 - [x] 新增 `update` CLI 子命令，复用安装路径选择、卸载安全检查和安装自检。
@@ -702,8 +702,8 @@ v0.22 没有新增事实源；它修复了命令入口在真实工作目录可�
 v0.22 已覆盖的全局能力：
 
 - AIT 命令可从已初始化项目的子目录恢复到同一个 SQLite 状态库。
-- `run exec` 的状态记录仍落在项目根目录，避免子目录生成孤立的 `runs/`。
-- agent 文档明确：实验需要子目录执行时，把 `cd path/to/workdir && ...` 写入 `--command`。
+- 当时的 `run exec` 状态记录仍落在项目根目录，避免子目录生成孤立的 `runs/`；执行目录规则已由 v0.42 的 workdir 规则取代。
+- agent 文档当时明确：实验需要子目录执行时，把 `cd path/to/workdir && ...` 写入 `--command`；v0.42 后该写法只保留为旧版兼容回退。
 - 用户可用一个命令刷新 `auto-iter` wrapper 和 installed skills。
 - update 默认保留项目状态，避免误删长期 tracking 信息。
 - update 默认不运行 `init`，避免在错误目录创建 AIT 状态。
@@ -1015,7 +1015,7 @@ v0.25 之后仍未覆盖的全局能力：
 
 ### v0.22
 
-- done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根，`run exec` 仍从项目根启动命令；安装产物 update 入口也已合入。
+- done：AIT 命令在已初始化项目子目录中自动使用最近父级状态库所在目录作为项目根；当时 `run exec` 仍从项目根启动命令，这条执行目录规则已由 v0.42 取代；安装产物 update 入口也已合入。
 
 ### v0.23
 
@@ -1129,6 +1129,20 @@ v0.25 之后仍未覆盖的全局能力：
 - done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明 `auto-iter run import`、`route-keyword` 和 `reopen-condition` 的使用边界。
 - global plan distance：本版本覆盖了外部/历史失败实验进入证据链的最小闭环；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
 - evidence：新增 `test_run_import_records_external_rejected_experiment_summary_for_decision_evidence`、`test_intent_check_flags_rejected_experiment_result_recording`、`test_checkpoint_save_warns_about_rejected_result_recording_debt` 和 `test_rejected_experiment_recording_is_documented`。
+
+### v0.42
+
+- done：新增 `AUTO_ITER_PROJECT_ROOT` 和全局 `--project-root`，用于指定共享 AIT 项目根，也就是 `.auto_iter/` 状态的读写位置。
+- done：新增 `AUTO_ITER_WORKDIR`、全局 `--workdir` 和 run 级 `--workdir`，用于指定 workdir（实验命令实际运行目录，通常是某个 Git worktree）。
+- done：run 记录新增 `project_root`、`workdir`、`git_dirty_count` 和 `git_status_short` 字段；Git 分支、Git 提交、未提交改动数量和状态摘要都从 workdir 采集。
+- done：`run exec` 从 workdir 执行命令，run summary 显示共享 AIT 项目根、workdir、Git 分支、Git 提交和未提交改动数量。
+- done：`doctor`、项目级 handoff 和 topic 级 handoff 显示 workdir，并把 branch/commit 绑定到该 workdir。
+- done：README、AGENTS、entry skill、workflow skill、AIT global plan 和 active plan 同步说明多 Git worktree、多 Codex 窗口的使用方式。
+- acceptance：`AUTO_ITER_PROJECT_ROOT` 和 `--project-root` 能让非项目根目录里的命令继续写入同一个 `.auto_iter/` 状态目录。
+- acceptance：`AUTO_ITER_WORKDIR`、全局 `--workdir` 和 run 级 `--workdir` 能让命令在指定 workdir 执行，并把该 workdir 的 Git 状态写进 run summary。
+- acceptance：旧版兼容方式 `cd path/to/workdir && ...` 只作为不支持 `--workdir` 的安装版本的回退说明。
+- global plan distance：本版本覆盖了多 Git worktree、多 Codex 窗口场景下的执行现场固化；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
+- evidence：`python3 -Wd -m unittest discover -s tests -v` 通过 90 个测试；`python3 -m py_compile auto_iteration/cli.py` 通过；`python3 -m auto_iteration.cli doctor` 返回 state/database ok；`git diff --check` 通过。
 
 ### 后续可选
 

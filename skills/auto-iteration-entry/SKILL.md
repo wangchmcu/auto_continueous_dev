@@ -32,11 +32,15 @@ When the user says one of these plain-language requests, treat it as a request t
 
 ## Required Start
 
-Run these commands in the current project root. If the shell is already inside
-a subdirectory of an initialized AIT project, `auto-iter` finds the nearest
-parent directory with `.auto_iter/state/agent_state.db` or legacy
-`state/agent_state.db` and uses that parent as the project root; do not rerun
-`init` merely because the current shell is nested.
+Run these commands where the AIT project root can be resolved. If the shell is
+inside a Git worktree or another window should share the same project state, set
+`AUTO_ITER_PROJECT_ROOT` to the shared AIT project root and `AUTO_ITER_WORKDIR`
+to the current workdir（working directory: the directory where commands actually
+run）before `doctor`. If the shell is simply inside a subdirectory of an
+initialized AIT project, `auto-iter` finds the nearest parent directory with
+`.auto_iter/state/agent_state.db` or legacy `state/agent_state.db` and uses that
+parent as the project root; do not rerun `init` merely because the current shell
+is nested.
 
 ```bash
 auto-iter doctor
@@ -285,9 +289,23 @@ Prefer:
 auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
 ```
 
-`run exec` launches `<exact command>` from the resolved AIT project root. If the
-actual experiment must execute in a subdirectory, put the directory change in
-the command itself, for example:
+In Git worktree or multi-window work, keep one shared AIT project root and one
+workdir（working directory: the directory where the experiment command actually
+runs）per window or per run:
+
+```bash
+AUTO_ITER_PROJECT_ROOT=/path/to/project \
+AUTO_ITER_WORKDIR=/path/to/project/worktrees/experiment-a \
+auto-iter run exec --config <config.json> --dataset <dataset-id> --command "<exact command>" --metrics <metrics.json> --artifact <artifact-path>
+```
+
+`AUTO_ITER_PROJECT_ROOT` or global `--project-root` selects the shared AIT
+project root whose `.auto_iter/` state is read and written. `AUTO_ITER_WORKDIR`
+or `--workdir` selects where `run exec` launches `<exact command>`. The run summary
+records the shared AIT project root, workdir, Git branch, Git commit, and
+uncommitted change count from the workdir. Use a directory-changing command
+inside `--command` only as a compatibility fallback for older installed AIT
+versions that do not support `--workdir`, for example:
 
 ```bash
 --command "cd path/to/workdir && python experiment.py"
