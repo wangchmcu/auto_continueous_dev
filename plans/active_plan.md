@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.42。
+- 当前版本：v0.43。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -51,6 +51,7 @@
 - v0.40 已完成：project-topic explicit tracking（项目计划和 topic 显式跟踪）：用 `auto-iter project link-topic` 记录 `project_plan.md` 标题与 topic 的双向可查询关联；这是跟踪关系，不是 project plan 与 topic plan 的自动内容同步。
 - v0.41 已完成：rejected experiment recording（被拒绝实验记录）：用 `auto-iter run import` 接住外部或历史失败实验，再用 rejected decision、`route-keyword` 和 `reopen-condition` 防止后续重复路线。
 - v0.42 已完成：worktree execution context（worktree 执行现场）：用 `AUTO_ITER_PROJECT_ROOT` 或 `--project-root` 绑定共享 AIT 项目根，用 `AUTO_ITER_WORKDIR` 或 `--workdir` 绑定当前窗口或当前 run 的实际执行目录，并把项目根、workdir、Git 分支、Git 提交和未提交改动数量写入 run summary。
+- v0.43 已完成：portable recovery paths（可移植恢复路径）：handoff 恢复入口、读取顺序、项目内 artifact 主路径和 baseline 证据入口优先写项目相对路径；root/workdir 和项目外路径保留为 provenance。
 
 ## 下一步
 
@@ -90,3 +91,4 @@
 34. 新接管项目默认使用 `.auto_iter/` 保存 AIT 状态；旧项目如需收拢散落目录，先运行 `auto-iter doctor` 确认 `layout: legacy`，再运行 `auto-iter migrate --layout single-dir`，最后运行 `auto-iter doctor`、`auto-iter context index` 和 `auto-iter handoff validate`。
 35. 当某个 topic 明确服务于 `project_plan.md` 的某个标题时，使用 `auto-iter project link-topic --project-heading "<heading>" --topic-id <id> --relation implements --summary "<说明>"` 建立双向跟踪；这不会自动改写 `project_plan.md` 或 topic plan。
 36. 当用户报告 rejected experiment（被拒绝的实验：已经证明不能继续采用或不能合入的实验结果）且没有现成 `run_id` 时，使用 `auto-iter run import` 导入外部结果，再用 `decision add --status rejected` 记录结论、`route-keyword` 和 `reopen-condition`。
+37. 换物理机恢复工作时，以当前 git repo root 解析 `plans/`、`topics/`、`handoffs/`、`runs/`、`decisions/` 和 `.auto_iter/` 下的项目相对路径；绝对 `root`、`workdir` 只视为生成时环境 provenance，不作为继续工作的主路径。

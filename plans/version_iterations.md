@@ -16,10 +16,10 @@
 
 ## 当前版本
 
-- current_version: v0.42
+- current_version: v0.43
 - status: done
-- previous_goal: v0.41 完成 rejected experiment recording（被拒绝实验记录），让外部或历史失败实验能用 `run import` 进入 run summary，再用 rejected decision 阻断重复路线。
-- goal: 完成 worktree execution context（worktree 执行现场）：共享 AIT 项目根负责 `.auto_iter/` 状态写入，每个窗口或 run 的 workdir 负责实验命令实际执行和 Git 状态采集。
+- previous_goal: v0.42 完成 worktree execution context（worktree 执行现场），让共享 AIT 项目根负责 `.auto_iter/` 状态写入，每个窗口或 run 的 workdir 负责实验命令实际执行和 Git 状态采集。
+- goal: 完成 portable recovery paths（可移植恢复路径）：换物理机重启工作时，handoff 恢复入口和项目内证据主路径不依赖旧机器绝对路径。
 
 ## v0.1 任务清单
 
@@ -1143,6 +1143,18 @@ v0.25 之后仍未覆盖的全局能力：
 - acceptance：旧版兼容方式 `cd path/to/workdir && ...` 只作为不支持 `--workdir` 的安装版本的回退说明。
 - global plan distance：本版本覆盖了多 Git worktree、多 Codex 窗口场景下的执行现场固化；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
 - evidence：`python3 -Wd -m unittest discover -s tests -v` 通过 90 个测试；`python3 -m py_compile auto_iteration/cli.py` 通过；`python3 -m auto_iteration.cli doctor` 返回 state/database ok；`git diff --check` 通过。
+
+### v0.43
+
+- done：新增项目内路径显示规则，handoff 恢复入口、读取顺序、baseline 的 evaluation/provenance/diagnostic 入口和 run summary 日志路径优先输出项目相对路径。
+- done：`artifacts.path` 对项目内文件改存项目相对路径；项目外文件仍可保留绝对路径，避免丢失外部证据位置。
+- done：`root`、`workdir`、run 的执行现场和项目外路径保留为 provenance，不作为换物理机恢复工作的主路径。
+- done：`handoff validate` 改为按相对路径契约校验 snapshot 和 read order，topic handoff validate 同步使用相对 `topic_handoff` 字段。
+- done：低假设初始化的 `plans/project_record_rules.md` 模板增加路径规则：用于继续工作的路径优先项目相对，绝对路径只用于 provenance。
+- acceptance：换物理机后，只要 clone 项目并同步 `.auto_iter/` 状态，agent 可从当前 repo root 解析 handoff/read order/artifact 主路径。
+- acceptance：历史 handoff、run summary 中的旧绝对 root/workdir 不需要重写，仍作为生成来源证据保留。
+- global plan distance：本版本补上跨物理机恢复的路径可移植性；仍未覆盖 topic 生命周期管理、增量索引和更重的本地 embedding（把文本变成稠密数值向量的模型）检索。
+- evidence：`TMPDIR=/private/tmp python -m pytest tests/test_cli.py -q` 通过 88 个测试。
 
 ### 后续可选
 

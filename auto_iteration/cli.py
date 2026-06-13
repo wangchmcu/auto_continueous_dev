@@ -730,6 +730,7 @@ LOW_ASSUMPTION_PROJECT_RECORD_RULES_TEMPLATE = """# Project Record Rules
 - 本文件只记录项目级记录流程定制，例如本项目是否要求特定证据链、恢复入口或 topic 绑定方式。
 - 本文件不能记录 AIT 工具自身功能迭代任务；AIT update、migrate、search、handoff、skill 等工具改动应进入 AIT source repository 的计划。
 - 本文件不记录代码坑点或技术结论；这些应进入 topic evidence、decision、handoff、run summary 或具体 topic plan。
+- 用于换物理机后继续工作的路径必须优先使用项目相对路径；绝对路径只用于 root/workdir、外部文件或历史来源 provenance。
 """
 
 GLOBAL_PLAN_COMPAT_TEMPLATE = """# Global Plan
@@ -821,6 +822,21 @@ def state_path(*parts: str | Path, prefer_legacy: bool = False) -> Path:
     for part in parts:
         path /= part
     return path
+
+
+def project_relative_path(path: str | Path) -> str:
+    """Return a portable project-relative path when possible."""
+    raw = Path(path).expanduser()
+    if not raw.is_absolute():
+        return raw.as_posix()
+    try:
+        return raw.resolve().relative_to(root()).as_posix()
+    except ValueError:
+        return str(raw.resolve())
+
+
+def display_path(path: str | Path) -> str:
+    return project_relative_path(path)
 
 
 def project_layout() -> str:
@@ -2719,13 +2735,14 @@ def add_artifact(db: sqlite3.Connection, run_id: str, artifact_path: str, kind: 
     path = Path(artifact_path).expanduser().resolve()
     if not path.exists():
         raise UserError(f"artifact does not exist: {path}")
-    artifact_id = "A-" + hashlib.sha256(f"{run_id}:{path}".encode("utf-8")).hexdigest()[:10]
+    stored_path = display_path(path)
+    artifact_id = "A-" + hashlib.sha256(f"{run_id}:{stored_path}".encode("utf-8")).hexdigest()[:10]
     db.execute(
         """
         insert or replace into artifacts (artifact_id, run_id, kind, path, sha256, summary)
         values (?, ?, ?, ?, ?, ?)
         """,
-        (artifact_id, run_id, kind, str(path), file_sha256(path), path.name),
+        (artifact_id, run_id, kind, stored_path, file_sha256(path), path.name),
     )
 
 
@@ -2806,10 +2823,10 @@ def write_run_summary(db: sqlite3.Connection, run_id: str) -> None:
     lines += [
         "",
         "## Logs",
-        f"- stdout: {logs_dir(run_id) / 'stdout.log'}",
-        f"- stderr: {logs_dir(run_id) / 'stderr.log'}",
-        f"- debug: {logs_dir(run_id) / 'debug.jsonl'}",
-        f"- error_summary: {logs_dir(run_id) / 'error_summary.md'}",
+        f"- stdout: {display_path(logs_dir(run_id) / 'stdout.log')}",
+        f"- stderr: {display_path(logs_dir(run_id) / 'stderr.log')}",
+        f"- debug: {display_path(logs_dir(run_id) / 'debug.jsonl')}",
+        f"- error_summary: {display_path(logs_dir(run_id) / 'error_summary.md')}",
         "",
     ]
     (run_dir(run_id) / "summary.md").write_text("\n".join(lines), encoding="utf-8")
@@ -3420,7 +3437,7 @@ def current_baseline_lines(
     if primary_decision:
         accepted_start = f"decision {primary_decision['decision_id']}: {primary_decision['title']}"
         why_current = primary_decision["claim"]
-        evaluation_entry = str(decision_path(primary_decision["status"], primary_decision["decision_id"]).resolve())
+        evaluation_entry = display_path(decision_path(primary_decision["status"], primary_decision["decision_id"]))
         last_confirmed_at = primary_decision["created_at"]
     elif success:
         accepted_start = f"run {success['run_id']}: dataset={success['dataset_id']} status={success['status']}"
@@ -3435,7 +3452,7 @@ def current_baseline_lines(
 
     if success:
         accepted_result = f"run {success['run_id']}: dataset={success['dataset_id']} status={success['status']}"
-        provenance_entry = str((run_dir(success["run_id"]) / "config_resolved.json").resolve())
+        provenance_entry = display_path(run_dir(success["run_id"]) / "config_resolved.json")
     else:
         accepted_result = "not recorded"
         provenance_entry = "not recorded"
@@ -3534,25 +3551,25 @@ def handoff_read_order_lines() -> list[str]:
     entries = []
     agents_path = root() / "AGENTS.md"
     if agents_path.exists():
-        entries.append(str(agents_path))
-    entries.append(str(state_path("handoffs", "latest_handoff.md")))
+        entries.append(display_path(agents_path))
+    entries.append(display_path(state_path("handoffs", "latest_handoff.md")))
     project_plan = state_path("plans", "project_plan.md")
     project_record_rules = state_path("plans", "project_record_rules.md")
     project_links = project_topic_links_path()
     if project_plan.exists():
-        entries.append(str(project_plan))
+        entries.append(display_path(project_plan))
     if project_record_rules.exists():
-        entries.append(str(project_record_rules))
+        entries.append(display_path(project_record_rules))
     if project_links.exists():
-        entries.append(str(project_links))
+        entries.append(display_path(project_links))
     entries += [
-        str(state_path("plans", "global_plan.md")),
-        str(state_path("plans", "version_iterations.md")),
-        str(state_path("plans", "active_plan.md")),
-        str(active_topic_path()),
-        str(topic_board_path()),
-        str(db_path()),
-        f"{state_path('decisions')}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
+        display_path(state_path("plans", "global_plan.md")),
+        display_path(state_path("plans", "version_iterations.md")),
+        display_path(state_path("plans", "active_plan.md")),
+        display_path(active_topic_path()),
+        display_path(topic_board_path()),
+        display_path(db_path()),
+        f"{display_path(state_path('decisions'))}（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。",
         "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "只有用户要求或确认切回 archived topic 时才读取 topics/archive/。",
         "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
@@ -3565,24 +3582,24 @@ def topic_handoff_read_order_lines(topic_id: str) -> list[str]:
     entries = []
     agents_path = root() / "AGENTS.md"
     if agents_path.exists():
-        entries.append(str(agents_path))
-    entries.append(str(topic_handoff_path(topic_id)))
+        entries.append(display_path(agents_path))
+    entries.append(display_path(topic_handoff_path(topic_id)))
     plan_path = topic_plan_path(topic_id)
     if plan_path.exists():
-        entries.append(str(plan_path))
+        entries.append(display_path(plan_path))
     project_plan = state_path("plans", "project_plan.md")
     project_record_rules = state_path("plans", "project_record_rules.md")
     if project_plan.exists():
-        entries.append(str(project_plan))
+        entries.append(display_path(project_plan))
     if project_record_rules.exists():
-        entries.append(str(project_record_rules))
+        entries.append(display_path(project_record_rules))
     entries += [
-        str(topic_index_path()),
-        str(active_topic_path()),
-        str(state_path("plans", "active_plan.md")),
-        str(state_path("plans", "version_iterations.md")),
-        str(state_path("plans", "global_plan.md")),
-        str(db_path()),
+        display_path(topic_index_path()),
+        display_path(active_topic_path()),
+        display_path(state_path("plans", "active_plan.md")),
+        display_path(state_path("plans", "version_iterations.md")),
+        display_path(state_path("plans", "global_plan.md")),
+        display_path(db_path()),
         f"用 `auto-iter topic evidence --topic-id {topic_id}` 查看该 topic 的 run、decision、artifact 证据链。",
         "用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。",
         "只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。",
@@ -3618,19 +3635,19 @@ def build_handoff(db: sqlite3.Connection, workdir: Path | None = None) -> tuple[
     project_record_rules = state_path("plans", "project_record_rules.md")
     project_links = project_topic_links_path()
     if project_plan.exists():
-        lines.append(f"- project_plan: {project_plan}")
+        lines.append(f"- project_plan: {display_path(project_plan)}")
     if project_record_rules.exists():
-        lines.append(f"- project_record_rules: {project_record_rules}")
+        lines.append(f"- project_record_rules: {display_path(project_record_rules)}")
     if project_links.exists():
-        lines.append(f"- project_topic_links: {project_links}")
+        lines.append(f"- project_topic_links: {display_path(project_links)}")
     global_key = "global_plan_compat" if project_plan.exists() else "global_plan"
     lines += [
-        f"- {global_key}: {state_path('plans', 'global_plan.md')}",
-        f"- version_task_tracking: {state_path('plans', 'version_iterations.md')}",
-        f"- active_plan: {state_path('plans', 'active_plan.md')}",
-        f"- active_topic: {active_topic_path()}",
-        f"- topic_index: {topic_index_path()}",
-        f"- topic_board: {topic_board_path()}",
+        f"- {global_key}: {display_path(state_path('plans', 'global_plan.md'))}",
+        f"- version_task_tracking: {display_path(state_path('plans', 'version_iterations.md'))}",
+        f"- active_plan: {display_path(state_path('plans', 'active_plan.md'))}",
+        f"- active_topic: {display_path(active_topic_path())}",
+        f"- topic_index: {display_path(topic_index_path())}",
+        f"- topic_board: {display_path(topic_board_path())}",
         "",
         "## 当前 Topic",
     ]
@@ -3732,13 +3749,13 @@ def build_topic_handoff(db: sqlite3.Connection, topic_id: str, workdir: Path | N
         f"- workdir: {resolved_workdir}",
         f"- branch: {git_branch(resolved_workdir)}",
         f"- commit: {git_commit(resolved_workdir)}",
-        f"- topic_handoff: {handoff_path}",
+        f"- topic_handoff: {display_path(handoff_path)}",
         f"- topic_id: {topic['topic_id']}",
         f"- title: {topic['title']}",
         f"- status: {topic['status']}",
         f"- summary: {topic['summary'] or 'none'}",
         f"- restore_hint: {topic['restore_hint'] or 'none'}",
-        f"- topic_plan: {plan_path if plan_path.exists() else 'none'}",
+        f"- topic_plan: {display_path(plan_path) if plan_path.exists() else 'none'}",
         f"- latest_successful_run_id: {success['run_id'] if success else 'none'}",
         f"- latest_failed_run_id: {failed['run_id'] if failed else 'none'}",
         "",
@@ -3825,18 +3842,18 @@ def validate_handoff_text(text: str) -> list[str]:
     if project_links.exists():
         required_paths["project_topic_links"] = project_links
     for key, path in required_paths.items():
-        expected = f"- {key}: {path}"
+        expected = f"- {key}: {display_path(path)}"
         if expected not in text:
             errors.append(f"missing snapshot path: {key}")
         elif not path.exists():
             errors.append(f"snapshot path does not exist: {path}")
-    if project_plan.exists() and str(project_plan) not in text:
+    if project_plan.exists() and display_path(project_plan) not in text:
         errors.append("read order missing project plan")
-    if project_record_rules.exists() and str(project_record_rules) not in text:
+    if project_record_rules.exists() and display_path(project_record_rules) not in text:
         errors.append("read order missing project record rules")
-    if project_links.exists() and str(project_links) not in text:
+    if project_links.exists() and display_path(project_links) not in text:
         errors.append("read order missing project topic links")
-    if str(state_path("plans", "global_plan.md")) not in text:
+    if display_path(state_path("plans", "global_plan.md")) not in text:
         errors.append("read order missing global plan")
     return errors
 
@@ -3858,7 +3875,7 @@ def validate_topic_handoff_text(text: str, topic_id: str, path: Path) -> list[st
             errors.append(f"missing section: {section}")
     required_lines = {
         "topic_id": f"- topic_id: {topic_id}",
-        "topic_handoff": f"- topic_handoff: {path}",
+        "topic_handoff": f"- topic_handoff: {display_path(path)}",
     }
     for key, expected in required_lines.items():
         if expected not in text:

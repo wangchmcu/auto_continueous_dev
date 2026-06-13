@@ -1025,11 +1025,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("Topic Archive MVP", index.stdout)
         self.assertEqual(handoff.stdout, "")
         self.assertIn("active_topic", handoff_text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "active_topic.md").resolve()), handoff_text)
+        self.assertIn(".auto_iter/topics/active_topic.md", handoff_text)
         self.assertIn("topic_index", handoff_text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "index.md").resolve()), handoff_text)
+        self.assertIn(".auto_iter/topics/index.md", handoff_text)
         self.assertIn("topic_board", handoff_text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "topics" / "board.md").resolve()), handoff_text)
+        self.assertIn(".auto_iter/topics/board.md", handoff_text)
         self.assertIn("是不是已经切入新的 topic 了", skill_text)
         self.assertIn("auto-iter topic", skill_text)
         self.assertIn("install check: ok", installed.stdout)
@@ -1795,7 +1795,8 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("sample_count", shown.stdout)
         self.assertIn("precision", shown.stdout)
-        self.assertIn(str(artifact.resolve()), shown.stdout)
+        self.assertIn("plot.txt", shown.stdout)
+        self.assertNotIn(str(artifact.resolve()), shown.stdout)
 
         with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
             metric = db.execute(
@@ -2636,7 +2637,7 @@ class CliTests(unittest.TestCase):
         handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
         self.assertIn("## 读取顺序", handoff_text)
         self.assertNotIn(str(self.tmp / "AGENTS.md"), handoff_text)
-        self.assertIn(f"1. {(self.tmp / '.auto_iter' / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
+        self.assertIn("1. .auto_iter/handoffs/latest_handoff.md", handoff_text)
 
     def test_handoff_read_order_includes_existing_project_agents_file(self):
         run_cli(self.tmp, "init")
@@ -2645,10 +2646,10 @@ class CliTests(unittest.TestCase):
         run_cli(self.tmp, "handoff", "generate")
 
         handoff_text = (self.tmp / ".auto_iter" / "handoffs" / "latest_handoff.md").read_text(encoding="utf-8")
-        self.assertIn(f"1. {(self.tmp / 'AGENTS.md').resolve()}", handoff_text)
-        self.assertIn(f"2. {(self.tmp / '.auto_iter' / 'handoffs' / 'latest_handoff.md').resolve()}", handoff_text)
+        self.assertIn("1. AGENTS.md", handoff_text)
+        self.assertIn("2. .auto_iter/handoffs/latest_handoff.md", handoff_text)
 
-    def test_handoff_and_resume_include_absolute_evidence_paths(self):
+    def test_handoff_uses_relative_project_paths_for_recovery_entries(self):
         run_cli(self.tmp, "init")
         config = self.tmp / "config.json"
         metrics = self.tmp / "metrics.json"
@@ -2701,16 +2702,17 @@ class CliTests(unittest.TestCase):
         self.assertEqual(handoff.stdout, "")
         self.assertIn("## 当前目标", text)
         self.assertIn("project_plan", text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "project_plan.md").resolve()), text)
+        self.assertIn(".auto_iter/plans/project_plan.md", text)
         self.assertIn("project_record_rules", text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "project_record_rules.md").resolve()), text)
+        self.assertIn(".auto_iter/plans/project_record_rules.md", text)
         self.assertIn("global_plan_compat", text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "global_plan.md").resolve()), text)
+        self.assertIn(".auto_iter/plans/global_plan.md", text)
         self.assertIn("version_task_tracking", text)
-        self.assertIn(str((self.tmp / ".auto_iter" / "plans" / "version_iterations.md").resolve()), text)
+        self.assertIn(".auto_iter/plans/version_iterations.md", text)
         self.assertIn("## 当前有效结论", text)
         self.assertIn("雨天阈值使用 0.58", text)
-        self.assertIn(str(artifact.resolve()), text)
+        self.assertIn("report.md", text)
+        self.assertNotIn(str(artifact.resolve()), text)
         self.assertIn(str(handoff_path.resolve()), resume.stdout)
 
     def test_handoff_includes_current_baseline_projection(self):
@@ -2792,14 +2794,14 @@ class CliTests(unittest.TestCase):
         self.assertIn(f"accepted_result: run {run_id}: dataset=fr-split-demo status=success", handoff_text)
         self.assertIn("why_current: Use V8 as the accepted comparison start", handoff_text)
         self.assertIn(
-            f"evaluation_entry: {(self.tmp / '.auto_iter' / 'decisions' / 'active' / (decision_id + '.md')).resolve()}",
+            f"evaluation_entry: .auto_iter/decisions/active/{decision_id}.md",
             handoff_text,
         )
         self.assertIn(
-            f"provenance_entry: {(self.tmp / '.auto_iter' / 'runs' / run_id / 'config_resolved.json').resolve()}",
+            f"provenance_entry: .auto_iter/runs/{run_id}/config_resolved.json",
             handoff_text,
         )
-        self.assertIn(f"diagnostic_entry: {artifact.resolve()}", handoff_text)
+        self.assertIn("diagnostic_entry: diagnostic.md", handoff_text)
 
     def test_handoff_uses_newest_success_when_runs_share_timestamp(self):
         run_cli(self.tmp, "init")
