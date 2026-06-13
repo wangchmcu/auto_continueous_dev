@@ -1147,6 +1147,7 @@ v0.25 之后仍未覆盖的全局能力：
 ### v0.43
 
 - done：新增项目内路径显示规则，handoff 恢复入口、读取顺序、baseline 的 evaluation/provenance/diagnostic 入口和 run summary 日志路径优先输出项目相对路径。
+- done：新项目初始化时 `projects.root_path` 存储为 `.`，避免 SQLite 项目表把某台机器的 checkout 目录当作跨机器恢复入口。
 - done：`artifacts.path` 对项目内文件改存项目相对路径；项目外文件仍可保留绝对路径，避免丢失外部证据位置。
 - done：`root`、`workdir`、run 的执行现场和项目外路径保留为 provenance，不作为换物理机恢复工作的主路径。
 - done：`handoff validate` 改为按相对路径契约校验 snapshot 和 read order，topic handoff validate 同步使用相对 `topic_handoff` 字段。

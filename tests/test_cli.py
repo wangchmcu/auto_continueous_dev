@@ -102,6 +102,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("database: ok", doctor.stdout)
         self.assertIn(f"state_dir: {state_root}", doctor.stdout)
         self.assertIn("layout: single-dir", doctor.stdout)
+        with closing(sqlite3.connect(state_root / "state" / "agent_state.db")) as db:
+            self.assertEqual(".", db.execute("select root_path from projects").fetchone()[0])
 
     def test_legacy_layout_init_remains_available(self):
         result = run_cli(self.tmp, "init", "--legacy-layout")

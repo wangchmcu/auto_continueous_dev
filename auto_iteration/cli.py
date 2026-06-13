@@ -1296,7 +1296,7 @@ def command_init(args: argparse.Namespace) -> int:
             values (?, ?, '')
             on conflict(project_id) do update set root_path = excluded.root_path
             """,
-            (project_id, str(root())),
+            (project_id, display_path(root())),
         )
         write_topic_projections(db)
         write_rule_projections(db)
