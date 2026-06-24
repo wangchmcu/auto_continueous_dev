@@ -4,17 +4,18 @@
 - 未设置；请在下一轮实验前明确当前优化目标。
 
 ## 当前快照
-- root: /home/ryan/auto_iteration
+- root: /Users/ryan/Documents/auto_continueous_dev
+- workdir: /Users/ryan/Documents/auto_continueous_dev
 - branch: search_enhance
-- commit: 41251f917f1a0b3f522b087d83619eca3cccf5d1
-- latest_successful_run_id: R-9723365f8f
+- commit: 08846e6ecd2215ca7243773bb0665d5a3ac80354
+- latest_successful_run_id: R-9aef4d0a8d
 - latest_failed_run_id: none
-- global_plan: /home/ryan/auto_iteration/plans/global_plan.md
-- version_task_tracking: /home/ryan/auto_iteration/plans/version_iterations.md
-- active_plan: /home/ryan/auto_iteration/plans/active_plan.md
-- active_topic: /home/ryan/auto_iteration/topics/active_topic.md
-- topic_index: /home/ryan/auto_iteration/topics/index.md
-- topic_board: /home/ryan/auto_iteration/topics/board.md
+- global_plan: plans/global_plan.md
+- version_task_tracking: plans/version_iterations.md
+- active_plan: plans/active_plan.md
+- active_topic: topics/active_topic.md
+- topic_index: topics/index.md
+- topic_board: topics/board.md
 
 ## 当前 Topic
 - none
@@ -36,28 +37,26 @@
 - none
 
 ## Current Baseline
-- accepted_start: decision D-7188530483: 十轮示例收敛到 weight 2.0 offset 1.5
-- accepted_result: run R-9723365f8f: dataset=ten-round-demo status=success
-- why_current: 第 10 轮使用 weight=2.0 和 offset=1.5，mean_absolute_error 达到 0.0。
-- evaluation_entry: /home/ryan/auto_iteration/decisions/active/D-7188530483.md
-- provenance_entry: /home/ryan/auto_iteration/runs/R-9723365f8f/config_resolved.json
-- diagnostic_entry: /home/ryan/auto_iteration/runs/R-9723365f8f/artifacts/report.md
-- last_confirmed_at: 2026-05-15T04:21:17+00:00
+- accepted_start: decision D-ce44870328: Route check ignores reference metadata keywords
+- accepted_result: run R-9aef4d0a8d: dataset=AIT:route_check_metadata_keyword_fix:v0.44 status=success
+- why_current: v0.44 route check now matches rejected route keywords against the structured current-route projection only. Freeform summary and reference metadata such as baseline, provenance, artifacts, results, metrics, logs, source paths, run ids, and decision ids no longer trigger route blocks; exact config duplicates, current route identity, factor/search-space keywords, and parameter-space numeric checks remain active. Verified by full unittest suite.
+- evaluation_entry: decisions/active/D-ce44870328.md
+- provenance_entry: runs/R-9aef4d0a8d/config_resolved.json
+- diagnostic_entry: not recorded
+- last_confirmed_at: 2026-06-24T11:50:12.649890+00:00
 
 ## Topic Evidence Links
 - none
 
 ## 最近成功实验
-- R-9723365f8f: dataset=ten-round-demo status=success
-  - other: /home/ryan/auto_iteration/runs/R-9723365f8f/artifacts/report.md
+- R-9aef4d0a8d: dataset=AIT:route_check_metadata_keyword_fix:v0.44 status=success
 
 ## 当前有效结论
-- D-7188530483: 十轮示例收敛到 weight 2.0 offset 1.5 evidence=R-9723365f8f
-  - 第 10 轮使用 weight=2.0 和 offset=1.5，mean_absolute_error 达到 0.0。
+- D-ce44870328: Route check ignores reference metadata keywords evidence=R-9aef4d0a8d
+  - v0.44 route check now matches rejected route keywords against the structured current-route projection only. Freeform summary and reference metadata such as baseline, provenance, artifacts, results, metrics, logs, source paths, run ids, and decision ids no longer trigger route blocks; exact config duplicates, current route identity, factor/search-space keywords, and parameter-space numeric checks remain active. Verified by full unittest suite.
 
 ## 已废弃且不要重复的路线
-- D-74cadc923e: 放弃 max_value_reward 错误目标函数 evidence=R-e037afb46d
-  - reopen_condition: 只有用户明确把任务目标改成奖励预测值变大时才允许重开。
+- none
 
 ## 未决假设
 - none
@@ -69,15 +68,15 @@
 4. 会话结束前运行 `auto-iter handoff generate` 和 `auto-iter handoff validate`。
 
 ## 读取顺序
-1. /home/ryan/auto_iteration/AGENTS.md
-2. /home/ryan/auto_iteration/handoffs/latest_handoff.md
-3. /home/ryan/auto_iteration/plans/global_plan.md
-4. /home/ryan/auto_iteration/plans/version_iterations.md
-5. /home/ryan/auto_iteration/plans/active_plan.md
-6. /home/ryan/auto_iteration/topics/active_topic.md
-7. /home/ryan/auto_iteration/topics/board.md
-8. /home/ryan/auto_iteration/state/agent_state.db
-9. /home/ryan/auto_iteration/decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
+1. AGENTS.md
+2. handoffs/latest_handoff.md
+3. plans/global_plan.md
+4. plans/version_iterations.md
+5. plans/active_plan.md
+6. topics/active_topic.md
+7. topics/board.md
+8. state/agent_state.db
+9. decisions（只信任 `auto-iter context index` 未标记为 orphan/stale 的 projection）。
 10. 用 `auto-iter context index` 查看可按需读取的标题索引和 projection warnings。
 11. 只有用户要求或确认切回 archived topic 时才读取 topics/archive/。
 12. 只有调查具体失败时才读取 runs/<run_id>/logs/ 下的原始日志。

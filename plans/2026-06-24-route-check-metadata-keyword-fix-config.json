@@ -1,0 +1,6 @@
+{
+  "change": "route_check_metadata_keyword_matching_fix",
+  "commit": "08846e6ecd2215ca7243773bb0665d5a3ac80354",
+  "goal": "Verify auto-iter route check rejected keyword matching uses the current route projection instead of freeform summary or reference metadata.",
+  "version": "v0.44"
+}
