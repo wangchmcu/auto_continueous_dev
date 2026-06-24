@@ -43,7 +43,7 @@ class CliTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
-        self.tmp = Path(self.temp_dir.name)
+        self.tmp = Path(self.temp_dir.name).resolve()
 
     def test_init_and_doctor_create_state_store(self):
         result = run_cli(self.tmp, "init")
@@ -1890,6 +1890,70 @@ class CliTests(unittest.TestCase):
             status = db.execute("select status from runs where run_id = ?", (run_id,)).fetchone()[0]
         self.assertEqual(status, "failed")
 
+    def test_run_exec_can_run_measurement_after_expected_nonzero_command(self):
+        run_cli(self.tmp, "init")
+        config = self.tmp / "config.json"
+        metrics = self.tmp / "metrics.json"
+        primary = self.tmp / "primary.py"
+        post = self.tmp / "postprocess.py"
+        write_json(config, {"case": "fail-closed-with-measurement"})
+        primary.write_text(
+            "import sys\nprint('blocked output quality')\nsys.exit(2)\n",
+            encoding="utf-8",
+        )
+        post.write_text(
+            "\n".join(
+                [
+                    "from pathlib import Path",
+                    "import json",
+                    "import sys",
+                    "Path(sys.argv[1]).write_text(",
+                    "    json.dumps({'blocked_quality_score': {'value': 0.0, 'unit': 'ratio', 'direction': 'higher_is_better'}}),",
+                    "    encoding='utf-8',",
+                    ")",
+                    "print('measurement complete')",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli(
+            self.tmp,
+            "run",
+            "exec",
+            "--config",
+            str(config),
+            "--dataset",
+            "exec-demo",
+            "--command",
+            f"{sys.executable} {primary}",
+            "--post-command",
+            f"{sys.executable} {post} {metrics}",
+            "--post-command-on-failure",
+            "--metrics",
+            str(metrics),
+            check=False,
+        )
+        run_id = result.stdout.strip().split()[2]
+        run_dir = self.tmp / ".auto_iter" / "runs" / run_id
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("status=failed", result.stdout)
+        self.assertIn("measurement complete", (run_dir / "logs" / "stdout.log").read_text(encoding="utf-8"))
+        self.assertIn("blocked_quality_score", (run_dir / "summary.md").read_text(encoding="utf-8"))
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
+            row = db.execute(
+                "select status from runs where run_id = ?",
+                (run_id,),
+            ).fetchone()
+            metric = db.execute(
+                "select metric_value from metrics where run_id = ? and metric_name = ?",
+                (run_id, "blocked_quality_score"),
+            ).fetchone()
+        self.assertEqual(row[0], "failed")
+        self.assertEqual(metric[0], 0.0)
+
     def test_v0_2_entry_flow_uses_installed_auto_iter_command(self):
         run_cli(self.tmp, "init")
         bin_dir = self.tmp / "bin"
@@ -1975,7 +2039,7 @@ class CliTests(unittest.TestCase):
     def test_rejected_decision_blocks_matching_route(self):
         run_cli(self.tmp, "init")
         config = self.tmp / "config.json"
-        write_json(config, {"sample_count": 100000, "proposal": "brute_force"})
+        write_json(config, {"sample_count": 100000, "proposal": "brute_force", "route_labels": ["采样次数"]})
         run_id = run_cli(
             self.tmp,
             "run",
@@ -2090,6 +2154,304 @@ class CliTests(unittest.TestCase):
         self.assertIn("parameter-space", blocked.stdout)
         self.assertIn("threshold:0.6:0.9", blocked.stdout)
         self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn("ALLOWED", allowed.stdout)
+
+    def test_route_check_ignores_rejected_keyword_in_reference_metadata(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "loop7_warmup_action_surface_probe_v4"
+        write_json(evidence_config, {"route_name": "old_rejected_route"})
+        write_json(
+            route_config,
+            {
+                "route_name": "material_repair_route_v1",
+                "factor_ids": ["material_gap_repair", "known_at_ts_audit"],
+                "search_space": {"quality_floor": [0.65, 0.7]},
+                "baseline": {
+                    "strategy_source": f"doc/archive/{rejected_keyword}/strategy.json",
+                },
+                "provenance": {
+                    "source_slug": rejected_keyword,
+                    "decision_id": "D-31656c22fa",
+                    "run_id": "R-oldroute",
+                },
+                "artifacts": [f"doc/results/{rejected_keyword}/metrics.json"],
+                "metrics": {"baseline_sharpe": 0.1},
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-keyword",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "旧 warmup action surface probe 被拒绝",
+            "--claim",
+            "旧路线不可复用。",
+            "--route-keyword",
+            rejected_keyword,
+            "--reopen-condition",
+            "只有显式 supersede 后才允许重开同名路线。",
+        )
+
+        allowed = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "material repair route with explicit candidate fields",
+        )
+
+        self.assertIn("ALLOWED", allowed.stdout)
+
+    def test_route_check_ignores_rejected_keyword_in_summary_reference(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "loop7_warmup_action_surface_probe_v4"
+        write_json(evidence_config, {"route_name": rejected_keyword})
+        write_json(
+            route_config,
+            {
+                "route_name": "material_repair_route_v2",
+                "factor_ids": ["quality_repair_factor"],
+                "search_space": {"stop_loss": [-0.025, -0.03]},
+                "baseline_metrics": f"doc/results/{rejected_keyword}/metrics.json",
+                "provenance": {"source_slug": rejected_keyword},
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-keyword",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "旧 action surface probe 被拒绝",
+            "--claim",
+            "旧路线不可复用。",
+            "--route-keyword",
+            rejected_keyword,
+        )
+
+        allowed = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            f"material repair route; not a replay of {rejected_keyword}",
+        )
+
+        self.assertIn("ALLOWED", allowed.stdout)
+
+    def test_route_check_blocks_rejected_keyword_in_current_route_identity(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "protected_add_quality_repair_v1"
+        write_json(evidence_config, {"route_name": "old_quality_route"})
+        write_json(
+            route_config,
+            {
+                "route_name": rejected_keyword,
+                "baseline": {"strategy_source": "doc/archive/other_route.json"},
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-keyword",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "同名 protected add quality repair 已拒绝",
+            "--claim",
+            "同名路线必须显式 supersede 或 reopen。",
+            "--route-keyword",
+            rejected_keyword,
+        )
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "quality repair candidate",
+            check=False,
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("BLOCKED", blocked.stdout)
+
+    def test_route_check_blocks_rejected_keyword_in_factor_search_space(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "ext_volume_ratio_48"
+        write_json(evidence_config, {"route_name": "old_factor_route"})
+        write_json(
+            route_config,
+            {
+                "route_name": "factor_material_repair_v1",
+                "factor_ids": ["ext_ma_60bar_gap", rejected_keyword],
+                "search_space": {
+                    "factor_ids": ["ext_ma_60bar_gap", rejected_keyword],
+                    "thresholds": [0.15, 0.2],
+                },
+                "provenance": {"source_slug": "new_factor_materialization"},
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-keyword",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "ext_volume_ratio_48 路线已拒绝",
+            "--claim",
+            "当前 factor/search space 不能继续复用该字段。",
+            "--route-keyword",
+            rejected_keyword,
+        )
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "factor material repair candidate",
+            check=False,
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("BLOCKED", blocked.stdout)
+
+    def test_route_check_ignores_superseded_broad_keyword_decision(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        write_json(evidence_config, {"factor_family": "A10M_FACTOR_EXT_V1"})
+        write_json(route_config, {"factor_ids": ["ext_momentum_10m", "ext_volume_surge_10m"]})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-keyword",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        old_decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "旧 data gate 拒绝宽泛 A10M_FACTOR_EXT_V1",
+            "--claim",
+            "旧的整组扩展因子输入口径不合格。",
+            "--route-keyword",
+            "A10M_FACTOR_EXT_V1",
+            "--reopen-condition",
+            "只有重新做具体因子准入后才允许重开。",
+        ).stdout.strip().split()[-1]
+        repair_decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "active",
+            "--evidence",
+            run_id,
+            "--title",
+            "具体 ext_* 因子准入完成",
+            "--claim",
+            "route 应只引用已准入的 ext_momentum_10m 和 ext_volume_surge_10m。",
+            "--route-keyword",
+            "ext_momentum_10m",
+            "--route-keyword",
+            "ext_volume_surge_10m",
+        ).stdout.strip().split()[-1]
+        run_cli(self.tmp, "decision", "supersede", old_decision_id, "--by", repair_decision_id)
+
+        allowed = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "使用已准入 concrete ext_momentum_10m 和 ext_volume_surge_10m，不重开 A10M_FACTOR_EXT_V1 整组方案",
+        )
+
         self.assertIn("ALLOWED", allowed.stdout)
 
     def test_handoff_validate_reports_missing_required_sections(self):

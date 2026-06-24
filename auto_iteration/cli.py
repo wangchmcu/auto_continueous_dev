@@ -2893,18 +2893,35 @@ def command_run_exec(args: argparse.Namespace) -> int:
         run_id = create_run_record(db, config, args.dataset, args.command, args.seed, args.session, workdir=workdir)
         write_debug_event(run_id, "started", {"command": args.command, "workdir": str(workdir)})
         result = subprocess.run(args.command, cwd=workdir, text=True, capture_output=True, shell=True)
-        (logs_dir(run_id) / "stdout.log").write_text(result.stdout, encoding="utf-8")
-        (logs_dir(run_id) / "stderr.log").write_text(result.stderr, encoding="utf-8")
-        status = "success" if result.returncode == 0 else "failed"
+        stdout_text = result.stdout
+        stderr_text = result.stderr
+        returncode = result.returncode
+        status = "success" if returncode == 0 else "failed"
+        if args.post_command and (returncode == 0 or args.post_command_on_failure):
+            write_debug_event(run_id, "post_command_started", {"command": args.post_command})
+            post_result = subprocess.run(args.post_command, cwd=workdir, text=True, capture_output=True, shell=True)
+            stdout_text += f"\n[auto-iter post-command stdout]\n{post_result.stdout}"
+            stderr_text += f"\n[auto-iter post-command stderr]\n{post_result.stderr}"
+            write_debug_event(
+                run_id,
+                "post_command_finished",
+                {"returncode": post_result.returncode},
+            )
+            if post_result.returncode != 0:
+                status = "failed"
+                if returncode == 0:
+                    returncode = post_result.returncode
+        (logs_dir(run_id) / "stdout.log").write_text(stdout_text, encoding="utf-8")
+        (logs_dir(run_id) / "stderr.log").write_text(stderr_text, encoding="utf-8")
         write_debug_event(
             run_id,
             "finished",
-            {"returncode": result.returncode, "status": status},
+            {"returncode": returncode, "status": status, "primary_returncode": result.returncode},
         )
         metrics = read_json(args.metrics) if args.metrics and Path(args.metrics).exists() else {}
-        finish_run_record(db, run_id, status, metrics, args.artifact, result.returncode)
-    print(f"executed run {run_id} status={status} returncode={result.returncode}")
-    return result.returncode
+        finish_run_record(db, run_id, status, metrics, args.artifact, returncode)
+    print(f"executed run {run_id} status={status} returncode={returncode}")
+    return returncode
 
 
 def command_run_list(args: argparse.Namespace) -> int:
@@ -2994,8 +3011,82 @@ def config_value(config: Any, dotted_name: str) -> Any:
     return current
 
 
+ROUTE_MATCHING_METADATA_KEYS = {
+    "archive",
+    "artifacts",
+    "artifact",
+    "baseline",
+    "decision_id",
+    "decision_ids",
+    "evidence",
+    "evidence_json",
+    "evidence_path",
+    "evidence_paths",
+    "evidences",
+    "history",
+    "log",
+    "logs",
+    "metric",
+    "metrics",
+    "previous",
+    "prior",
+    "provenance",
+    "result",
+    "results",
+    "run_id",
+    "run_ids",
+    "source",
+    "source_path",
+    "source_paths",
+    "source_slug",
+    "strategy_source",
+}
+
+
+ROUTE_MATCHING_METADATA_KEY_PARTS = {
+    "archive",
+    "artifact",
+    "artifacts",
+    "baseline",
+    "evidence",
+    "evidences",
+    "history",
+    "log",
+    "logs",
+    "metric",
+    "metrics",
+    "previous",
+    "prior",
+    "provenance",
+    "result",
+    "results",
+}
+
+
+def is_route_matching_metadata_key(key: Any) -> bool:
+    normalized = str(key).lower().replace("-", "_")
+    if normalized in ROUTE_MATCHING_METADATA_KEYS:
+        return True
+    return any(part in ROUTE_MATCHING_METADATA_KEY_PARTS for part in normalized.split("_"))
+
+
+def route_matching_projection(config: Any) -> Any:
+    """Keep active route candidate fields, excluding reference metadata."""
+    if isinstance(config, dict):
+        projected: dict[str, Any] = {}
+        for key, value in config.items():
+            if is_route_matching_metadata_key(key):
+                continue
+            projected[key] = route_matching_projection(value)
+        return projected
+    if isinstance(config, list):
+        return [route_matching_projection(item) for item in config]
+    return config
+
+
 def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
-    haystack = summary + "\n" + stable_json(config)
+    del summary
+    haystack = stable_json(route_matching_projection(config))
     keywords = rule["keywords"]
     keywords_match = all(keyword in haystack for keyword in keywords)
     relation = rule["relation"]
@@ -3373,7 +3464,7 @@ def command_route_check(args: argparse.Namespace) -> int:
         decisions = db.execute(
             """
             select * from decisions
-            where status in ('rejected', 'superseded')
+            where status = 'rejected'
             order by created_at desc
             """
         ).fetchall()
@@ -3394,7 +3485,7 @@ def command_route_check(args: argparse.Namespace) -> int:
         )
     if result == "allow":
         print("ALLOWED")
-        print("No rejected or superseded route matched this proposal.")
+        print("No rejected route matched this proposal.")
         return 0
     print("BLOCKED")
     for reason in reasons:
@@ -4923,6 +5014,8 @@ def add_common_run_subcommands(subparsers: argparse._SubParsersAction[argparse.A
     exec_cmd.add_argument("--workdir")
     exec_cmd.add_argument("--metrics")
     exec_cmd.add_argument("--artifact", action="append", default=[])
+    exec_cmd.add_argument("--post-command")
+    exec_cmd.add_argument("--post-command-on-failure", action="store_true")
     exec_cmd.add_argument("--seed")
     exec_cmd.add_argument("--session")
     exec_cmd.set_defaults(func=command_run_exec)

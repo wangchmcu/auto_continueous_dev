@@ -16,10 +16,29 @@
 
 ## 当前版本
 
-- current_version: v0.43
+- current_version: v0.44
 - status: done
-- previous_goal: v0.42 完成 worktree execution context（worktree 执行现场），让共享 AIT 项目根负责 `.auto_iter/` 状态写入，每个窗口或 run 的 workdir 负责实验命令实际执行和 Git 状态采集。
-- goal: 完成 portable recovery paths（可移植恢复路径）：换物理机重启工作时，handoff 恢复入口和项目内证据主路径不依赖旧机器绝对路径。
+- previous_goal: v0.43 完成 portable recovery paths（可移植恢复路径）：换物理机重启工作时，handoff 恢复入口和项目内证据主路径不依赖旧机器绝对路径。
+- goal: 修复 `route check` rejected keyword 的匹配范围：只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
+
+## v0.44 任务清单
+
+- status: done
+- goal: 收窄 `auto-iter route check` 的 rejected keyword 匹配范围，保留 exact config hash duplicate 检查和 parameter-space 原始 config 数值读取。
+- [x] 新增当前路线匹配投影，keyword haystack 只包含主动候选字段投影；freeform summary 继续落库审计，但不参与 keyword 匹配。
+- [x] 明确排除 baseline、provenance、evidence、artifact、result、metrics、log、source、run_id、decision_id、previous/prior/archive/history 等引用性元数据。
+- [x] 保留当前 route identity、显式 route 字段、factor ids、search space 中 rejected keyword 的阻断行为。
+- [x] 增加 route-check 回归测试，覆盖元数据引用不阻断、summary 引用不阻断、route identity 阻断、factor/search space 阻断、superseded broad keyword 仍不阻断。
+
+## v0.44 验收命令
+
+- `python3 -m unittest tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_reference_metadata tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_summary_reference tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_current_route_identity tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_factor_search_space tests.test_cli.CliTests.test_route_check_ignores_superseded_broad_keyword_decision tests.test_cli.CliTests.test_route_check_blocks_rejected_parameter_space -v`
+- `python3 -m unittest discover -s tests -v`
+- `git diff --check`
+
+## v0.44 距离 global plan
+
+v0.44 强化了路线关系管理的可靠性：rejected decision 仍能阻断真实重复路线，但不会因为 freeform summary、历史证据路径或旧决策引用误伤新的修复路线。后续仍可继续增强 reopen/supersede 提示与可选语义检索。
 
 ## v0.1 任务清单
 
