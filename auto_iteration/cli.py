@@ -2982,13 +2982,40 @@ def parse_route_param(spec: str) -> dict[str, Any]:
     return {"name": name, "min": min_value, "max": max_value}
 
 
-def encode_route_rule(route_keywords: list[str], route_relation: str, route_params: list[str]) -> str:
+def parse_route_scope(spec: str) -> tuple[str, str]:
+    if "=" not in spec:
+        raise UserError(f"invalid --route-scope {spec!r}; expected key=value")
+    key, value = spec.split("=", 1)
+    key = key.strip()
+    value = value.strip()
+    if not key:
+        raise UserError(f"invalid --route-scope {spec!r}; key is empty")
+    if not value:
+        raise UserError(f"invalid --route-scope {spec!r}; value is empty")
+    return key, value
+
+
+def encode_route_scope(route_scope: list[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for spec in route_scope:
+        key, value = parse_route_scope(spec)
+        result[key] = value
+    return result
+
+
+def encode_route_rule(
+    route_keywords: list[str],
+    route_relation: str,
+    route_params: list[str],
+    route_scope: list[str] | None = None,
+) -> str:
     params = [parse_route_param(spec) for spec in route_params]
     return json.dumps(
         {
             "keywords": route_keywords,
             "relation": route_relation,
             "params": params,
+            "scope": encode_route_scope(route_scope or []),
         },
         ensure_ascii=False,
     )
@@ -3004,11 +3031,16 @@ def decode_route_rule(raw: str) -> dict[str, Any]:
         "keywords": list(data.get("keywords") or []),
         "relation": str(data.get("relation") or "keyword"),
         "params": list(data.get("params") or []),
+        "scope": dict(data.get("scope") or {}),
     }
 
 
 def route_param_text(params: list[dict[str, Any]]) -> str:
     return ", ".join(f"{item['name']}:{item['min']:g}:{item['max']:g}" for item in params)
+
+
+def route_scope_text(scope: dict[str, Any]) -> str:
+    return ", ".join(f"{key}={value}" for key, value in sorted(scope.items()))
 
 
 def config_value(config: Any, dotted_name: str) -> Any:
@@ -3094,8 +3126,46 @@ def route_matching_projection(config: Any) -> Any:
     return config
 
 
+def normalize_route_scope_value(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return stable_json(value)
+    return str(value)
+
+
+def extract_route_scope(config: Any) -> dict[str, str]:
+    if not isinstance(config, dict):
+        return {}
+    raw_scope = config.get("route_scope")
+    if raw_scope is None and isinstance(config.get("route_governance"), dict):
+        governance = config["route_governance"]
+        raw_scope = governance.get("route_scope") or governance.get("scope")
+    if not isinstance(raw_scope, dict):
+        return {}
+    return {str(key): normalize_route_scope_value(value) for key, value in raw_scope.items()}
+
+
+def route_scope_matches(rule_scope: dict[str, Any], config: Any) -> bool:
+    if not rule_scope:
+        return True
+    proposed_scope = extract_route_scope(config)
+    if not proposed_scope:
+        return False
+    for key, value in rule_scope.items():
+        if proposed_scope.get(str(key)) != normalize_route_scope_value(value):
+            return False
+    return True
+
+
 def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
     del summary
+    scope = rule.get("scope") or {}
+    scope_match = route_scope_matches(scope, config)
+    if scope:
+        if rule["relation"] == "parameter-space":
+            if not scope_match:
+                return False
+        else:
+            return scope_match
     haystack = stable_json(route_matching_projection(config))
     keywords = rule["keywords"]
     keywords_match = all(keyword in haystack for keyword in keywords)
@@ -3103,6 +3173,8 @@ def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
     params = rule["params"]
     if relation == "parameter-space":
         if not params:
+            return False
+        if scope and not scope_match:
             return False
         for item in params:
             value = config_value(config, str(item["name"]))
@@ -3393,6 +3465,8 @@ def write_decision_projection(
         lines.append(f"- route_relation: {route_rule['relation']}")
     if route_rule["keywords"]:
         lines.append(f"- route_keywords: {', '.join(route_rule['keywords'])}")
+    if route_rule.get("scope"):
+        lines.append(f"- route_scope: {route_scope_text(route_rule['scope'])}")
     if route_rule["params"]:
         lines.append(f"- route_params: {route_param_text(route_rule['params'])}")
     if reopen_condition:
@@ -3409,7 +3483,7 @@ def command_decision_add(args: argparse.Namespace) -> int:
         raise UserError("at least one --evidence run_id is required")
     decision_id = new_id("D")
     route_keywords = args.route_keyword or []
-    route_rule_json = encode_route_rule(route_keywords, args.route_relation, args.route_param or [])
+    route_rule_json = encode_route_rule(route_keywords, args.route_relation, args.route_param or [], args.route_scope or [])
     route_rule = decode_route_rule(route_rule_json)
     with database() as db:
         for run_id in evidence:
@@ -3566,6 +3640,8 @@ def command_route_check(args: argparse.Namespace) -> int:
             evidence = ", ".join(json.loads(decision["evidence_run_ids_json"]))
             print(f"- {decision['decision_id']}: {decision['title']}")
             print(f"  route_relation: {rule['relation']}")
+            if rule.get("scope"):
+                print(f"  route_scope: {route_scope_text(rule['scope'])}")
             if rule["params"]:
                 print(f"  route_params: {route_param_text(rule['params'])}")
             print(f"  evidence_run_ids: {evidence}")
@@ -3580,6 +3656,8 @@ def command_route_check(args: argparse.Namespace) -> int:
         evidence = ", ".join(json.loads(decision["evidence_run_ids_json"]))
         print(f"- {decision['decision_id']}: {decision['title']}")
         print(f"  route_relation: {rule['relation']}")
+        if rule.get("scope"):
+            print(f"  route_scope: {route_scope_text(rule['scope'])}")
         if rule["params"]:
             print(f"  route_params: {route_param_text(rule['params'])}")
         print(f"  evidence_run_ids: {evidence}")
@@ -5267,6 +5345,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="keyword",
     )
     add.add_argument("--route-param", action="append", default=[])
+    add.add_argument("--route-scope", action="append", default=[])
     add.add_argument("--reopen-condition")
     add.add_argument("--supersedes")
     add.set_defaults(func=command_decision_add)

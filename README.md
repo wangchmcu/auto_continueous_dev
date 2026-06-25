@@ -406,6 +406,24 @@ Before a new experiment route:
 auto-iter route check --config config.json --summary "<中文路线说明>"
 ```
 
+For new rejected decisions, prefer structured route scope over broad keyword
+matching:
+
+```bash
+auto-iter decision add --status rejected --evidence R-... \
+  --title "<why rejected>" \
+  --claim "<what failed>" \
+  --route-relation method \
+  --route-scope strategy_family=bloop06_midconfidence \
+  --route-scope source_family=stage_projection \
+  --route-scope failure_class=source_admission \
+  --reopen-condition "<when this structured scope may be retried>"
+```
+
+When a rejected decision has `route_scope`, `route check` compares those
+structured keys exactly. Legacy `route-keyword` text is then audit metadata and
+does not create a fuzzy similarity block for a different structured scope.
+
 If a rejected decision matches but its recorded `reopen-condition` has been
 satisfied, do not edit the rejected decision or rename the route to bypass
 governance. Rerun the check with an explicit reopen audit:

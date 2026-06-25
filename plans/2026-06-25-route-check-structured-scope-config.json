@@ -1,0 +1,19 @@
+{
+  "route_name": "route_check_structured_scope_v0_46",
+  "capability": "route_check_structured_scope",
+  "scope": "AIT CLI route governance",
+  "root_cause": "legacy route similarity used keyword containment over projected route JSON",
+  "new_behavior": "when a rejected decision has route_scope, route check matches by exact structured scope fields instead of legacy keyword text",
+  "legacy_behavior": "decisions without route_scope still use legacy keyword matching for compatibility",
+  "non_goals": [
+    "do not reinterpret historical rejected decisions automatically",
+    "do not remove legacy keyword matching in this release",
+    "do not use natural-language similarity or embeddings for route blocking"
+  ],
+  "acceptance": [
+    "structured scope match blocks even if route_name changed",
+    "structured scope mismatch allows even if legacy keyword text appears in active route fields",
+    "legacy keyword and parameter-space tests still pass",
+    "explicit reopen tests still pass"
+  ]
+}

@@ -7,8 +7,8 @@
 - root: /Users/ryan/Documents/auto_continueous_dev
 - workdir: /Users/ryan/Documents/auto_continueous_dev
 - branch: search_enhance
-- commit: aad37b916fedcd2cbec1203bd605d384052ec7cc
-- latest_successful_run_id: R-102a1b8878
+- commit: bdd9b53ef340a4f55753380c8e96d98eb56cefad
+- latest_successful_run_id: R-389e68b4cd
 - latest_failed_run_id: none
 - global_plan: plans/global_plan.md
 - version_task_tracking: plans/version_iterations.md
@@ -37,22 +37,24 @@
 - none
 
 ## Current Baseline
-- accepted_start: decision D-55f5a3ec72: Route check explicit reopen remains fail-closed across exact duplicate history
-- accepted_result: run R-102a1b8878: dataset=AIT:route_check_explicit_reopen:v0.45 status=success
-- why_current: v0.45 keeps rejected route checks blocked by default, supports explicit ALLOWED_WITH_REOPEN only for matching rejected decisions with reopen_condition and --reopen-reason, and permits exact config duplicate retry only when every exact duplicate run is failed/aborted and is evidence for an explicitly reopened decision. Success exact duplicates and unrelated failed exact duplicates remain BLOCKED. Verified by full unittest suite.
-- evaluation_entry: decisions/active/D-55f5a3ec72.md
-- provenance_entry: runs/R-102a1b8878/config_resolved.json
-- diagnostic_entry: plans/2026-06-25-route-check-explicit-reopen-config.json
-- last_confirmed_at: 2026-06-25T03:59:43.542970+00:00
+- accepted_start: decision D-a800fe3a38: Route check uses structured route scope before legacy keywords
+- accepted_result: run R-389e68b4cd: dataset=AIT:route_check_structured_scope:v0.46 status=success
+- why_current: v0.46 addresses the root cause of repeated route-check similarity disputes: new rejected decisions can define route_scope key/value fields, and route check matches those fields exactly instead of relying on keyword containment. If a rejected decision has route_scope, legacy route keywords no longer create fuzzy blocks for different structured scopes. Legacy keyword matching remains only for old decisions without route_scope. Verified by full unittest suite.
+- evaluation_entry: decisions/active/D-a800fe3a38.md
+- provenance_entry: runs/R-389e68b4cd/config_resolved.json
+- diagnostic_entry: plans/2026-06-25-route-check-structured-scope-config.json
+- last_confirmed_at: 2026-06-25T04:20:36.375007+00:00
 
 ## Topic Evidence Links
 - none
 
 ## 最近成功实验
-- R-102a1b8878: dataset=AIT:route_check_explicit_reopen:v0.45 status=success
-  - other: plans/2026-06-25-route-check-explicit-reopen-config.json
+- R-389e68b4cd: dataset=AIT:route_check_structured_scope:v0.46 status=success
+  - other: plans/2026-06-25-route-check-structured-scope-config.json
 
 ## 当前有效结论
+- D-a800fe3a38: Route check uses structured route scope before legacy keywords evidence=R-389e68b4cd
+  - v0.46 addresses the root cause of repeated route-check similarity disputes: new rejected decisions can define route_scope key/value fields, and route check matches those fields exactly instead of relying on keyword containment. If a rejected decision has route_scope, legacy route keywords no longer create fuzzy blocks for different structured scopes. Legacy keyword matching remains only for old decisions without route_scope. Verified by full unittest suite.
 - D-55f5a3ec72: Route check explicit reopen remains fail-closed across exact duplicate history evidence=R-102a1b8878
   - v0.45 keeps rejected route checks blocked by default, supports explicit ALLOWED_WITH_REOPEN only for matching rejected decisions with reopen_condition and --reopen-reason, and permits exact config duplicate retry only when every exact duplicate run is failed/aborted and is evidence for an explicitly reopened decision. Success exact duplicates and unrelated failed exact duplicates remain BLOCKED. Verified by full unittest suite.
 - D-ce44870328: Route check ignores reference metadata keywords evidence=R-9aef4d0a8d

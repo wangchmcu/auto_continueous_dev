@@ -16,10 +16,30 @@
 
 ## 当前版本
 
-- current_version: v0.45
+- current_version: v0.46
 - status: done
-- previous_goal: v0.44 修复 `route check` rejected keyword 的匹配范围：只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
-- goal: 补齐 `route check` 显式重开能力：rejected decision 仍默认阻断；只有调用者显式提供匹配的 `--reopen-decision` 和 `--reopen-reason`，且该 decision 有 `reopen_condition`，才允许返回 `ALLOWED_WITH_REOPEN` 并写入审计记录。
+- previous_goal: v0.45 补齐 `route check` 显式重开能力：rejected decision 仍默认阻断；只有调用者显式提供匹配的 `--reopen-decision` 和 `--reopen-reason`，且该 decision 有 `reopen_condition`，才允许返回 `ALLOWED_WITH_REOPEN` 并写入审计记录。
+- goal: 从源头收敛 route similarity（路线相似性）判断：新增结构化 `route_scope`，让新 rejected decision 可以用明确键值匹配路线范围，而不是依赖关键词在 route JSON 里的模糊包含。
+
+## v0.46 任务清单
+
+- status: done
+- goal: 把“是否与已拒绝实验方法相似”从 legacy keyword containment 转为结构化 scope matching。
+- [x] `decision add` 新增 `--route-scope key=value`，写入 route rule 的 `scope` 字段。
+- [x] `route check` 对带 `route_scope` 的 rejected decision 只按结构化 scope 精确匹配；scope 不匹配时，即使 legacy keyword 文本出现在当前 route active fields 里也不阻断。
+- [x] 不自动重写历史 rejected decision；无 `route_scope` 的旧记录继续走 legacy keyword matching。
+- [x] decision projection 和 route-check 输出展示 `route_scope`，便于审计阻断依据。
+- [x] 增加回归测试，覆盖 scope 匹配阻断、scope 不匹配时 keyword 文本碰撞不阻断、legacy keyword/parameter-space/reopen 兼容。
+
+## v0.46 验收命令
+
+- `python3 -m unittest tests.test_cli.CliTests.test_route_check_blocks_rejected_parameter_space tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_reference_metadata tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_summary_reference tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_current_route_identity tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_factor_search_space tests.test_cli.CliTests.test_route_check_blocks_structured_route_scope_match tests.test_cli.CliTests.test_route_check_structured_scope_overrides_legacy_keyword_text_collision tests.test_cli.CliTests.test_route_check_allows_explicit_reopen_for_matching_rejected_decision tests.test_cli.CliTests.test_route_check_reopen_requires_reason_and_matching_reopenable_decision tests.test_cli.CliTests.test_route_check_reopen_allows_failed_exact_config_when_evidence_decision_reopened tests.test_cli.CliTests.test_route_check_reopen_blocks_success_or_unrelated_exact_config_duplicates tests.test_cli.CliTests.test_route_check_ignores_superseded_broad_keyword_decision -v`
+- `python3 -m unittest discover -s tests -v`
+- `git diff --check`
+
+## v0.46 距离 global plan
+
+v0.46 是 route governance 的源头修复：新路线阻断依据可以表达成结构化 scope，而不是靠文字相似。后续剩余工作是逐步把高价值历史 rejected decision 迁移/补录结构化 scope；legacy keyword matching 暂时保留为兼容层，不再作为新记录的首选机制。
 
 ## v0.45 任务清单
 

@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.45。
+- 当前版本：v0.46。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -54,6 +54,7 @@
 - v0.43 已完成：portable recovery paths（可移植恢复路径）：handoff 恢复入口、读取顺序、项目内 artifact 主路径和 baseline 证据入口优先写项目相对路径；root/workdir 和项目外路径保留为 provenance。
 - v0.44 已完成：`route check` rejected keyword 匹配范围收窄，只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
 - v0.45 已完成：`route check` 显式重开能力，匹配 rejected decision 时默认仍阻断；只有显式传入匹配的 `--reopen-decision` 和 `--reopen-reason`，且该 decision 有 `reopen_condition`，才返回 `ALLOWED_WITH_REOPEN` 并记录审计字段。
+- v0.46 已完成：`route check` 结构化 `route_scope` 匹配，新 rejected decision 可以用明确键值表达方法族、数据/证据族和失败类别；带 scope 的 decision 不再靠 legacy keyword 文本碰撞判断相似性。
 
 ## 下一步
 

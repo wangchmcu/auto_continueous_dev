@@ -34,6 +34,7 @@
 - 新路线前运行 route check。
 - 阻止明显重复配置和 rejected/superseded 路线。
 - 后续增强方法被替代、参数空间被部分否定、重开条件提示和显式重开审计。
+- 新 rejected decision 应优先使用结构化 `route_scope` 表达方法族、数据/证据族、失败类别或参数空间边界；legacy keyword matching 只作为旧记录兼容层。
 
 ### 4. 交接和恢复
 

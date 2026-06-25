@@ -2389,6 +2389,135 @@ class CliTests(unittest.TestCase):
         self.assertEqual(blocked.returncode, 2)
         self.assertIn("BLOCKED", blocked.stdout)
 
+    def test_route_check_blocks_structured_route_scope_match(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        write_json(evidence_config, {"route_name": "old_source_blocked_route"})
+        write_json(
+            route_config,
+            {
+                "route_name": "new_retry_name_v1",
+                "route_scope": {
+                    "strategy_family": "bloop06_midconfidence",
+                    "source_family": "stage_projection",
+                    "failure_class": "source_admission",
+                },
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-scope",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "source admission route failed",
+            "--claim",
+            "this structured route scope is invalid until source-clean evidence exists.",
+            "--route-relation",
+            "method",
+            "--route-scope",
+            "strategy_family=bloop06_midconfidence",
+            "--route-scope",
+            "source_family=stage_projection",
+            "--route-scope",
+            "failure_class=source_admission",
+            "--reopen-condition",
+            "Reopen only with source-clean evidence.",
+        )
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "structured scope retry",
+            check=False,
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn("route_scope", blocked.stdout)
+        self.assertIn("strategy_family=bloop06_midconfidence", blocked.stdout)
+
+    def test_route_check_structured_scope_overrides_legacy_keyword_text_collision(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "loop7_warmup_action_surface_probe_v4"
+        write_json(evidence_config, {"route_name": rejected_keyword})
+        write_json(
+            route_config,
+            {
+                "route_name": rejected_keyword,
+                "route_scope": {
+                    "strategy_family": "new_material_repair",
+                    "source_family": "formal_clean_source",
+                },
+                "search_space": {"threshold": [0.1, 0.2]},
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-scope",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "old action surface route failed",
+            "--claim",
+            "old route family failed.",
+            "--route-keyword",
+            rejected_keyword,
+            "--route-scope",
+            "strategy_family=old_action_surface",
+            "--route-scope",
+            "source_family=legacy_probe",
+            "--reopen-condition",
+            "Reopen only with same structured scope evidence.",
+        )
+
+        allowed = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "new structured route that still mentions old keyword",
+        )
+
+        self.assertIn("ALLOWED", allowed.stdout)
+
     def test_route_check_allows_explicit_reopen_for_matching_rejected_decision(self):
         run_cli(self.tmp, "init")
         evidence_config = self.tmp / "evidence.json"

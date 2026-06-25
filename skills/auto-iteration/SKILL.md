@@ -183,6 +183,19 @@ For rejected numeric parameter ranges, record the rejected decision with:
 auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" --route-relation parameter-space --route-param name:min:max
 ```
 
+For new rejected method/source-family routes, prefer structured scope over broad keywords:
+
+```bash
+auto-iter decision add --status rejected --evidence <run_id> --title "<中文标题>" --claim "<中文结论>" \
+  --route-relation method \
+  --route-scope strategy_family=<family> \
+  --route-scope source_family=<source-or-evidence-family> \
+  --route-scope failure_class=<why-rejected> \
+  --reopen-condition "<什么时候允许重开>"
+```
+
+When a rejected decision has `route_scope`, route check matches that structured scope exactly. Treat `route-keyword` as legacy compatibility or audit text, not the preferred similarity mechanism.
+
 ## Loading Context
 
 Before broad history reading, use:
