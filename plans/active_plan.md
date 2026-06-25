@@ -6,7 +6,7 @@
 
 ## 当前实施阶段
 
-- 当前版本：v0.43。
+- 当前版本：v0.45。
 - AIT 源仓 global plan 文件：`plans/global_plan.md`。
 - 当前任务跟踪文件：`plans/version_iterations.md`。
 - v0.1 已完成：初始化状态库、记录实验、记录结论、拦截重复路线、生成 handoff、版本任务跟踪、实验命令封装、日志捕获、日志摘要。
@@ -52,6 +52,8 @@
 - v0.41 已完成：rejected experiment recording（被拒绝实验记录）：用 `auto-iter run import` 接住外部或历史失败实验，再用 rejected decision、`route-keyword` 和 `reopen-condition` 防止后续重复路线。
 - v0.42 已完成：worktree execution context（worktree 执行现场）：用 `AUTO_ITER_PROJECT_ROOT` 或 `--project-root` 绑定共享 AIT 项目根，用 `AUTO_ITER_WORKDIR` 或 `--workdir` 绑定当前窗口或当前 run 的实际执行目录，并把项目根、workdir、Git 分支、Git 提交和未提交改动数量写入 run summary。
 - v0.43 已完成：portable recovery paths（可移植恢复路径）：handoff 恢复入口、读取顺序、项目内 artifact 主路径和 baseline 证据入口优先写项目相对路径；root/workdir 和项目外路径保留为 provenance。
+- v0.44 已完成：`route check` rejected keyword 匹配范围收窄，只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
+- v0.45 已完成：`route check` 显式重开能力，匹配 rejected decision 时默认仍阻断；只有显式传入匹配的 `--reopen-decision` 和 `--reopen-reason`，且该 decision 有 `reopen_condition`，才返回 `ALLOWED_WITH_REOPEN` 并记录审计字段。
 
 ## 下一步
 

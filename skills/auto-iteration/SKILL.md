@@ -175,6 +175,7 @@ auto-iter route check --config <config.json> --summary "<中文路线说明>"
 ```
 
 If the command returns `BLOCKED`, do not run that route unless the user explicitly reopens it.
+When a matched rejected decision has a recorded reopen condition that is now satisfied, keep the rejected decision unchanged and rerun route check with `--reopen-decision <D-id> --reopen-reason "<why satisfied>"`; do not rename the route or edit history to bypass governance. This explicit reopen only works for matching rejected decisions that already have `reopen_condition`. Exact config duplicates remain blocked unless the duplicate run is failed or aborted and is one of the evidence runs for the explicitly reopened rejected decision.
 
 For rejected numeric parameter ranges, record the rejected decision with:
 

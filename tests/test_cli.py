@@ -2389,6 +2389,415 @@ class CliTests(unittest.TestCase):
         self.assertEqual(blocked.returncode, 2)
         self.assertIn("BLOCKED", blocked.stdout)
 
+    def test_route_check_allows_explicit_reopen_for_matching_rejected_decision(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "bloop06_midconfidence_trainonly_v1"
+        write_json(evidence_config, {"route_name": rejected_keyword, "stage_source": "future_leaking"})
+        write_json(
+            route_config,
+            {
+                "route_name": "bloop06_midconfidence_stage_projection_v1",
+                "method_family": rejected_keyword,
+                "stage_source_projection": "source_clean_stage",
+            },
+        )
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-reopen",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "stage source future timestamp blocker",
+            "--claim",
+            "stage source leaked future timestamps.",
+            "--route-relation",
+            "method",
+            "--route-keyword",
+            rejected_keyword,
+            "--reopen-condition",
+            "Reopen only with a source-clean stage evidence source.",
+        ).stdout.strip().split()[-1]
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "source-clean stage projection retry",
+            check=False,
+        )
+        reopened = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "source-clean stage projection retry",
+            "--reopen-decision",
+            decision_id,
+            "--reopen-reason",
+            "source scan will verify no future timestamps before replay",
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn("ALLOWED_WITH_REOPEN", reopened.stdout)
+        self.assertIn(decision_id, reopened.stdout)
+        self.assertIn("source scan will verify", reopened.stdout)
+        with closing(sqlite3.connect(self.tmp / ".auto_iter" / "state" / "agent_state.db")) as db:
+            row = db.execute(
+                """
+                select result, matched_decision_ids_json, reopened_decision_ids_json, reopen_reason
+                from route_checks
+                order by created_at desc
+                limit 1
+                """
+            ).fetchone()
+        self.assertEqual("allow_reopen", row[0])
+        self.assertEqual([decision_id], json.loads(row[1]))
+        self.assertEqual([decision_id], json.loads(row[2]))
+        self.assertIn("source scan will verify", row[3])
+
+    def test_route_check_reopen_requires_reason_and_matching_reopenable_decision(self):
+        run_cli(self.tmp, "init")
+        evidence_config = self.tmp / "evidence.json"
+        route_config = self.tmp / "route.json"
+        other_route_config = self.tmp / "other_route.json"
+        rejected_keyword = "method_reopen_guard_v1"
+        no_reopen_keyword = "method_without_reopen_condition_v1"
+        write_json(evidence_config, {"route_name": rejected_keyword})
+        write_json(route_config, {"route_name": rejected_keyword})
+        write_json(other_route_config, {"route_name": "new_unmatched_route"})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "start",
+            "--config",
+            str(evidence_config),
+            "--dataset",
+            "route-reopen",
+            "--command",
+            "python experiment.py",
+        ).stdout.strip().split()[-1]
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "method can reopen with evidence",
+            "--claim",
+            "old method failed without new evidence.",
+            "--route-keyword",
+            rejected_keyword,
+            "--reopen-condition",
+            "Reopen only with explicit evidence.",
+        ).stdout.strip().split()[-1]
+        no_reopen_decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "method cannot reopen implicitly",
+            "--claim",
+            "old method failed.",
+            "--route-keyword",
+            no_reopen_keyword,
+        ).stdout.strip().split()[-1]
+        no_reason = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "retry without reason",
+            "--reopen-decision",
+            decision_id,
+            check=False,
+        )
+        unmatched = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(other_route_config),
+            "--summary",
+            "unmatched reopen request",
+            "--reopen-decision",
+            decision_id,
+            "--reopen-reason",
+            "evidence exists",
+            check=False,
+        )
+        no_condition_config = self.tmp / "no_condition.json"
+        write_json(no_condition_config, {"route_name": no_reopen_keyword})
+        no_condition = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(no_condition_config),
+            "--summary",
+            "retry no reopen condition",
+            "--reopen-decision",
+            no_reopen_decision_id,
+            "--reopen-reason",
+            "evidence exists",
+            check=False,
+        )
+
+        self.assertEqual(no_reason.returncode, 1)
+        self.assertIn("--reopen-reason is required", no_reason.stderr)
+        self.assertEqual(unmatched.returncode, 1)
+        self.assertIn("does not match this route proposal", unmatched.stderr)
+        self.assertEqual(no_condition.returncode, 1)
+        self.assertIn("has no reopen_condition", no_condition.stderr)
+
+    def test_route_check_reopen_allows_failed_exact_config_when_evidence_decision_reopened(self):
+        run_cli(self.tmp, "init")
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "stage_projection_exact_retry_v1"
+        write_json(route_config, {"route_name": rejected_keyword, "stage_source_projection": "source_clean_stage"})
+        run_id = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(route_config),
+            "--dataset",
+            "route-reopen",
+            "--status",
+            "failed",
+            "--summary",
+            "route check blocked before source scan",
+            "--command",
+            "external worker",
+        ).stdout.strip().split()[-1]
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            run_id,
+            "--title",
+            "stage projection blocked by governance",
+            "--claim",
+            "the same config failed before replay because route governance had no explicit reopen path.",
+            "--route-relation",
+            "method",
+            "--route-keyword",
+            rejected_keyword,
+            "--reopen-condition",
+            "Reopen only after route governance supports explicit reopen.",
+        ).stdout.strip().split()[-1]
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "same source-clean stage projection retry",
+            check=False,
+        )
+        reopened = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "same source-clean stage projection retry",
+            "--reopen-decision",
+            decision_id,
+            "--reopen-reason",
+            "route governance now supports explicit reopen audit",
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("same config already recorded", blocked.stdout)
+        self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn("ALLOWED_WITH_REOPEN", reopened.stdout)
+        self.assertIn(f"exact_config_run: {run_id} status=failed", reopened.stdout)
+
+    def test_route_check_reopen_blocks_success_or_unrelated_exact_config_duplicates(self):
+        run_cli(self.tmp, "init")
+        route_config = self.tmp / "route.json"
+        rejected_keyword = "stage_projection_exact_retry_guard_v1"
+        write_json(route_config, {"route_name": rejected_keyword, "stage_source_projection": "source_clean_stage"})
+        success_run_id = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(route_config),
+            "--dataset",
+            "route-reopen",
+            "--status",
+            "success",
+            "--summary",
+            "same route already succeeded",
+            "--command",
+            "external worker",
+        ).stdout.strip().split()[-1]
+        failed_run_id = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(route_config),
+            "--dataset",
+            "route-reopen",
+            "--status",
+            "failed",
+            "--summary",
+            "later governance failure",
+            "--command",
+            "external worker",
+        ).stdout.strip().split()[-1]
+        decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            failed_run_id,
+            "--title",
+            "stage projection blocked by governance",
+            "--claim",
+            "the later failed run can reopen, but older exact success must still block.",
+            "--route-relation",
+            "method",
+            "--route-keyword",
+            rejected_keyword,
+            "--reopen-condition",
+            "Reopen only after route governance supports explicit reopen.",
+        ).stdout.strip().split()[-1]
+
+        blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(route_config),
+            "--summary",
+            "same source-clean stage projection retry",
+            "--reopen-decision",
+            decision_id,
+            "--reopen-reason",
+            "route governance now supports explicit reopen audit",
+            check=False,
+        )
+
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("BLOCKED", blocked.stdout)
+        self.assertIn(f"same config already recorded by run {success_run_id} status=success", blocked.stdout)
+
+        unrelated_config = self.tmp / "unrelated_failed_exact.json"
+        unrelated_keyword = "stage_projection_unrelated_failed_exact_v1"
+        write_json(unrelated_config, {"route_name": unrelated_keyword})
+        unrelated_failed_run_id = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(unrelated_config),
+            "--dataset",
+            "route-reopen",
+            "--status",
+            "failed",
+            "--summary",
+            "unrelated exact failure",
+            "--command",
+            "external worker",
+        ).stdout.strip().split()[-1]
+        evidence_failed_run_id = run_cli(
+            self.tmp,
+            "run",
+            "import",
+            "--config",
+            str(unrelated_config),
+            "--dataset",
+            "route-reopen",
+            "--status",
+            "failed",
+            "--summary",
+            "reopenable exact failure",
+            "--command",
+            "external worker",
+        ).stdout.strip().split()[-1]
+        unrelated_decision_id = run_cli(
+            self.tmp,
+            "decision",
+            "add",
+            "--status",
+            "rejected",
+            "--evidence",
+            evidence_failed_run_id,
+            "--title",
+            "stage projection blocked by governance",
+            "--claim",
+            "only one failed exact duplicate is evidence for this decision.",
+            "--route-relation",
+            "method",
+            "--route-keyword",
+            unrelated_keyword,
+            "--reopen-condition",
+            "Reopen only after route governance supports explicit reopen.",
+        ).stdout.strip().split()[-1]
+        unrelated_blocked = run_cli(
+            self.tmp,
+            "route",
+            "check",
+            "--config",
+            str(unrelated_config),
+            "--summary",
+            "same source-clean stage projection retry",
+            "--reopen-decision",
+            unrelated_decision_id,
+            "--reopen-reason",
+            "route governance now supports explicit reopen audit",
+            check=False,
+        )
+
+        self.assertEqual(unrelated_blocked.returncode, 2)
+        self.assertIn("BLOCKED", unrelated_blocked.stdout)
+        self.assertIn(
+            f"same config already recorded by run {unrelated_failed_run_id} status=failed",
+            unrelated_blocked.stdout,
+        )
+
     def test_route_check_ignores_superseded_broad_keyword_decision(self):
         run_cli(self.tmp, "init")
         evidence_config = self.tmp / "evidence.json"

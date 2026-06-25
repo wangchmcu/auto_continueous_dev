@@ -16,10 +16,31 @@
 
 ## 当前版本
 
-- current_version: v0.44
+- current_version: v0.45
 - status: done
-- previous_goal: v0.43 完成 portable recovery paths（可移植恢复路径）：换物理机重启工作时，handoff 恢复入口和项目内证据主路径不依赖旧机器绝对路径。
-- goal: 修复 `route check` rejected keyword 的匹配范围：只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
+- previous_goal: v0.44 修复 `route check` rejected keyword 的匹配范围：只扫描当前路线匹配投影，避免 freeform summary 和 baseline/provenance/artifact/result/metrics/source/run/decision 等引用性元数据误阻断新路线。
+- goal: 补齐 `route check` 显式重开能力：rejected decision 仍默认阻断；只有调用者显式提供匹配的 `--reopen-decision` 和 `--reopen-reason`，且该 decision 有 `reopen_condition`，才允许返回 `ALLOWED_WITH_REOPEN` 并写入审计记录。
+
+## v0.45 任务清单
+
+- status: done
+- goal: 在不改写 rejected history、不自动解释自然语言条件的前提下，让已满足 reopen_condition 的路线能显式通过 route check。
+- [x] `route check` 新增 `--reopen-decision` 和 `--reopen-reason`。
+- [x] 默认行为保持不变：匹配 rejected decision 时仍返回 `BLOCKED`。
+- [x] 显式 reopen 只允许作用于当前 proposal 实际匹配到的 rejected decision；不匹配、非 rejected、缺 reason、缺 reopen_condition 均 fail closed。
+- [x] 若同 config 只因 route-governance 失败 run 被记录，且该 failed/aborted run 是被显式重开的 rejected decision 的 evidence run，则允许重跑；无关 exact duplicate 和 success exact duplicate 仍阻断。
+- [x] `route_checks` 增加 `reopened_decision_ids_json` 和 `reopen_reason`，保留审计链。
+- [x] 增加回归测试，覆盖 allowed reopen 和 fail-closed 条件。
+
+## v0.45 验收命令
+
+- `python3 -m unittest tests.test_cli.CliTests.test_route_check_allows_explicit_reopen_for_matching_rejected_decision tests.test_cli.CliTests.test_route_check_reopen_requires_reason_and_matching_reopenable_decision tests.test_cli.CliTests.test_route_check_reopen_allows_failed_exact_config_when_evidence_decision_reopened tests.test_cli.CliTests.test_route_check_reopen_blocks_success_or_unrelated_exact_config_duplicates tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_current_route_identity tests.test_cli.CliTests.test_route_check_blocks_rejected_keyword_in_factor_search_space tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_reference_metadata tests.test_cli.CliTests.test_route_check_ignores_rejected_keyword_in_summary_reference tests.test_cli.CliTests.test_route_check_blocks_rejected_parameter_space tests.test_cli.CliTests.test_route_check_ignores_superseded_broad_keyword_decision -v`
+- `python3 -m unittest discover -s tests -v`
+- `git diff --check`
+
+## v0.45 距离 global plan
+
+v0.45 补齐了路线控制里“重开条件提示”之后的最小可执行动作：AIT 不替 agent 判断 reopen_condition 是否满足，但提供显式、可审计、fail-closed 的重开入口。后续若需要更强能力，可以再增加结构化 reopen evidence 校验，而不是让 route check 自动理解中文条件。
 
 ## v0.44 任务清单
 

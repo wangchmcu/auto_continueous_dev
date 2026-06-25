@@ -1164,7 +1164,9 @@ def init_schema(db: sqlite3.Connection) -> None:
             proposed_config_hash text not null,
             proposed_summary text not null,
             result text not null,
-            matched_decision_ids_json text not null
+            matched_decision_ids_json text not null,
+            reopened_decision_ids_json text not null default '[]',
+            reopen_reason text not null default ''
         );
 
         create table if not exists topics (
@@ -1272,6 +1274,14 @@ def init_schema(db: sqlite3.Connection) -> None:
             "workdir": "text not null default ''",
             "git_dirty_count": "integer not null default 0",
             "git_status_short": "text not null default ''",
+        },
+    )
+    ensure_table_columns(
+        db,
+        "route_checks",
+        {
+            "reopened_decision_ids_json": "text not null default '[]'",
+            "reopen_reason": "text not null default ''",
         },
     )
 
@@ -3106,6 +3116,18 @@ def route_rule_matches(rule: dict[str, Any], summary: str, config: Any) -> bool:
     return bool(keywords) and keywords_match
 
 
+def unique_nonempty(items: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        normalized = str(item).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
 def normalize_rule_evidence(spec: str) -> dict[str, str]:
     if ":" in spec:
         kind, value = spec.split(":", 1)
@@ -3454,13 +3476,15 @@ def command_route_check(args: argparse.Namespace) -> int:
     summary = args.summary
     matched: list[sqlite3.Row] = []
     reasons: list[str] = []
+    reopen_ids = unique_nonempty(getattr(args, "reopen_decision", None) or [])
+    reopen_reason = (getattr(args, "reopen_reason", None) or "").strip()
+    if reopen_ids and not reopen_reason:
+        raise UserError("--reopen-reason is required when --reopen-decision is used")
     with database() as db:
-        exact = db.execute(
-            "select run_id, status from runs where config_hash = ? order by started_at desc limit 1",
+        exact_runs = db.execute(
+            "select run_id, status from runs where config_hash = ? order by started_at desc",
             (config_hash,),
-        ).fetchone()
-        if exact:
-            reasons.append(f"same config already recorded by run {exact['run_id']} status={exact['status']}")
+        ).fetchall()
         decisions = db.execute(
             """
             select * from decisions
@@ -3472,25 +3496,86 @@ def command_route_check(args: argparse.Namespace) -> int:
             rule = decode_route_rule(decision["route_keywords_json"])
             if route_rule_matches(rule, summary, config):
                 matched.append(decision)
-        result = "block" if matched or exact else "allow"
+        matched_by_id = {row["decision_id"]: row for row in matched}
+        for decision_id in reopen_ids:
+            matched_decision = matched_by_id.get(decision_id)
+            if matched_decision is None:
+                existing = db.execute(
+                    "select decision_id, status from decisions where decision_id = ?",
+                    (decision_id,),
+                ).fetchone()
+                if existing is None:
+                    raise UserError(f"unknown reopen decision: {decision_id}")
+                if existing["status"] != "rejected":
+                    raise UserError(f"reopen decision is not rejected: {decision_id} status={existing['status']}")
+                raise UserError(f"reopen decision does not match this route proposal: {decision_id}")
+            if not str(matched_decision["reopen_condition"] or "").strip():
+                raise UserError(f"reopen decision has no reopen_condition: {decision_id}")
+        reopened = [row for row in matched if row["decision_id"] in reopen_ids]
+        blocking_matches = [row for row in matched if row["decision_id"] not in reopen_ids]
+        reopened_evidence_run_ids: set[str] = set()
+        for decision in reopened:
+            reopened_evidence_run_ids.update(json.loads(decision["evidence_run_ids_json"]))
+        exact_reopened = bool(exact_runs) and all(
+            row["status"] in {"failed", "aborted"} and row["run_id"] in reopened_evidence_run_ids
+            for row in exact_runs
+        )
+        exact_blockers = [] if exact_reopened else exact_runs
+        for row in exact_blockers:
+            reasons.append(f"same config already recorded by run {row['run_id']} status={row['status']}")
+        result = (
+            "block"
+            if blocking_matches or exact_blockers
+            else ("allow_reopen" if reopened or exact_reopened else "allow")
+        )
         check_id = new_id("C")
         db.execute(
             """
             insert into route_checks (
-                check_id, created_at, proposed_config_hash, proposed_summary, result, matched_decision_ids_json
+                check_id, created_at, proposed_config_hash, proposed_summary, result,
+                matched_decision_ids_json, reopened_decision_ids_json, reopen_reason
             )
-            values (?, ?, ?, ?, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (check_id, now_iso(), config_hash, summary, result, json.dumps([row["decision_id"] for row in matched])),
+            (
+                check_id,
+                now_iso(),
+                config_hash,
+                summary,
+                result,
+                json.dumps([row["decision_id"] for row in matched], ensure_ascii=False),
+                json.dumps([row["decision_id"] for row in reopened], ensure_ascii=False),
+                reopen_reason if reopened else "",
+            ),
         )
     if result == "allow":
         print("ALLOWED")
         print("No rejected route matched this proposal.")
         return 0
+    if result == "allow_reopen":
+        print("ALLOWED_WITH_REOPEN")
+        print("Rejected route match reopened by explicit route-check request.")
+        if exact_reopened:
+            for row in exact_runs:
+                print(
+                    f"- exact_config_run: {row['run_id']} "
+                    f"status={row['status']} reopened by matching decision evidence"
+                )
+        for decision in reopened:
+            rule = decode_route_rule(decision["route_keywords_json"])
+            evidence = ", ".join(json.loads(decision["evidence_run_ids_json"]))
+            print(f"- {decision['decision_id']}: {decision['title']}")
+            print(f"  route_relation: {rule['relation']}")
+            if rule["params"]:
+                print(f"  route_params: {route_param_text(rule['params'])}")
+            print(f"  evidence_run_ids: {evidence}")
+            print(f"  reopen_condition: {decision['reopen_condition']}")
+            print(f"  reopen_reason: {reopen_reason}")
+        return 0
     print("BLOCKED")
     for reason in reasons:
         print(f"- {reason}")
-    for decision in matched:
+    for decision in blocking_matches:
         rule = decode_route_rule(decision["route_keywords_json"])
         evidence = ", ".join(json.loads(decision["evidence_run_ids_json"]))
         print(f"- {decision['decision_id']}: {decision['title']}")
@@ -5194,6 +5279,8 @@ def build_parser() -> argparse.ArgumentParser:
     check = route_sub.add_parser("check")
     check.add_argument("--config", required=True)
     check.add_argument("--summary", required=True)
+    check.add_argument("--reopen-decision", action="append", default=[])
+    check.add_argument("--reopen-reason")
     check.set_defaults(func=command_route_check)
     handoff = subparsers.add_parser("handoff")
     handoff_sub = handoff.add_subparsers(dest="handoff_command", required=True)

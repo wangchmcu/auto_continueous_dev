@@ -406,6 +406,22 @@ Before a new experiment route:
 auto-iter route check --config config.json --summary "<中文路线说明>"
 ```
 
+If a rejected decision matches but its recorded `reopen-condition` has been
+satisfied, do not edit the rejected decision or rename the route to bypass
+governance. Rerun the check with an explicit reopen audit:
+
+```bash
+auto-iter route check --config config.json --summary "<中文路线说明>" \
+  --reopen-decision D-... \
+  --reopen-reason "<why the recorded reopen-condition is satisfied>"
+```
+
+The reopen path only applies to matching rejected decisions that already have a
+`reopen-condition`; unmatched decisions, missing reasons, or exact config
+duplicates still fail closed. An exact config duplicate may be reopened only
+when the duplicate run is failed or aborted and is one of the evidence runs for
+the explicitly reopened rejected decision.
+
 Record a run by letting `auto_iteration` execute the command and capture logs:
 
 ```bash

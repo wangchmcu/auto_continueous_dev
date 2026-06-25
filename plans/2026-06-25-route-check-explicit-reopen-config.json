@@ -1,0 +1,19 @@
+{
+  "route_name": "route_check_explicit_reopen_v0_45",
+  "capability": "route_check_explicit_reopen",
+  "scope": "AIT CLI route governance",
+  "default_behavior": "unchanged_block_rejected_matches",
+  "new_behavior": "allow only explicitly reopened matching rejected decisions with reopen_condition and reopen_reason",
+  "non_goals": [
+    "do not rewrite rejected decision history",
+    "do not infer reopen_condition satisfaction from natural language",
+    "do not bypass exact config hash duplicate blocking"
+  ],
+  "acceptance": [
+    "route check without reopen remains BLOCKED for matching rejected decisions",
+    "route check with matching --reopen-decision and --reopen-reason returns ALLOWED_WITH_REOPEN",
+    "failed exact config duplicates can reopen only when they are evidence for the explicitly reopened rejected decision",
+    "unmatched, missing-reason, or no-reopen-condition cases fail closed",
+    "route_checks table records reopened decision ids and reopen reason"
+  ]
+}

@@ -7,8 +7,8 @@
 - root: /Users/ryan/Documents/auto_continueous_dev
 - workdir: /Users/ryan/Documents/auto_continueous_dev
 - branch: search_enhance
-- commit: 08846e6ecd2215ca7243773bb0665d5a3ac80354
-- latest_successful_run_id: R-9aef4d0a8d
+- commit: aad37b916fedcd2cbec1203bd605d384052ec7cc
+- latest_successful_run_id: R-102a1b8878
 - latest_failed_run_id: none
 - global_plan: plans/global_plan.md
 - version_task_tracking: plans/version_iterations.md
@@ -37,21 +37,24 @@
 - none
 
 ## Current Baseline
-- accepted_start: decision D-ce44870328: Route check ignores reference metadata keywords
-- accepted_result: run R-9aef4d0a8d: dataset=AIT:route_check_metadata_keyword_fix:v0.44 status=success
-- why_current: v0.44 route check now matches rejected route keywords against the structured current-route projection only. Freeform summary and reference metadata such as baseline, provenance, artifacts, results, metrics, logs, source paths, run ids, and decision ids no longer trigger route blocks; exact config duplicates, current route identity, factor/search-space keywords, and parameter-space numeric checks remain active. Verified by full unittest suite.
-- evaluation_entry: decisions/active/D-ce44870328.md
-- provenance_entry: runs/R-9aef4d0a8d/config_resolved.json
-- diagnostic_entry: not recorded
-- last_confirmed_at: 2026-06-24T11:50:12.649890+00:00
+- accepted_start: decision D-55f5a3ec72: Route check explicit reopen remains fail-closed across exact duplicate history
+- accepted_result: run R-102a1b8878: dataset=AIT:route_check_explicit_reopen:v0.45 status=success
+- why_current: v0.45 keeps rejected route checks blocked by default, supports explicit ALLOWED_WITH_REOPEN only for matching rejected decisions with reopen_condition and --reopen-reason, and permits exact config duplicate retry only when every exact duplicate run is failed/aborted and is evidence for an explicitly reopened decision. Success exact duplicates and unrelated failed exact duplicates remain BLOCKED. Verified by full unittest suite.
+- evaluation_entry: decisions/active/D-55f5a3ec72.md
+- provenance_entry: runs/R-102a1b8878/config_resolved.json
+- diagnostic_entry: plans/2026-06-25-route-check-explicit-reopen-config.json
+- last_confirmed_at: 2026-06-25T03:59:43.542970+00:00
 
 ## Topic Evidence Links
 - none
 
 ## 最近成功实验
-- R-9aef4d0a8d: dataset=AIT:route_check_metadata_keyword_fix:v0.44 status=success
+- R-102a1b8878: dataset=AIT:route_check_explicit_reopen:v0.45 status=success
+  - other: plans/2026-06-25-route-check-explicit-reopen-config.json
 
 ## 当前有效结论
+- D-55f5a3ec72: Route check explicit reopen remains fail-closed across exact duplicate history evidence=R-102a1b8878
+  - v0.45 keeps rejected route checks blocked by default, supports explicit ALLOWED_WITH_REOPEN only for matching rejected decisions with reopen_condition and --reopen-reason, and permits exact config duplicate retry only when every exact duplicate run is failed/aborted and is evidence for an explicitly reopened decision. Success exact duplicates and unrelated failed exact duplicates remain BLOCKED. Verified by full unittest suite.
 - D-ce44870328: Route check ignores reference metadata keywords evidence=R-9aef4d0a8d
   - v0.44 route check now matches rejected route keywords against the structured current-route projection only. Freeform summary and reference metadata such as baseline, provenance, artifacts, results, metrics, logs, source paths, run ids, and decision ids no longer trigger route blocks; exact config duplicates, current route identity, factor/search-space keywords, and parameter-space numeric checks remain active. Verified by full unittest suite.
 
